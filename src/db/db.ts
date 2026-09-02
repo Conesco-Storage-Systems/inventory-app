@@ -1,0 +1,87 @@
+import Dexie, { type Table } from 'dexie'
+import type {
+  Area,
+  Beam,
+  MiscItem,
+  PickerOption,
+  Photo,
+  ProjectPhoto,
+  Site,
+  Upright,
+  WireDeck,
+} from '../models/types'
+
+class InventoryDB extends Dexie {
+  sites!: Table<Site, string>
+  areas!: Table<Area, string>
+  pickerOptions!: Table<PickerOption, string>
+  beams!: Table<Beam, string>
+  uprights!: Table<Upright, string>
+  wireDecks!: Table<WireDeck, string>
+  miscItems!: Table<MiscItem, string>
+  photos!: Table<Photo, string>
+  projectPhotos!: Table<ProjectPhoto, string>
+
+  constructor() {
+    super('ConescoRackingInventory')
+    this.version(1).stores({
+      sites: 'id, name, createdAt',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+    })
+    this.version(2).stores({
+      sites: 'id, name, createdAt',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      siteFieldOptions: 'id, siteId, fieldKey, [siteId+fieldKey]',
+    })
+    // Site-scoped "Other" options are now derived live from each site's saved items
+    // instead of a separate growing log, so this table is no longer needed.
+    this.version(3).stores({
+      sites: 'id, name, createdAt',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      siteFieldOptions: null,
+    })
+    this.version(4).stores({
+      sites: 'id, name, createdAt',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, createdAt',
+    })
+  }
+}
+
+export const db = new InventoryDB()

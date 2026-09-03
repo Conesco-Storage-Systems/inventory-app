@@ -25,6 +25,7 @@ export interface WireDeckDraft {
   condition: string
   quantity: string
   bundleSize: string
+  zone: string
   notes: string
   photos: File[]
 }
@@ -39,6 +40,7 @@ export const emptyWireDeckDraft: WireDeckDraft = {
   condition: '',
   quantity: '',
   bundleSize: '',
+  zone: '',
   notes: '',
   photos: [],
 }
@@ -51,6 +53,7 @@ type WireDeckFieldKey =
   | 'condition'
   | 'quantity'
   | 'bundleSize'
+  | 'zone'
   | 'notes'
   | 'photos'
 
@@ -63,6 +66,7 @@ const DEFAULT_WIRE_DECK_FIELD_ORDER: WireDeckFieldKey[] = [
   'condition',
   'quantity',
   'bundleSize',
+  'zone',
   'notes',
 ]
 
@@ -209,6 +213,16 @@ export default function WireDeckForm({ value, onChange, siteId }: WireDeckFormPr
           type="text"
           value={value.bundleSize}
           onChange={(e) => onChange({ ...value, bundleSize: e.target.value })}
+        />
+      </label>
+    ),
+    zone: (
+      <label>
+        Zone
+        <input
+          type="text"
+          value={value.zone}
+          onChange={(e) => onChange({ ...value, zone: e.target.value })}
         />
       </label>
     ),

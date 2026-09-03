@@ -11,6 +11,7 @@ export interface WireDeckRow {
   condition: string
   quantity: number
   bundleSize: string
+  zone: string
   notes: string
   photoIds: string[]
 }
@@ -26,6 +27,7 @@ export function groupWireDecks(wireDecks: WireDeck[]): WireDeckRow[] {
       [...wireDeck.style].sort().join(','),
       wireDeck.condition,
       wireDeck.bundleSize,
+      wireDeck.zone,
       wireDeck.notes,
     ].join('|')
 
@@ -48,6 +50,7 @@ export function groupWireDecks(wireDecks: WireDeck[]): WireDeckRow[] {
       condition: wireDeck.condition,
       quantity: wireDeck.quantity,
       bundleSize: wireDeck.bundleSize,
+      zone: wireDeck.zone,
       notes: wireDeck.notes,
       photoIds: [...wireDeck.photoIds],
     })

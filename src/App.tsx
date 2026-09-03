@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Route, BrowserRouter, Routes } from 'react-router-dom'
-import EditorNameGate from './components/EditorNameGate'
+import LoginGate from './components/LoginGate'
 import InactiveLocations from './screens/InactiveLocations'
 import ItemPhotos from './screens/ItemPhotos'
 import LocationDetail from './screens/LocationDetail'
@@ -21,7 +21,7 @@ function App() {
   }, [])
 
   return (
-    <EditorNameGate>
+    <LoginGate>
       <BrowserRouter>
         <img src="/conesco-logo.png" alt="Conesco" className="app-logo" />
         <Routes>
@@ -33,7 +33,7 @@ function App() {
           <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
         </Routes>
       </BrowserRouter>
-    </EditorNameGate>
+    </LoginGate>
   )
 }
 

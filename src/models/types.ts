@@ -28,7 +28,9 @@ export interface Site {
   lastUpdatedBy: string
   lastUpdatedAt: number
   sitePhoto?: Blob
+  sitePhotoPath?: string
   active?: boolean
+  syncStatus: SyncStatus
 }
 
 export interface Area {
@@ -58,6 +60,7 @@ export interface ItemBase {
   quantity: number
   condition: Condition
   bundleSize: string
+  zone: string
   notes: string
   photoIds: string[]
   recordedBy: string
@@ -118,4 +121,18 @@ export interface ProjectPhoto {
   siteId: string
   blob: Blob
   createdAt: number
+  uploadStatus: 'pending' | 'uploading' | 'synced' | 'failed'
+  remoteUrl?: string
+}
+
+// Records a delete that happened locally so it can be replayed against
+// Supabase once back online — the deleted row itself no longer exists
+// locally to carry a syncStatus of its own.
+export type SyncTable = 'sites' | 'beams' | 'uprights' | 'wireDecks' | 'miscItems' | 'photos' | 'projectPhotos'
+
+export interface PendingDelete {
+  id: string
+  table: SyncTable
+  recordId: string
+  deletedAt: number
 }

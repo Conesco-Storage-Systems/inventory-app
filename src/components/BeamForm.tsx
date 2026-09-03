@@ -37,6 +37,7 @@ export interface BeamDraft {
   condition: string
   quantity: string
   bundleSize: string
+  zone: string
   notes: string
   photos: File[]
 }
@@ -55,6 +56,7 @@ export const emptyBeamDraft: BeamDraft = {
   condition: '',
   quantity: '',
   bundleSize: '',
+  zone: '',
   notes: '',
   photos: [],
 }
@@ -70,6 +72,7 @@ type BeamFieldKey =
   | 'condition'
   | 'quantity'
   | 'bundleSize'
+  | 'zone'
   | 'notes'
   | 'photos'
 
@@ -85,6 +88,7 @@ const DEFAULT_BEAM_FIELD_ORDER: BeamFieldKey[] = [
   'condition',
   'quantity',
   'bundleSize',
+  'zone',
   'notes',
 ]
 
@@ -277,6 +281,16 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
           type="text"
           value={value.bundleSize}
           onChange={(e) => onChange({ ...value, bundleSize: e.target.value })}
+        />
+      </label>
+    ),
+    zone: (
+      <label>
+        Zone
+        <input
+          type="text"
+          value={value.zone}
+          onChange={(e) => onChange({ ...value, zone: e.target.value })}
         />
       </label>
     ),

@@ -14,6 +14,7 @@ export interface BeamRow {
   condition: string
   quantity: number
   bundleSize: string
+  zone: string
   notes: string
   photoIds: string[]
 }
@@ -32,6 +33,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
       beam.stickers,
       beam.condition,
       beam.bundleSize,
+      beam.zone,
       beam.notes,
     ].join('|')
 
@@ -57,6 +59,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
       condition: beam.condition,
       quantity: beam.quantity,
       bundleSize: beam.bundleSize,
+      zone: beam.zone,
       notes: beam.notes,
       photoIds: [...beam.photoIds],
     })

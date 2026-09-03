@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
 import { touchSiteUpdated } from './locations'
+import { enqueuePendingDelete } from './pendingDeletes'
 
 export async function addProjectPhoto(siteId: string, file: File): Promise<void> {
   await db.projectPhotos.add({
@@ -8,6 +9,7 @@ export async function addProjectPhoto(siteId: string, file: File): Promise<void>
     siteId,
     blob: file,
     createdAt: Date.now(),
+    uploadStatus: 'pending',
   })
   await touchSiteUpdated(siteId)
 }
@@ -17,5 +19,6 @@ export async function listProjectPhotos(siteId: string) {
 }
 
 export async function deleteProjectPhoto(photoId: string): Promise<void> {
+  await enqueuePendingDelete('projectPhotos', photoId)
   await db.projectPhotos.delete(photoId)
 }

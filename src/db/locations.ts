@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
+import { enqueuePendingDelete, enqueuePendingDeletes } from './pendingDeletes'
 import type { AreaStatus } from '../models/types'
 import { getEditorName } from '../state/editor'
 
@@ -15,6 +16,7 @@ export async function createSite(name: string, address: string, otherInfo: strin
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: now,
     active: true,
+    syncStatus: 'pending',
   })
   return id
 }
@@ -39,6 +41,7 @@ export async function updateSite(
     otherInfo: otherInfo.trim(),
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
   })
 }
 
@@ -46,6 +49,7 @@ export async function touchSiteUpdated(siteId: string): Promise<void> {
   await db.sites.update(siteId, {
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
   })
 }
 
@@ -54,6 +58,7 @@ export async function markSiteInactive(siteId: string): Promise<void> {
     active: false,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
   })
 }
 
@@ -62,15 +67,17 @@ export async function markSiteActive(siteId: string): Promise<void> {
     active: true,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
   })
 }
 
 export async function deleteSite(siteId: string): Promise<void> {
-  const [beams, uprights, wireDecks, miscItems] = await Promise.all([
+  const [beams, uprights, wireDecks, miscItems, projectPhotos] = await Promise.all([
     db.beams.where('siteId').equals(siteId).toArray(),
     db.uprights.where('siteId').equals(siteId).toArray(),
     db.wireDecks.where('siteId').equals(siteId).toArray(),
     db.miscItems.where('siteId').equals(siteId).toArray(),
+    db.projectPhotos.where('siteId').equals(siteId).toArray(),
   ])
   const itemIds = [
     ...beams.map((b) => b.id),
@@ -78,6 +85,15 @@ export async function deleteSite(siteId: string): Promise<void> {
     ...wireDecks.map((w) => w.id),
     ...miscItems.map((m) => m.id),
   ]
+  const photos = itemIds.length > 0 ? await db.photos.where('itemId').anyOf(itemIds).toArray() : []
+
+  await enqueuePendingDeletes('beams', beams.map((b) => b.id))
+  await enqueuePendingDeletes('uprights', uprights.map((u) => u.id))
+  await enqueuePendingDeletes('wireDecks', wireDecks.map((w) => w.id))
+  await enqueuePendingDeletes('miscItems', miscItems.map((m) => m.id))
+  await enqueuePendingDeletes('photos', photos.map((p) => p.id))
+  await enqueuePendingDeletes('projectPhotos', projectPhotos.map((p) => p.id))
+  await enqueuePendingDelete('sites', siteId)
 
   if (itemIds.length > 0) {
     await db.photos.where('itemId').anyOf(itemIds).delete()
@@ -96,6 +112,7 @@ export async function setSitePhoto(siteId: string, file: File): Promise<void> {
     sitePhoto: file,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
   })
 }
 

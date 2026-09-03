@@ -20,6 +20,7 @@ function draftFromRow(row: WireDeckRow): WireDeckDraft {
     condition: row.condition,
     quantity: String(row.quantity),
     bundleSize: row.bundleSize,
+    zone: row.zone,
     notes: row.notes,
     photos: [],
   }
@@ -59,6 +60,7 @@ export default function EditWireDeckDialog({ row, siteId, mode, onClose }: EditW
           quantity: Number(draft.quantity) || 0,
           condition: draft.condition as Condition,
           bundleSize: draft.bundleSize,
+          zone: draft.zone,
           notes: draft.notes,
           length: Number(draft.length) || 0,
           width: Number(draft.width) || 0,
@@ -73,6 +75,7 @@ export default function EditWireDeckDialog({ row, siteId, mode, onClose }: EditW
           quantity: Number(draft.quantity) || 0,
           condition: draft.condition as Condition,
           bundleSize: draft.bundleSize,
+          zone: draft.zone,
           notes: draft.notes,
           length: Number(draft.length) || 0,
           width: Number(draft.width) || 0,

@@ -32,6 +32,7 @@ function draftFromRow(row: UprightRow): UprightDraft {
     quantity: String(row.quantity),
     stamp: row.stamp,
     bundleSize: row.bundleSize,
+    zone: row.zone,
     notes: row.notes,
   }
 }
@@ -71,6 +72,7 @@ export default function EditUprightDialog({ row, siteId, mode, onClose }: EditUp
           quantity: Number(draft.quantity) || 0,
           condition: draft.condition as Condition,
           bundleSize: draft.bundleSize,
+          zone: draft.zone,
           notes: draft.notes,
           color,
           style,
@@ -94,6 +96,7 @@ export default function EditUprightDialog({ row, siteId, mode, onClose }: EditUp
           quantity: Number(draft.quantity) || 0,
           condition: draft.condition as Condition,
           bundleSize: draft.bundleSize,
+          zone: draft.zone,
           notes: draft.notes,
           color,
           style,

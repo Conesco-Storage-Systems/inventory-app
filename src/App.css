@@ -7,6 +7,21 @@
   z-index: 500;
 }
 
+.sign-out-button {
+  position: fixed;
+  top: 12px;
+  left: 16px;
+  z-index: 500;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .page {
   max-width: 640px;
   margin: 0 auto;
@@ -209,6 +224,72 @@ button {
   margin-top: 32px;
 }
 
+.table-toolbar-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.table-toolbar-row .filter-toggle-button,
+.table-toolbar-row .column-picker-button {
+  margin-bottom: 0;
+}
+
+.column-picker-button {
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.column-picker-dialog {
+  width: min(360px, 90vw);
+}
+
+.column-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.column-picker-dialog .column-picker-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 15px;
+}
+
+.column-picker-select-all {
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.column-picker-option input {
+  width: 18px;
+  height: 18px;
+}
+
+.draggable-column-header {
+  cursor: grab;
+  user-select: none;
+}
+
+.draggable-column-header.dragging {
+  opacity: 0.4;
+}
+
 .filter-toggle-button {
   font-size: 14px;
   padding: 8px 16px;
@@ -393,16 +474,21 @@ button {
   margin: 0;
 }
 
+/* Each section's table scrolls horizontally within its own wrapper instead of
+   squeezing columns, so a growing number of columns stays readable — the rest
+   of the page (other sections, the toolbar, the header) never moves. */
 .item-table-wrap {
   max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow-x: auto;
 }
 
 .item-table {
   border-collapse: collapse;
-  table-layout: fixed;
-  width: 100%;
+  table-layout: auto;
+  width: auto;
+  min-width: 100%;
   font-size: 15px;
 }
 
@@ -411,82 +497,37 @@ button {
   padding: 10px 8px;
   text-align: center;
   border-bottom: 1px solid var(--border);
-  overflow-wrap: normal;
-  word-break: normal;
+  white-space: nowrap;
 }
 
 .item-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.item-table th {
-  background: var(--code-bg);
-  font-weight: 500;
-}
-
-.item-table .col-quantity {
-  width: 90px;
-  white-space: nowrap;
-}
-
-.item-table .col-condition {
-  width: 100px;
-  white-space: nowrap;
-}
-
-.item-table .col-column-size {
-  width: 130px;
-  white-space: nowrap;
-}
-
-.item-table .col-footplate {
-  width: 130px;
-  white-space: nowrap;
-}
-
-.item-table .col-width-height {
-  width: 150px;
-  white-space: nowrap;
-}
-
+/* Notes wraps at 40 characters, but only at a space — a word longer than
+   that stays intact rather than splitting mid-word. Width (not just
+   max-width) is set so the column actually renders at ~40 characters wide
+   instead of the auto table layout shrinking it narrower. */
 .item-table .col-notes {
+  width: 40ch;
+  min-width: 40ch;
+  max-width: 40ch;
+  white-space: normal;
   overflow-wrap: normal;
   word-break: normal;
 }
 
-.item-table .col-edit {
-  width: 50px;
-  white-space: nowrap;
+/* Centers the notes block as a whole within the column, while the text
+   inside it stays left-aligned line to line (ragged right, not centered). */
+.notes-text {
+  display: inline-block;
+  max-width: 100%;
+  text-align: left;
 }
 
-/* Phones/small tablets: don't squeeze columns to avoid a scrollbar — let the
-   table size naturally and scroll horizontally instead, so text stays readable. */
-@media (max-width: 768px) {
-  .item-table-wrap {
-    overflow-x: auto;
-  }
-
-  .item-table {
-    table-layout: auto;
-    width: auto;
-    min-width: 100%;
-  }
-
-  .item-table th,
-  .item-table td {
-    white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: normal;
-  }
-
-  .item-table .col-quantity,
-  .item-table .col-condition,
-  .item-table .col-column-size,
-  .item-table .col-footplate,
-  .item-table .col-width-height,
-  .item-table .col-edit {
-    width: auto;
-  }
+.item-table th {
+  background: var(--code-bg);
+  font-weight: 500;
 }
 
 .save-item-row {

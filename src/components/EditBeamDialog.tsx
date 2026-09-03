@@ -24,6 +24,7 @@ function draftFromRow(row: BeamRow): BeamDraft {
     condition: row.condition,
     quantity: String(row.quantity),
     bundleSize: row.bundleSize,
+    zone: row.zone,
     notes: row.notes,
     photos: [],
   }
@@ -64,6 +65,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           quantity: Number(draft.quantity) || 0,
           condition: draft.condition as Condition,
           bundleSize: draft.bundleSize,
+          zone: draft.zone,
           notes: draft.notes,
           length: Number(draft.length) || 0,
           width: draft.width,
@@ -81,6 +83,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           quantity: Number(draft.quantity) || 0,
           condition: draft.condition as Condition,
           bundleSize: draft.bundleSize,
+          zone: draft.zone,
           notes: draft.notes,
           length: Number(draft.length) || 0,
           width: draft.width,

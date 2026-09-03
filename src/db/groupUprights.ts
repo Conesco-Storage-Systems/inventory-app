@@ -23,6 +23,7 @@ export interface UprightRow {
   quantity: number
   stamp: string
   bundleSize: string
+  zone: string
   notes: string
   photoIds: string[]
 }
@@ -47,6 +48,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       upright.condition,
       upright.stamp,
       upright.bundleSize,
+      upright.zone,
       upright.notes,
     ].join('|')
 
@@ -86,6 +88,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       quantity: upright.quantity,
       stamp: upright.stamp,
       bundleSize: upright.bundleSize,
+      zone: upright.zone,
       notes: upright.notes,
       photoIds: [...upright.photoIds],
     })

@@ -1,13 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import BeamTable from '../components/BeamTable'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import EditBeamDialog from '../components/EditBeamDialog'
 import EditUprightDialog from '../components/EditUprightDialog'
 import EditWireDeckDialog from '../components/EditWireDeckDialog'
-import FilterOptionList from '../components/FilterOptionList'
-import FilterSection from '../components/FilterSection'
 import SitePhotoPicker from '../components/SitePhotoPicker'
+import UprightTable from '../components/UprightTable'
+import WireDeckTable from '../components/WireDeckTable'
 import { db } from '../db/db'
 import { groupBeams, type BeamRow } from '../db/groupBeams'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
@@ -162,12 +163,6 @@ export default function LocationDetail() {
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
   const [activeAction, setActiveAction] = useState<'edit' | 'duplicate' | 'delete' | null>(null)
 
-  const [wireDeckFilterOpen, setWireDeckFilterOpen] = useState(false)
-  const [wireDeckExpandedSections, setWireDeckExpandedSections] = useState<Set<string>>(new Set())
-  const [wireDeckStyleFilter, setWireDeckStyleFilter] = useState<Set<string>>(new Set())
-  const [wireDeckChannelFilter, setWireDeckChannelFilter] = useState<Set<string>>(new Set())
-  const [wireDeckWidthLengthFilter, setWireDeckWidthLengthFilter] = useState<Set<string>>(new Set())
-  const [wireDeckWidthSort, setWireDeckWidthSort] = useState<'none' | 'asc' | 'desc'>('none')
   const [searchTerm, setSearchTerm] = useState('')
 
   const uprightRows = groupUprights(uprights)
@@ -200,46 +195,9 @@ export default function LocationDetail() {
     else await deleteWireDeckGroup(selectedItem.row.ids)
   }
 
-  function toggleInSet(setState: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) {
-    setState((prev) => {
-      const next = new Set(prev)
-      if (next.has(value)) next.delete(value)
-      else next.add(value)
-      return next
-    })
-  }
-
-  function toggleWireDeckSection(key: string) {
-    toggleInSet(setWireDeckExpandedSections, key)
-  }
-
-  const wireDeckStyleOptions = Array.from(new Set(wireDeckRows.flatMap((row) => row.style))).sort()
-  const wireDeckChannelOptions = Array.from(new Set(wireDeckRows.map((row) => row.channelCount))).sort()
-  const wireDeckWidthLengthOptions = Array.from(new Set(wireDeckRows.map((row) => row.widthByLength)))
-
-  const wireDeckFiltersActive =
-    wireDeckStyleFilter.size > 0 || wireDeckChannelFilter.size > 0 || wireDeckWidthLengthFilter.size > 0
-
-  let displayedWireDeckRows = wireDeckRows.filter((row) => {
-    if (wireDeckStyleFilter.size > 0 && !row.style.some((s) => wireDeckStyleFilter.has(s))) return false
-    if (wireDeckChannelFilter.size > 0 && !wireDeckChannelFilter.has(row.channelCount)) return false
-    if (wireDeckWidthLengthFilter.size > 0 && !wireDeckWidthLengthFilter.has(row.widthByLength)) return false
-    return true
-  })
-  if (wireDeckWidthSort !== 'none') {
-    displayedWireDeckRows = [...displayedWireDeckRows].sort((a, b) =>
-      wireDeckWidthSort === 'asc' ? a.width - b.width : b.width - a.width,
-    )
-  }
-  if (normalizedSearch) {
-    displayedWireDeckRows = displayedWireDeckRows.filter((row) => matchesSearch(row, normalizedSearch))
-  }
-
-  function clearWireDeckFilters() {
-    setWireDeckStyleFilter(new Set())
-    setWireDeckChannelFilter(new Set())
-    setWireDeckWidthLengthFilter(new Set())
-  }
+  const displayedWireDeckRows = normalizedSearch
+    ? wireDeckRows.filter((row) => matchesSearch(row, normalizedSearch))
+    : wireDeckRows
 
   if (site === undefined) {
     return (
@@ -302,6 +260,7 @@ export default function LocationDetail() {
       Stamp: '',
       Stickers: '',
       'Bundle Size': '',
+      Zone: '',
       Notes: '',
       Photos: 0 as string | number,
     }
@@ -322,6 +281,7 @@ export default function LocationDetail() {
         Condition: row.condition,
         Stamp: row.stamp,
         'Bundle Size': row.bundleSize,
+        Zone: row.zone,
         Notes: row.notes,
         Photos: row.photoIds.length,
       })),
@@ -337,6 +297,7 @@ export default function LocationDetail() {
         Stamp: row.stamp,
         Stickers: row.stickers,
         'Bundle Size': row.bundleSize,
+        Zone: row.zone,
         Notes: row.notes,
         Photos: row.photoIds.length,
       })),
@@ -349,6 +310,7 @@ export default function LocationDetail() {
         'Number of Channels': row.channelCount,
         Condition: row.condition,
         'Bundle Size': row.bundleSize,
+        Zone: row.zone,
         Notes: row.notes,
         Photos: row.photoIds.length,
       })),
@@ -543,269 +505,37 @@ export default function LocationDetail() {
       {uprightRows.length > 0 && (
         <section className="item-section">
           <h2>Uprights</h2>
-          <div className="item-table-wrap">
-            <table className="item-table">
-              <thead>
-                <tr>
-                  <th className="col-quantity">Quantity</th>
-                  <th>Style</th>
-                  <th className="col-width-height">Width x Height</th>
-                  <th>Color</th>
-                  <th className="col-column-size">Column Size</th>
-                  <th className="col-footplate">Footplate Size</th>
-                  <th>Anchor Hole Count</th>
-                  <th>Hole Size</th>
-                  <th>Gauge</th>
-                  <th className="col-condition">Condition</th>
-                  <th>Stamp</th>
-                  <th>Bundle Size</th>
-                  <th className="col-notes">Notes</th>
-                  <th>Photos</th>
-                  <th className="col-edit"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedUprightRows.length === 0 && (
-                  <tr>
-                    <td colSpan={15}>No uprights match your search.</td>
-                  </tr>
-                )}
-                {displayedUprightRows.map((row) => (
-                  <tr key={row.key}>
-                    <td>{row.quantity}</td>
-                    <td>{row.style}</td>
-                    <td>{row.widthByHeight}</td>
-                    <td>{row.color}</td>
-                    <td>{row.columnSizeDisplay}</td>
-                    <td>{row.footplateSizeDisplay}</td>
-                    <td>{row.anchorHoleCount}</td>
-                    <td>{row.holeSize || '—'}</td>
-                    <td>{row.gauge}</td>
-                    <td>{row.condition}</td>
-                    <td>{row.stamp || '—'}</td>
-                    <td>{row.bundleSize || '—'}</td>
-                    <td className="col-notes">{row.notes || '—'}</td>
-                    <td>
-                      {row.photoIds.length > 0 ? (
-                        <Link to={`/locations/${site.id}/photos?ids=${row.ids.join(',')}`}>
-                          View photos ({row.photoIds.length})
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedItem?.itemType === 'upright' && selectedItem.key === row.key}
-                        onChange={() => toggleSelect('upright', row)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <UprightTable
+            rows={displayedUprightRows}
+            siteId={site.id}
+            selectedKey={selectedItem?.itemType === 'upright' ? selectedItem.key : null}
+            onToggleSelect={(row) => toggleSelect('upright', row)}
+          />
         </section>
       )}
 
       {beamRows.length > 0 && (
         <section className="item-section">
           <h2>Beams</h2>
-          <div className="item-table-wrap">
-            <table className="item-table">
-              <thead>
-                <tr>
-                  <th className="col-quantity">Quantity</th>
-                  <th>Style</th>
-                  <th>Width x Length</th>
-                  <th>Color</th>
-                  <th>Pin Count</th>
-                  <th className="col-condition">Condition</th>
-                  <th>Stamp</th>
-                  <th>Stickers</th>
-                  <th>Bundle Size</th>
-                  <th className="col-notes">Notes</th>
-                  <th>Photos</th>
-                  <th className="col-edit"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedBeamRows.length === 0 && (
-                  <tr>
-                    <td colSpan={12}>No beams match your search.</td>
-                  </tr>
-                )}
-                {displayedBeamRows.map((row) => (
-                  <tr key={row.key}>
-                    <td>{row.quantity}</td>
-                    <td>{row.style}</td>
-                    <td>{row.widthByLength}</td>
-                    <td>{row.color}</td>
-                    <td>{row.pinCount}</td>
-                    <td>{row.condition}</td>
-                    <td>{row.stamp || '—'}</td>
-                    <td>{row.stickers}</td>
-                    <td>{row.bundleSize || '—'}</td>
-                    <td className="col-notes">{row.notes || '—'}</td>
-                    <td>
-                      {row.photoIds.length > 0 ? (
-                        <Link to={`/locations/${site.id}/photos?ids=${row.ids.join(',')}`}>
-                          View photos ({row.photoIds.length})
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedItem?.itemType === 'beam' && selectedItem.key === row.key}
-                        onChange={() => toggleSelect('beam', row)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <BeamTable
+            rows={displayedBeamRows}
+            siteId={site.id}
+            selectedKey={selectedItem?.itemType === 'beam' ? selectedItem.key : null}
+            onToggleSelect={(row) => toggleSelect('beam', row)}
+          />
         </section>
       )}
 
       {wireDeckRows.length > 0 && (
         <section className="item-section">
           <h2>Wire Decks</h2>
-
-          <button
-            type="button"
-            className="filter-toggle-button"
-            onClick={() => setWireDeckFilterOpen(!wireDeckFilterOpen)}
-          >
-            Filter
-            {wireDeckFiltersActive
-              ? ` (${wireDeckStyleFilter.size + wireDeckChannelFilter.size + wireDeckWidthLengthFilter.size})`
-              : ''}
-          </button>
-
-          {wireDeckFilterOpen && (
-            <div className="filter-panel">
-              <FilterSection
-                label="Style"
-                count={wireDeckStyleFilter.size}
-                expanded={wireDeckExpandedSections.has('style')}
-                onToggle={() => toggleWireDeckSection('style')}
-              >
-                <FilterOptionList
-                  options={wireDeckStyleOptions}
-                  selected={wireDeckStyleFilter}
-                  onToggle={(v) => toggleInSet(setWireDeckStyleFilter, v)}
-                />
-              </FilterSection>
-
-              <FilterSection
-                label="Number of Channels"
-                count={wireDeckChannelFilter.size}
-                expanded={wireDeckExpandedSections.has('channels')}
-                onToggle={() => toggleWireDeckSection('channels')}
-              >
-                <FilterOptionList
-                  options={wireDeckChannelOptions}
-                  selected={wireDeckChannelFilter}
-                  onToggle={(v) => toggleInSet(setWireDeckChannelFilter, v)}
-                />
-              </FilterSection>
-
-              <FilterSection
-                label="Width x Length"
-                count={wireDeckWidthLengthFilter.size}
-                expanded={wireDeckExpandedSections.has('widthLength')}
-                onToggle={() => toggleWireDeckSection('widthLength')}
-              >
-                <FilterOptionList
-                  options={wireDeckWidthLengthOptions}
-                  selected={wireDeckWidthLengthFilter}
-                  onToggle={(v) => toggleInSet(setWireDeckWidthLengthFilter, v)}
-                />
-                <div className="filter-sort-group">
-                  <span className="filter-checkbox-row-label">Sort by Width</span>
-                  <button
-                    type="button"
-                    className={wireDeckWidthSort === 'asc' ? 'filter-sort-active' : ''}
-                    onClick={() => setWireDeckWidthSort(wireDeckWidthSort === 'asc' ? 'none' : 'asc')}
-                  >
-                    Smallest → Biggest
-                  </button>
-                  <button
-                    type="button"
-                    className={wireDeckWidthSort === 'desc' ? 'filter-sort-active' : ''}
-                    onClick={() => setWireDeckWidthSort(wireDeckWidthSort === 'desc' ? 'none' : 'desc')}
-                  >
-                    Biggest → Smallest
-                  </button>
-                </div>
-              </FilterSection>
-
-              {wireDeckFiltersActive && (
-                <button type="button" className="filter-clear-button" onClick={clearWireDeckFilters}>
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="item-table-wrap">
-            <table className="item-table">
-              <thead>
-                <tr>
-                  <th className="col-quantity">Quantity</th>
-                  <th>Style</th>
-                  <th>Width x Length</th>
-                  <th>Number of Channels</th>
-                  <th className="col-condition">Condition</th>
-                  <th>Bundle Size</th>
-                  <th className="col-notes">Notes</th>
-                  <th>Photos</th>
-                  <th className="col-edit"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedWireDeckRows.length === 0 && (
-                  <tr>
-                    <td colSpan={9}>
-                      No wire decks match the current filters{normalizedSearch ? ' or search' : ''}.
-                    </td>
-                  </tr>
-                )}
-                {displayedWireDeckRows.map((row) => (
-                  <tr key={row.key}>
-                    <td>{row.quantity}</td>
-                    <td>{row.style.join(', ') || '—'}</td>
-                    <td>{row.widthByLength}</td>
-                    <td>{row.channelCount}</td>
-                    <td>{row.condition}</td>
-                    <td>{row.bundleSize || '—'}</td>
-                    <td className="col-notes">{row.notes || '—'}</td>
-                    <td>
-                      {row.photoIds.length > 0 ? (
-                        <Link to={`/locations/${site.id}/photos?ids=${row.ids.join(',')}`}>
-                          View photos ({row.photoIds.length})
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedItem?.itemType === 'wireDeck' && selectedItem.key === row.key}
-                        onChange={() => toggleSelect('wireDeck', row)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <WireDeckTable
+            rows={displayedWireDeckRows}
+            siteId={site.id}
+            selectedKey={selectedItem?.itemType === 'wireDeck' ? selectedItem.key : null}
+            onToggleSelect={(row) => toggleSelect('wireDeck', row)}
+            searchActive={!!normalizedSearch}
+          />
         </section>
       )}
 

@@ -39,6 +39,7 @@ export interface UprightDraft {
   quantity: string
   stamp: string
   bundleSize: string
+  zone: string
   notes: string
 }
 
@@ -63,6 +64,7 @@ export const emptyUprightDraft: UprightDraft = {
   quantity: '',
   stamp: '',
   bundleSize: '',
+  zone: '',
   notes: '',
 }
 
@@ -81,6 +83,7 @@ type UprightFieldKey =
   | 'quantity'
   | 'stamp'
   | 'bundleSize'
+  | 'zone'
   | 'notes'
 
 const DEFAULT_UPRIGHT_FIELD_ORDER: UprightFieldKey[] = [
@@ -98,6 +101,7 @@ const DEFAULT_UPRIGHT_FIELD_ORDER: UprightFieldKey[] = [
   'quantity',
   'stamp',
   'bundleSize',
+  'zone',
   'notes',
 ]
 
@@ -338,6 +342,16 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
           type="text"
           value={value.bundleSize}
           onChange={(e) => onChange({ ...value, bundleSize: e.target.value })}
+        />
+      </label>
+    ),
+    zone: (
+      <label>
+        Zone
+        <input
+          type="text"
+          value={value.zone}
+          onChange={(e) => onChange({ ...value, zone: e.target.value })}
         />
       </label>
     ),

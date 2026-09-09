@@ -18,6 +18,7 @@ export interface NewBeamInput {
   stamp: string
   style: string
   stickers: string
+  step: string
   photoFiles: File[]
 }
 
@@ -65,6 +66,7 @@ export async function createBeam(input: NewBeamInput): Promise<string> {
     stamp: input.stamp,
     style: input.style,
     stickers: input.stickers,
+    step: input.step,
   }
 
   await db.beams.add(beam)
@@ -91,6 +93,7 @@ export interface BeamEditInput {
   stamp: string
   style: string
   stickers: string
+  step: string
   existingPhotoIds: string[]
   newPhotoFiles: File[]
 }
@@ -121,6 +124,7 @@ export async function updateBeamGroup(input: BeamEditInput): Promise<void> {
     stamp: input.stamp,
     style: input.style,
     stickers: input.stickers,
+    step: input.step,
     photoIds,
     updatedAt: Date.now(),
     syncStatus: 'pending',

@@ -102,6 +102,7 @@ const beamConfig: ItemTableConfig = {
     stamp: b.stamp,
     style: b.style,
     stickers: b.stickers,
+    step: b.step,
     created_at: b.createdAt,
     updated_at: b.updatedAt,
   }),
@@ -125,6 +126,7 @@ const beamConfig: ItemTableConfig = {
     stamp: r.stamp as string,
     style: r.style as string,
     stickers: r.stickers as string,
+    step: (r.step as string) ?? '',
   }),
 }
 

@@ -39,6 +39,7 @@ export default function NewItem() {
         stamp: beamDraft.stamp,
         style: beamDraft.style === 'Other' ? beamDraft.styleOther : beamDraft.style,
         stickers: beamDraft.stickers,
+        step: beamDraft.step === 'Other' ? beamDraft.stepOther : beamDraft.step,
         photoFiles: beamDraft.photos,
       })
       navigate(`/locations/${siteId}`)

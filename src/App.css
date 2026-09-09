@@ -1023,6 +1023,51 @@ button {
   box-sizing: border-box;
 }
 
+.option-box-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option-box-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.option-box-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.option-box {
+  font-size: 16px;
+  padding: 14px 20px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 100px;
+}
+
+.option-box--selected {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.option-box-field .other-input {
+  font-size: 16px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 320px;
+  box-sizing: border-box;
+}
+
 .location-dialog {
   border: none;
   border-radius: 12px;

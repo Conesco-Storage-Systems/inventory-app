@@ -30,6 +30,7 @@ create table beams (
   stamp text not null default '',
   style text not null default '',
   stickers text not null default '',
+  step text not null default '',
   created_at bigint not null,
   updated_at bigint not null
 );
@@ -140,3 +141,8 @@ create policy "Authenticated users can do anything with inventory photos"
   on storage.objects for all
   using (bucket_id = 'inventory-photos' and auth.uid() is not null)
   with check (bucket_id = 'inventory-photos' and auth.uid() is not null);
+
+-- Migration: adds the Beam "Step" field (run this in the SQL editor against
+-- the already-live database — the create table above is only for a brand
+-- new setup and won't re-run against an existing table).
+alter table beams add column if not exists step text not null default '';

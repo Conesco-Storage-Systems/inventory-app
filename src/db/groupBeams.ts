@@ -11,6 +11,7 @@ export interface BeamRow {
   stamp: string
   style: string
   stickers: string
+  step: string
   condition: string
   quantity: number
   bundleSize: string
@@ -31,6 +32,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
       beam.stamp,
       beam.style,
       beam.stickers,
+      beam.step,
       beam.condition,
       beam.bundleSize,
       beam.zone,
@@ -56,6 +58,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
       stamp: beam.stamp,
       style: beam.style,
       stickers: beam.stickers,
+      step: beam.step ?? '',
       condition: beam.condition,
       quantity: beam.quantity,
       bundleSize: beam.bundleSize,

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import BeamForm, { BEAM_COLOR_OPTIONS, BEAM_PIN_COUNT_OPTIONS, BEAM_STYLE_OPTIONS, type BeamDraft } from './BeamForm'
+import BeamForm, {
+  BEAM_COLOR_OPTIONS,
+  BEAM_PIN_COUNT_OPTIONS,
+  BEAM_STEP_OPTIONS,
+  BEAM_STYLE_OPTIONS,
+  type BeamDraft,
+} from './BeamForm'
 import DeleteConfirm from './DeleteConfirm'
 import type { BeamRow } from '../db/groupBeams'
 import { createBeam, deleteBeamGroup, updateBeamGroup } from '../db/items'
@@ -9,6 +15,8 @@ function draftFromRow(row: BeamRow): BeamDraft {
   const knownColor = (BEAM_COLOR_OPTIONS as readonly string[]).includes(row.color)
   const knownStyle = (BEAM_STYLE_OPTIONS as readonly string[]).includes(row.style)
   const knownPinCount = (BEAM_PIN_COUNT_OPTIONS as readonly string[]).includes(row.pinCount)
+  const step = row.step ?? ''
+  const knownStep = step === '' || (BEAM_STEP_OPTIONS as readonly string[]).includes(step)
 
   return {
     length: String(row.length),
@@ -21,6 +29,8 @@ function draftFromRow(row: BeamRow): BeamDraft {
     style: knownStyle ? row.style : 'Other',
     styleOther: knownStyle ? '' : row.style,
     stickers: row.stickers,
+    step: knownStep ? step : 'Other',
+    stepOther: knownStep ? '' : step,
     condition: row.condition,
     quantity: String(row.quantity),
     bundleSize: row.bundleSize,
@@ -58,6 +68,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
       const color = draft.color === 'Other' ? draft.colorOther : draft.color
       const style = draft.style === 'Other' ? draft.styleOther : draft.style
       const pinCount = draft.pinCount === 'Other' ? draft.pinCountOther : draft.pinCount
+      const step = draft.step === 'Other' ? draft.stepOther : draft.step
 
       if (mode === 'duplicate') {
         await createBeam({
@@ -74,6 +85,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           stamp: draft.stamp,
           style,
           stickers: draft.stickers,
+          step,
           photoFiles: draft.photos,
         })
       } else {
@@ -92,6 +104,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           stamp: draft.stamp,
           style,
           stickers: draft.stickers,
+          step,
           existingPhotoIds: row.photoIds,
           newPhotoFiles: draft.photos,
         })

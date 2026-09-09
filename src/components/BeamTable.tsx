@@ -11,6 +11,7 @@ type BeamColumnKey =
   | 'widthByLength'
   | 'color'
   | 'pinCount'
+  | 'step'
   | 'condition'
   | 'stamp'
   | 'stickers'
@@ -25,6 +26,7 @@ const DEFAULT_BEAM_COLUMN_ORDER: BeamColumnKey[] = [
   'widthByLength',
   'color',
   'pinCount',
+  'step',
   'condition',
   'stamp',
   'stickers',
@@ -55,6 +57,7 @@ export default function BeamTable({ rows, siteId, selectedKey, onToggleSelect }:
     widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
     color: { label: 'Color', render: (row) => row.color },
     pinCount: { label: 'Pin Count', render: (row) => row.pinCount },
+    step: { label: 'Step', render: (row) => row.step || '—' },
     condition: { label: 'Condition', render: (row) => row.condition },
     stamp: { label: 'Stamp', render: (row) => row.stamp || '—' },
     stickers: { label: 'Stickers', render: (row) => row.stickers },

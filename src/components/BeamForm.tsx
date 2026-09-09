@@ -21,6 +21,8 @@ export const BEAM_PIN_COUNT_OPTIONS = [
 
 export const BEAM_STYLE_OPTIONS = ['Teardrop', 'New Style', 'TBOLT', 'Ridg-U-Rak', 'Other'] as const
 
+export const BEAM_STEP_OPTIONS = ['1-5/8"', 'Other'] as const
+
 export const STICKERS_OPTIONS = ['Yes', 'No'] as const
 
 export interface BeamDraft {
@@ -34,6 +36,8 @@ export interface BeamDraft {
   style: string
   styleOther: string
   stickers: string
+  step: string
+  stepOther: string
   condition: string
   quantity: string
   bundleSize: string
@@ -53,6 +57,8 @@ export const emptyBeamDraft: BeamDraft = {
   style: '',
   styleOther: '',
   stickers: '',
+  step: '',
+  stepOther: '',
   condition: '',
   quantity: '',
   bundleSize: '',
@@ -69,6 +75,7 @@ type BeamFieldKey =
   | 'stamp'
   | 'style'
   | 'stickers'
+  | 'step'
   | 'condition'
   | 'quantity'
   | 'bundleSize'
@@ -85,6 +92,7 @@ const DEFAULT_BEAM_FIELD_ORDER: BeamFieldKey[] = [
   'stamp',
   'style',
   'stickers',
+  'step',
   'condition',
   'quantity',
   'bundleSize',
@@ -226,6 +234,32 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
           />
         )}
       </>
+    ),
+    step: (
+      <div className="option-box-field">
+        <span className="option-box-label">Step</span>
+        <div className="option-box-group">
+          {BEAM_STEP_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={`option-box${value.step === option ? ' option-box--selected' : ''}`}
+              onClick={() => onChange({ ...value, step: option })}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+        {value.step === 'Other' && (
+          <input
+            type="text"
+            placeholder="Enter step"
+            value={value.stepOther}
+            onChange={(e) => onChange({ ...value, stepOther: e.target.value })}
+            className="other-input"
+          />
+        )}
+      </div>
     ),
     stickers: (
       <label>

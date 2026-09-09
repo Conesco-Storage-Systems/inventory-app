@@ -326,6 +326,7 @@ function buildBeam(quantity: number, qtyFlagged: boolean, sizeRaw: string, notes
     stamp: '',
     style: style.style,
     stickers: stickers.stickers,
+    step: '',
   }
 }
 

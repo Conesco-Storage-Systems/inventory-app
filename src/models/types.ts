@@ -77,6 +77,7 @@ export interface Beam extends ItemBase {
   stamp: string
   style: string
   stickers: string
+  step: string
 }
 
 export interface Upright extends ItemBase {

@@ -246,7 +246,16 @@ function siteToRemote(site: Site): Record<string, unknown> {
 
 async function pushSites(): Promise<void> {
   const pending = await db.sites.where('syncStatus').equals('pending').toArray()
-  for (const site of pending) {
+  // A site can be "synced" (its name/address/etc. made it up fine) while its
+  // photo specifically never did — e.g. it failed before the storage bucket
+  // had a policy. That site won't show up as "pending" anymore, so it has
+  // to be found separately or its photo would be stranded forever.
+  const syncedWithUnsentPhoto = await db.sites
+    .filter((site) => site.syncStatus === 'synced' && !!site.sitePhoto && !site.sitePhotoPath)
+    .toArray()
+  const sitesToPush = [...pending, ...syncedWithUnsentPhoto]
+
+  for (const site of sitesToPush) {
     let sitePhotoPath = site.sitePhotoPath
     if (site.sitePhoto && !sitePhotoPath) {
       const path = `${site.id}/site/${site.id}.jpg`

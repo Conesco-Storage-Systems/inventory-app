@@ -2,11 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   getCachedAuthedEmail,
   getCurrentSession,
+  isSessionDefinitivelyInvalid,
   onAuthStateChange,
   setCachedAuthedEmail,
+  setNewPassword,
   signIn,
   signOut,
 } from '../auth/authClient'
+import { consumeInviteOrRecoveryLink, type InviteLinkType } from '../auth/inviteFlow'
 import { setEditorName } from '../state/editor'
 import { startAutoSync } from '../sync/syncEngine'
 import { supabaseConfigured } from '../sync/supabaseClient'
@@ -17,6 +20,11 @@ export default function LoginGate({ children }: { children: ReactNode }) {
   const [password, setPassword] = useState('')
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState('')
+  const [linkType, setLinkType] = useState<InviteLinkType | null>(null)
+  const [newPassword, setNewPasswordDraft] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
+  const [settingPassword, setSettingPassword] = useState(false)
+  const [setPasswordError, setSetPasswordError] = useState('')
   // Start from whatever this device last successfully authenticated as, so a
   // reload while offline shows the app immediately instead of waiting on a
   // network call that may never come back.
@@ -28,26 +36,46 @@ export default function LoginGate({ children }: { children: ReactNode }) {
       return
     }
 
-    getCurrentSession()
-      .then((session) => {
+    consumeInviteOrRecoveryLink()
+      .then(async (type) => {
+        if (type) {
+          setLinkType(type)
+          return
+        }
+
+        const session = await getCurrentSession()
         if (session?.user.email) {
           setUserEmail(session.user.email)
           setCachedAuthedEmail(session.user.email)
+          return
         }
-        // No live session but we already trust a cached one from before —
-        // leave it alone. This is far more likely a network hiccup (or a
-        // background token refresh that couldn't reach Supabase) than an
-        // actual sign-out, and offline use shouldn't get bounced for that.
+        // No live session locally. If we have a cached login, only clear it
+        // if Supabase explicitly rejects the token — otherwise this is far
+        // more likely a network hiccup than an actual sign-out, and offline
+        // use shouldn't get bounced for that.
+        if (getCachedAuthedEmail() && (await isSessionDefinitivelyInvalid())) {
+          await signOut()
+          setUserEmail(null)
+        }
       })
       .catch(() => {
         // Same reasoning — a failed check is not a sign-out.
       })
       .finally(() => setCheckingSession(false))
 
-    return onAuthStateChange((session) => {
+    return onAuthStateChange((event, session) => {
       if (session?.user.email) {
         setUserEmail(session.user.email)
         setCachedAuthedEmail(session.user.email)
+        return
+      }
+      // supabase-js only fires SIGNED_OUT when it has definitively determined
+      // the session is gone (an explicit signOut() call, or a background
+      // token refresh that the server actually rejected) — never just because
+      // a request couldn't reach the network. Safe to trust as "really out."
+      if (event === 'SIGNED_OUT') {
+        setCachedAuthedEmail(null)
+        setUserEmail(null)
       }
     })
   }, [])
@@ -63,6 +91,28 @@ export default function LoginGate({ children }: { children: ReactNode }) {
     setUserEmail(null)
   }
 
+  async function handleSetNewPassword(e: React.FormEvent) {
+    e.preventDefault()
+    setSetPasswordError('')
+    if (newPassword !== newPasswordConfirm) {
+      setSetPasswordError('Passwords do not match.')
+      return
+    }
+    setSettingPassword(true)
+    const message = await setNewPassword(newPassword)
+    setSettingPassword(false)
+    if (message) {
+      setSetPasswordError(message)
+      return
+    }
+    const session = await getCurrentSession()
+    if (session?.user.email) {
+      setUserEmail(session.user.email)
+      setCachedAuthedEmail(session.user.email)
+    }
+    setLinkType(null)
+  }
+
   if (!supabaseConfigured) {
     return (
       <div className="editor-gate-overlay">
@@ -74,6 +124,46 @@ export default function LoginGate({ children }: { children: ReactNode }) {
             <code>.env.local</code> file and restart the dev server.
           </p>
         </div>
+      </div>
+    )
+  }
+
+  if (linkType) {
+    return (
+      <div className="editor-gate-overlay">
+        <form className="editor-gate-panel" onSubmit={handleSetNewPassword}>
+          <h2>{linkType === 'invite' ? 'Welcome — set your password' : 'Set a new password'}</h2>
+          <p>
+            {linkType === 'invite'
+              ? 'Choose a password to finish setting up your account.'
+              : 'Choose a new password for your account.'}
+          </p>
+          <label>
+            New password
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPasswordDraft(e.target.value)}
+              autoFocus
+              required
+              minLength={6}
+            />
+          </label>
+          <label>
+            Confirm password
+            <input
+              type="password"
+              value={newPasswordConfirm}
+              onChange={(e) => setNewPasswordConfirm(e.target.value)}
+              required
+              minLength={6}
+            />
+          </label>
+          {setPasswordError && <p className="field-error">{setPasswordError}</p>}
+          <button type="submit" disabled={settingPassword || !newPassword || !newPasswordConfirm}>
+            {settingPassword ? 'Saving…' : 'Save password'}
+          </button>
+        </form>
       </div>
     )
   }

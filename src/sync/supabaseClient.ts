@@ -12,4 +12,11 @@ if (!supabaseConfigured) {
   )
 }
 
-export const supabase = createClient(supabaseUrl ?? 'https://placeholder.supabase.co', supabaseAnonKey ?? 'placeholder')
+// detectSessionInUrl is off because we parse invite/recovery links ourselves
+// (see src/auth/inviteFlow.ts) so we can show a "set your password" screen
+// before dropping someone straight into the app.
+export const supabase = createClient(
+  supabaseUrl ?? 'https://placeholder.supabase.co',
+  supabaseAnonKey ?? 'placeholder',
+  { auth: { detectSessionInUrl: false } },
+)

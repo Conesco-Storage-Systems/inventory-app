@@ -29,6 +29,12 @@ export interface Site {
   lastUpdatedAt: number
   sitePhoto?: Blob
   sitePhotoPath?: string
+  // True when the local sitePhoto blob is newer than whatever's at
+  // sitePhotoPath remotely — set on every photo change, cleared once the
+  // replacement upload actually succeeds. Needed because sitePhotoPath alone
+  // can't tell "no photo yet" apart from "photo changed since this path was
+  // last uploaded."
+  sitePhotoDirty?: boolean
   active?: boolean
   syncStatus: SyncStatus
 }

@@ -250,27 +250,41 @@ async function pushSites(): Promise<void> {
   const pending = await db.sites.where('syncStatus').equals('pending').toArray()
   // A site can be "synced" (its name/address/etc. made it up fine) while its
   // photo specifically never did — e.g. it failed before the storage bucket
-  // had a policy. That site won't show up as "pending" anymore, so it has
-  // to be found separately or its photo would be stranded forever.
+  // had a policy, or a previous replacement upload failed. That site won't
+  // show up as "pending" anymore, so it has to be found separately or its
+  // photo would be stranded forever.
   const syncedWithUnsentPhoto = await db.sites
-    .filter((site) => site.syncStatus === 'synced' && !!site.sitePhoto && !site.sitePhotoPath)
+    .filter((site) => site.syncStatus === 'synced' && !!site.sitePhoto && !!site.sitePhotoDirty)
     .toArray()
-  const sitesToPush = [...pending, ...syncedWithUnsentPhoto]
+  const pendingIds = new Set(pending.map((s) => s.id))
+  const sitesToPush = [...pending, ...syncedWithUnsentPhoto.filter((s) => !pendingIds.has(s.id))]
 
   for (const site of sitesToPush) {
     let sitePhotoPath = site.sitePhotoPath
-    if (site.sitePhoto && !sitePhotoPath) {
-      const path = `${site.id}/site/${site.id}.jpg`
+    let photoUploadFailed = false
+    if (site.sitePhoto && site.sitePhotoDirty) {
+      // Versioned filename (not a fixed one) so the path itself changes on
+      // every replacement — otherwise other devices would never notice the
+      // photo changed, since they only re-download when the path differs.
+      const path = `${site.id}/site/${site.id}-${Date.now()}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(path, site.sitePhoto, { upsert: true, contentType: site.sitePhoto.type })
-      if (!uploadError) sitePhotoPath = path
-      else console.error(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+      if (!uploadError) {
+        sitePhotoPath = path
+      } else {
+        photoUploadFailed = true
+        console.error(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+      }
     }
 
     const { error } = await supabase.from('sites').upsert(siteToRemote({ ...site, sitePhotoPath }))
     if (!error) {
-      await db.sites.update(site.id, { syncStatus: 'synced', sitePhotoPath })
+      await db.sites.update(site.id, {
+        syncStatus: 'synced',
+        sitePhotoPath,
+        sitePhotoDirty: photoUploadFailed,
+      })
     } else {
       console.error(`[sync] push sites/${site.id} failed:`, error.message, error)
     }
@@ -312,6 +326,7 @@ async function pullSites(): Promise<void> {
       active: remoteRow.active as boolean,
       sitePhoto,
       sitePhotoPath,
+      sitePhotoDirty: false,
       createdAt: remoteRow.created_at as number,
       lastUpdatedBy: remoteRow.last_updated_by as string,
       lastUpdatedAt: updatedAt,

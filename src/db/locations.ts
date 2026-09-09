@@ -110,6 +110,7 @@ export async function deleteSite(siteId: string): Promise<void> {
 export async function setSitePhoto(siteId: string, file: File): Promise<void> {
   await db.sites.update(siteId, {
     sitePhoto: file,
+    sitePhotoDirty: true,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
     syncStatus: 'pending',

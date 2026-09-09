@@ -1,5 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { getCurrentSession, onAuthStateChange, signIn, signOut } from '../auth/authClient'
+import {
+  getCachedAuthedEmail,
+  getCurrentSession,
+  onAuthStateChange,
+  setCachedAuthedEmail,
+  signIn,
+  signOut,
+} from '../auth/authClient'
 import { setEditorName } from '../state/editor'
 import { startAutoSync } from '../sync/syncEngine'
 import { supabaseConfigured } from '../sync/supabaseClient'
@@ -10,19 +17,38 @@ export default function LoginGate({ children }: { children: ReactNode }) {
   const [password, setPassword] = useState('')
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState('')
-  const [userEmail, setUserEmail] = useState<string | null>(null)
+  // Start from whatever this device last successfully authenticated as, so a
+  // reload while offline shows the app immediately instead of waiting on a
+  // network call that may never come back.
+  const [userEmail, setUserEmail] = useState<string | null>(() => getCachedAuthedEmail())
 
   useEffect(() => {
     if (!supabaseConfigured) {
       setCheckingSession(false)
       return
     }
-    getCurrentSession().then((session) => {
-      setUserEmail(session?.user.email ?? null)
-      setCheckingSession(false)
-    })
+
+    getCurrentSession()
+      .then((session) => {
+        if (session?.user.email) {
+          setUserEmail(session.user.email)
+          setCachedAuthedEmail(session.user.email)
+        }
+        // No live session but we already trust a cached one from before —
+        // leave it alone. This is far more likely a network hiccup (or a
+        // background token refresh that couldn't reach Supabase) than an
+        // actual sign-out, and offline use shouldn't get bounced for that.
+      })
+      .catch(() => {
+        // Same reasoning — a failed check is not a sign-out.
+      })
+      .finally(() => setCheckingSession(false))
+
     return onAuthStateChange((session) => {
-      setUserEmail(session?.user.email ?? null)
+      if (session?.user.email) {
+        setUserEmail(session.user.email)
+        setCachedAuthedEmail(session.user.email)
+      }
     })
   }, [])
 
@@ -31,6 +57,11 @@ export default function LoginGate({ children }: { children: ReactNode }) {
     setEditorName(userEmail)
     startAutoSync()
   }, [userEmail])
+
+  async function handleSignOut() {
+    await signOut()
+    setUserEmail(null)
+  }
 
   if (!supabaseConfigured) {
     return (
@@ -47,18 +78,18 @@ export default function LoginGate({ children }: { children: ReactNode }) {
     )
   }
 
-  if (checkingSession) return null
-
   if (userEmail) {
     return (
       <>
-        <button type="button" className="sign-out-button" onClick={() => signOut()}>
+        <button type="button" className="sign-out-button" onClick={handleSignOut}>
           Sign out ({userEmail})
         </button>
         {children}
       </>
     )
   }
+
+  if (checkingSession) return null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

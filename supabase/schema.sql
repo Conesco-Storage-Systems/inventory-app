@@ -132,3 +132,11 @@ create policy "Authenticated users can do anything" on photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on project_photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Storage bucket policy: creating the "inventory-photos" bucket in the
+-- dashboard does NOT automatically let logged-in users upload to it — that's
+-- a separate policy on storage.objects, scoped to just this bucket.
+create policy "Authenticated users can do anything with inventory photos"
+  on storage.objects for all
+  using (bucket_id = 'inventory-photos' and auth.uid() is not null)
+  with check (bucket_id = 'inventory-photos' and auth.uid() is not null);

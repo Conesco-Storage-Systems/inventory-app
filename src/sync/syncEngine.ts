@@ -45,6 +45,8 @@ async function pushItemTable(config: ItemTableConfig): Promise<void> {
     const { error } = await supabase.from(config.remoteTable).upsert(config.toRemote(row))
     if (!error) {
       await table.update(row.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push ${config.remoteTable}/${row.id} failed:`, error.message, error)
     }
   }
 }
@@ -52,7 +54,11 @@ async function pushItemTable(config: ItemTableConfig): Promise<void> {
 async function pullItemTable(config: ItemTableConfig): Promise<void> {
   const cursor = getCursors()[config.remoteTable] ?? 0
   const { data, error } = await supabase.from(config.remoteTable).select('*').gt('updated_at', cursor)
-  if (error || !data) return
+  if (error) {
+    console.error(`[sync] pull ${config.remoteTable} failed:`, error.message, error)
+    return
+  }
+  if (!data) return
 
   const table = db.table(config.localTable)
   let maxUpdatedAt = cursor
@@ -248,11 +254,14 @@ async function pushSites(): Promise<void> {
         .from(STORAGE_BUCKET)
         .upload(path, site.sitePhoto, { upsert: true, contentType: site.sitePhoto.type })
       if (!uploadError) sitePhotoPath = path
+      else console.error(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
     }
 
     const { error } = await supabase.from('sites').upsert(siteToRemote({ ...site, sitePhotoPath }))
     if (!error) {
       await db.sites.update(site.id, { syncStatus: 'synced', sitePhotoPath })
+    } else {
+      console.error(`[sync] push sites/${site.id} failed:`, error.message, error)
     }
   }
 }
@@ -260,7 +269,11 @@ async function pushSites(): Promise<void> {
 async function pullSites(): Promise<void> {
   const cursor = getCursors().sites ?? 0
   const { data, error } = await supabase.from('sites').select('*').gt('last_updated_at', cursor)
-  if (error || !data) return
+  if (error) {
+    console.error('[sync] pull sites failed:', error.message, error)
+    return
+  }
+  if (!data) return
 
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
@@ -306,7 +319,10 @@ async function pushPhotos(): Promise<void> {
     const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
-    if (uploadError) continue
+    if (uploadError) {
+      console.error(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+      continue
+    }
 
     const { error } = await supabase.from('photos').upsert({
       id: photo.id,
@@ -317,6 +333,8 @@ async function pushPhotos(): Promise<void> {
     })
     if (!error) {
       await db.photos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+    } else {
+      console.error(`[sync] push photos/${photo.id} failed:`, error.message, error)
     }
   }
 }
@@ -324,7 +342,11 @@ async function pushPhotos(): Promise<void> {
 async function pullPhotos(): Promise<void> {
   const cursor = getCursors().photos ?? 0
   const { data, error } = await supabase.from('photos').select('*').gt('created_at', cursor)
-  if (error || !data) return
+  if (error) {
+    console.error('[sync] pull photos failed:', error.message, error)
+    return
+  }
+  if (!data) return
 
   let maxCreatedAt = cursor
   const touchedItemIds = new Set<string>()
@@ -374,7 +396,10 @@ async function pushProjectPhotos(): Promise<void> {
     const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
-    if (uploadError) continue
+    if (uploadError) {
+      console.error(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+      continue
+    }
 
     const { error } = await supabase.from('project_photos').upsert({
       id: photo.id,
@@ -384,6 +409,8 @@ async function pushProjectPhotos(): Promise<void> {
     })
     if (!error) {
       await db.projectPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+    } else {
+      console.error(`[sync] push project_photos/${photo.id} failed:`, error.message, error)
     }
   }
 }
@@ -391,7 +418,11 @@ async function pushProjectPhotos(): Promise<void> {
 async function pullProjectPhotos(): Promise<void> {
   const cursor = getCursors().project_photos ?? 0
   const { data, error } = await supabase.from('project_photos').select('*').gt('created_at', cursor)
-  if (error || !data) return
+  if (error) {
+    console.error('[sync] pull project_photos failed:', error.message, error)
+    return
+  }
+  if (!data) return
 
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
@@ -431,6 +462,8 @@ async function pushPendingDeletes(): Promise<void> {
     const { error } = await supabase.from(remoteTable).delete().eq('id', del.recordId)
     if (!error) {
       await db.pendingDeletes.delete(del.id)
+    } else {
+      console.error(`[sync] delete ${remoteTable}/${del.recordId} failed:`, error.message, error)
     }
   }
 }
@@ -440,7 +473,19 @@ async function pushPendingDeletes(): Promise<void> {
 let syncing = false
 
 export async function runSync(): Promise<void> {
-  if (!supabaseConfigured || syncing || !navigator.onLine) return
+  if (!supabaseConfigured) {
+    console.warn('[sync] skipped — Supabase is not configured')
+    return
+  }
+  if (syncing) {
+    console.log('[sync] skipped — a sync is already in progress')
+    return
+  }
+  if (!navigator.onLine) {
+    console.log('[sync] skipped — browser reports offline')
+    return
+  }
+  console.log('[sync] starting…')
   syncing = true
   try {
     await pushPendingDeletes()
@@ -453,6 +498,7 @@ export async function runSync(): Promise<void> {
     await pullSites()
     await pullPhotos()
     await pullProjectPhotos()
+    console.log('[sync] finished')
   } catch (err) {
     console.error('[sync] sync run failed', err)
   } finally {

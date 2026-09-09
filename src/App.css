@@ -87,7 +87,6 @@ button {
 }
 
 .location-header-row {
-  position: relative;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   align-items: flex-start;
@@ -100,9 +99,9 @@ button {
 }
 
 .locked-image-box {
-  position: absolute;
-  z-index: 5;
-  transition: margin-left 0.15s ease;
+  grid-column: 2;
+  width: 100%;
+  max-width: 300px;
   text-align: center;
 }
 
@@ -116,10 +115,6 @@ button {
 
 .locked-image-box .project-images-link {
   margin-top: 10px;
-}
-
-.locked-image-box--editing {
-  margin-left: 140px;
 }
 
 .site-photo-picker {

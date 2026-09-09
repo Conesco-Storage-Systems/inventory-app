@@ -28,16 +28,6 @@ import { setSitePhoto, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
 
-function readSiteMapBox(siteId: string): { x: number; y: number; width: number } {
-  try {
-    const stored = localStorage.getItem(`siteMapBox:${siteId}`)
-    if (stored) return JSON.parse(stored)
-  } catch {
-    // ignore malformed storage
-  }
-  return { x: 300, y: 0, width: 300 }
-}
-
 // Strips inch marks and all whitespace so formatting differences (4" x 96", 4 x 96,
 // 4x96) don't stop a dimension search like "4x96" from matching.
 function normalizeForSearch(text: string): string {
@@ -324,9 +314,6 @@ export default function LocationDetail() {
 
   const hasItems = uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0
 
-  const siteMapBox = readSiteMapBox(site.id)
-  const siteMapBoxStyle = { left: siteMapBox.x, top: siteMapBox.y, width: siteMapBox.width }
-
   return (
     <main className="page page-wide">
       <p>
@@ -379,10 +366,7 @@ export default function LocationDetail() {
             </>
           )}
         </div>
-        <div
-          className={`locked-image-box${editingSite ? ' locked-image-box--editing' : ''}`}
-          style={siteMapBoxStyle}
-        >
+        <div className="locked-image-box">
           <SitePhotoPicker
             photo={site.sitePhoto}
             alt={`${site.name} site photo`}

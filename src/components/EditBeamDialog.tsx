@@ -9,7 +9,7 @@ import BeamForm, {
 import DeleteConfirm from './DeleteConfirm'
 import type { BeamRow } from '../db/groupBeams'
 import { createBeam, deleteBeamGroup, updateBeamGroup } from '../db/items'
-import type { Condition } from '../models/types'
+import { CONDITIONS, type Condition } from '../models/types'
 
 function draftFromRow(row: BeamRow): BeamDraft {
   const knownColor = (BEAM_COLOR_OPTIONS as readonly string[]).includes(row.color)
@@ -17,6 +17,7 @@ function draftFromRow(row: BeamRow): BeamDraft {
   const knownPinCount = (BEAM_PIN_COUNT_OPTIONS as readonly string[]).includes(row.pinCount)
   const step = row.step ?? ''
   const knownStep = step === '' || (BEAM_STEP_OPTIONS as readonly string[]).includes(step)
+  const knownCondition = (CONDITIONS as readonly string[]).includes(row.condition)
 
   return {
     length: String(row.length),
@@ -31,7 +32,8 @@ function draftFromRow(row: BeamRow): BeamDraft {
     stickers: row.stickers,
     step: knownStep ? step : 'Other',
     stepOther: knownStep ? '' : step,
-    condition: row.condition,
+    condition: knownCondition ? row.condition : 'Other',
+    conditionOther: knownCondition ? '' : row.condition,
     quantity: String(row.quantity),
     bundleSize: row.bundleSize,
     zone: row.zone,
@@ -69,12 +71,13 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
       const style = draft.style === 'Other' ? draft.styleOther : draft.style
       const pinCount = draft.pinCount === 'Other' ? draft.pinCountOther : draft.pinCount
       const step = draft.step === 'Other' ? draft.stepOther : draft.step
+      const condition = (draft.condition === 'Other' ? draft.conditionOther : draft.condition) as Condition
 
       if (mode === 'duplicate') {
         await createBeam({
           siteId,
           quantity: Number(draft.quantity) || 0,
-          condition: draft.condition as Condition,
+          condition,
           bundleSize: draft.bundleSize,
           zone: draft.zone,
           notes: draft.notes,
@@ -93,7 +96,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           survivingId: row.ids[0],
           otherIds: row.ids.slice(1),
           quantity: Number(draft.quantity) || 0,
-          condition: draft.condition as Condition,
+          condition,
           bundleSize: draft.bundleSize,
           zone: draft.zone,
           notes: draft.notes,

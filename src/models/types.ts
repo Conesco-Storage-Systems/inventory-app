@@ -1,6 +1,8 @@
-export type Condition = 'Like New' | 'Good' | 'Rusty'
+// A free-text "Other" condition is allowed (see CONDITIONS), so this can't
+// stay a strict union of the fixed options.
+export type Condition = string
 
-export const CONDITIONS: Condition[] = ['Like New', 'Good', 'Rusty']
+export const CONDITIONS = ['Like New', 'Good', 'Poor', 'Rusty', 'Other'] as const
 
 export type AreaStatus = 'Not started' | 'In progress' | 'Complete'
 
@@ -56,7 +58,14 @@ export interface PickerOption {
   createdAt: number
 }
 
-export type SiteFieldKey = 'color' | 'beamStyle' | 'uprightStyle' | 'gauge' | 'channelCount' | 'wireDeckStyle'
+export type SiteFieldKey =
+  | 'color'
+  | 'beamStyle'
+  | 'uprightStyle'
+  | 'gauge'
+  | 'channelCount'
+  | 'wireDeckStyle'
+  | 'miscItem'
 
 export interface ItemBase {
   id: string
@@ -111,6 +120,7 @@ export interface WireDeck extends ItemBase {
 
 export interface MiscItem extends ItemBase {
   description: string
+  itemDescription: string
 }
 
 export interface Photo {

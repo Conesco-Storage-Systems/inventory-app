@@ -89,6 +89,7 @@ create table misc_items (
   notes text not null default '',
   recorded_by text not null default '',
   description text not null default '',
+  item_description text not null default '',
   created_at bigint not null,
   updated_at bigint not null
 );
@@ -146,3 +147,6 @@ create policy "Authenticated users can do anything with inventory photos"
 -- the already-live database — the create table above is only for a brand
 -- new setup and won't re-run against an existing table).
 alter table beams add column if not exists step text not null default '';
+
+-- Migration: adds the "Other" item type's Item Description field.
+alter table misc_items add column if not exists item_description text not null default '';

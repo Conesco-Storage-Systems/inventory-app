@@ -5,23 +5,20 @@ import { useFieldOrder } from '../hooks/useFieldOrder'
 import { useSiteFieldOptions } from '../hooks/useSiteFieldOptions'
 import { CONDITIONS } from '../models/types'
 
-export const CHANNEL_COUNT_OPTIONS = ['3', '4', '5', '6', 'Other'] as const
-
-export const WIRE_DECK_STYLE_OPTIONS = [
-  'Double Waterfall',
-  'Flared/Flanged',
-  'Lay-in',
-  'Inside Waterfall',
+export const MISC_ITEM_OPTIONS = [
+  'Row Spacer',
+  'Column Spacer',
+  'Pallet Supports',
+  'End Aisle Guards',
+  'Guard Rail',
+  'Conveyor',
   'Other',
 ] as const
 
-export interface WireDeckDraft {
-  length: string
-  width: string
-  channelCount: string
-  channelCountOther: string
-  style: string[]
-  styleOther: string
+export interface MiscItemDraft {
+  description: string
+  descriptionOther: string
+  itemDescription: string
   condition: string
   conditionOther: string
   quantity: string
@@ -31,13 +28,10 @@ export interface WireDeckDraft {
   photos: File[]
 }
 
-export const emptyWireDeckDraft: WireDeckDraft = {
-  length: '',
-  width: '',
-  channelCount: '',
-  channelCountOther: '',
-  style: [],
-  styleOther: '',
+export const emptyMiscItemDraft: MiscItemDraft = {
+  description: '',
+  descriptionOther: '',
+  itemDescription: '',
   condition: '',
   conditionOther: '',
   quantity: '',
@@ -47,11 +41,9 @@ export const emptyWireDeckDraft: WireDeckDraft = {
   photos: [],
 }
 
-type WireDeckFieldKey =
-  | 'length'
-  | 'width'
-  | 'channelCount'
-  | 'style'
+type MiscItemFieldKey =
+  | 'description'
+  | 'itemDescription'
   | 'condition'
   | 'quantity'
   | 'bundleSize'
@@ -59,12 +51,10 @@ type WireDeckFieldKey =
   | 'notes'
   | 'photos'
 
-const DEFAULT_WIRE_DECK_FIELD_ORDER: WireDeckFieldKey[] = [
+const DEFAULT_MISC_ITEM_FIELD_ORDER: MiscItemFieldKey[] = [
   'photos',
-  'length',
-  'width',
-  'channelCount',
-  'style',
+  'description',
+  'itemDescription',
   'condition',
   'quantity',
   'bundleSize',
@@ -72,112 +62,61 @@ const DEFAULT_WIRE_DECK_FIELD_ORDER: WireDeckFieldKey[] = [
   'notes',
 ]
 
-interface WireDeckFormProps {
-  value: WireDeckDraft
-  onChange: (next: WireDeckDraft) => void
+interface MiscItemFormProps {
+  value: MiscItemDraft
+  onChange: (next: MiscItemDraft) => void
   siteId?: string
 }
 
-export default function WireDeckForm({ value, onChange, siteId }: WireDeckFormProps) {
-  const { order, locked, setLocked, moveField } = useFieldOrder<WireDeckFieldKey>(
-    'wireDeckFieldOrder',
-    DEFAULT_WIRE_DECK_FIELD_ORDER,
+export default function MiscItemForm({ value, onChange, siteId }: MiscItemFormProps) {
+  const { order, locked, setLocked, moveField } = useFieldOrder<MiscItemFieldKey>(
+    'miscItemFieldOrder',
+    DEFAULT_MISC_ITEM_FIELD_ORDER,
     { photos: 'start', notes: 'end' },
   )
-  const [draggingKey, setDraggingKey] = useState<WireDeckFieldKey | null>(null)
+  const [draggingKey, setDraggingKey] = useState<MiscItemFieldKey | null>(null)
 
-  const channelCountOptions = useSiteFieldOptions(siteId, 'channelCount', CHANNEL_COUNT_OPTIONS)
-  const styleOptions = useSiteFieldOptions(siteId, 'wireDeckStyle', WIRE_DECK_STYLE_OPTIONS)
+  const descriptionOptions = useSiteFieldOptions(siteId, 'miscItem', MISC_ITEM_OPTIONS)
 
-  function toggleStyle(option: string) {
-    const has = value.style.includes(option)
-    onChange({
-      ...value,
-      style: has ? value.style.filter((s) => s !== option) : [...value.style, option],
-    })
-  }
-
-  const fields: Record<WireDeckFieldKey, React.ReactNode> = {
-    length: (
-      <label>
-        Length
-        <div className="input-with-unit">
-          <input
-            type="number"
-            inputMode="decimal"
-            value={value.length}
-            onChange={(e) => onChange({ ...value, length: e.target.value })}
-          />
-          <span className="unit">Inches</span>
-        </div>
-      </label>
-    ),
-    width: (
-      <label>
-        Width
-        <div className="input-with-unit">
-          <input
-            type="number"
-            inputMode="decimal"
-            value={value.width}
-            onChange={(e) => onChange({ ...value, width: e.target.value })}
-          />
-          <span className="unit">Inches</span>
-        </div>
-      </label>
-    ),
-    channelCount: (
+  const fields: Record<MiscItemFieldKey, React.ReactNode> = {
+    description: (
       <>
         <label>
-          Number of Channels
+          Item
           <select
-            value={value.channelCount}
-            onChange={(e) => onChange({ ...value, channelCount: e.target.value })}
+            value={value.description}
+            onChange={(e) => onChange({ ...value, description: e.target.value })}
           >
             <option value="" disabled>
-              Select…
+              Select an item…
             </option>
-            {channelCountOptions.map((option) => (
+            {descriptionOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
             ))}
           </select>
         </label>
-        {value.channelCount === 'Other' && (
+        {value.description === 'Other' && (
           <input
             type="text"
-            value={value.channelCountOther}
-            onChange={(e) => onChange({ ...value, channelCountOther: e.target.value })}
+            placeholder="Enter item"
+            value={value.descriptionOther}
+            onChange={(e) => onChange({ ...value, descriptionOther: e.target.value })}
             className="other-input"
           />
         )}
       </>
     ),
-    style: (
-      <fieldset className="checkbox-fieldset">
-        <legend>Style</legend>
-        <div className="checkbox-options">
-          {styleOptions.map((option) => (
-            <label key={option} className="checkbox-option">
-              <input
-                type="checkbox"
-                checked={value.style.includes(option)}
-                onChange={() => toggleStyle(option)}
-              />
-              {option}
-            </label>
-          ))}
-        </div>
-        {value.style.includes('Other') && (
-          <input
-            type="text"
-            value={value.styleOther}
-            onChange={(e) => onChange({ ...value, styleOther: e.target.value })}
-            className="other-input"
-          />
-        )}
-      </fieldset>
+    itemDescription: (
+      <label>
+        Item Description
+        <textarea
+          value={value.itemDescription}
+          onChange={(e) => onChange({ ...value, itemDescription: e.target.value })}
+          rows={3}
+        />
+      </label>
     ),
     condition: (
       <>
@@ -272,9 +211,9 @@ export default function WireDeckForm({ value, onChange, siteId }: WireDeckFormPr
           fieldKey={key}
           draggable={!locked}
           isDragging={draggingKey === key}
-          onDragStartKey={(k) => setDraggingKey(k as WireDeckFieldKey)}
+          onDragStartKey={(k) => setDraggingKey(k as MiscItemFieldKey)}
           onDragOverKey={(k) => {
-            if (draggingKey) moveField(draggingKey, k as WireDeckFieldKey)
+            if (draggingKey) moveField(draggingKey, k as MiscItemFieldKey)
           }}
           onDragEnd={() => setDraggingKey(null)}
         >

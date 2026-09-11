@@ -65,6 +65,9 @@ function extractCondition(text: string): { condition: Condition; remaining: stri
   if (/\blike new\b/i.test(text)) {
     return { condition: 'Like New', remaining: text.replace(/\blike new\b/i, ' ') }
   }
+  if (/\bpoor\b/i.test(text)) {
+    return { condition: 'Poor', remaining: text.replace(/\bpoor\b/i, ' ') }
+  }
   return { condition: 'Good', remaining: text }
 }
 

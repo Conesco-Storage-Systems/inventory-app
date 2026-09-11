@@ -1,6 +1,6 @@
 import { db } from '../db/db'
 import { supabase, supabaseConfigured } from './supabaseClient'
-import type { Beam, ItemType, Photo, ProjectPhoto, Site, Upright, WireDeck } from '../models/types'
+import type { Beam, ItemType, MiscItem, Photo, ProjectPhoto, Site, Upright, WireDeck } from '../models/types'
 
 const STORAGE_BUCKET = 'inventory-photos'
 const CURSOR_KEY = 'inventoryApp.syncCursors'
@@ -28,7 +28,7 @@ function setCursor(table: string, value: number): void {
 // ---------- generic item tables (beams / uprights / wire decks) ----------
 
 interface ItemTableConfig {
-  localTable: 'beams' | 'uprights' | 'wireDecks'
+  localTable: 'beams' | 'uprights' | 'wireDecks' | 'miscItems'
   remoteTable: string
   itemType: ItemType
   // Rows are handled loosely (any) here — each table has its own field
@@ -228,7 +228,43 @@ const wireDeckConfig: ItemTableConfig = {
   }),
 }
 
-const ITEM_CONFIGS = [beamConfig, uprightConfig, wireDeckConfig]
+const miscItemConfig: ItemTableConfig = {
+  localTable: 'miscItems',
+  remoteTable: 'misc_items',
+  itemType: 'misc',
+  toRemote: (m) => ({
+    id: m.id,
+    site_id: m.siteId,
+    quantity: m.quantity,
+    condition: m.condition,
+    bundle_size: m.bundleSize,
+    zone: m.zone,
+    notes: m.notes,
+    recorded_by: m.recordedBy,
+    description: m.description,
+    item_description: m.itemDescription,
+    created_at: m.createdAt,
+    updated_at: m.updatedAt,
+  }),
+  fromRemote: (r) => ({
+    id: r.id as string,
+    siteId: r.site_id as string,
+    areaId: '',
+    aisleOrBay: '',
+    quantity: r.quantity as number,
+    condition: r.condition as MiscItem['condition'],
+    bundleSize: r.bundle_size as string,
+    zone: r.zone as string,
+    notes: r.notes as string,
+    recordedBy: r.recorded_by as string,
+    createdAt: r.created_at as number,
+    updatedAt: r.updated_at as number,
+    description: r.description as string,
+    itemDescription: (r.item_description as string) ?? '',
+  }),
+}
+
+const ITEM_CONFIGS = [beamConfig, uprightConfig, wireDeckConfig, miscItemConfig]
 
 // ---------- sites (including the site photo blob) ----------
 
@@ -542,7 +578,7 @@ export function startAutoSync(): void {
   window.addEventListener('online', () => runSync())
   setInterval(runSync, 30_000)
 
-  const remoteTables = ['sites', 'beams', 'uprights', 'wire_decks', 'photos', 'project_photos']
+  const remoteTables = ['sites', 'beams', 'uprights', 'wire_decks', 'misc_items', 'photos', 'project_photos']
   for (const table of remoteTables) {
     supabase
       .channel(`realtime:${table}`)

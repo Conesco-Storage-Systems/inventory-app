@@ -3,12 +3,13 @@ import DeleteConfirm from './DeleteConfirm'
 import WireDeckForm, { CHANNEL_COUNT_OPTIONS, WIRE_DECK_STYLE_OPTIONS, type WireDeckDraft } from './WireDeckForm'
 import type { WireDeckRow } from '../db/groupWireDecks'
 import { createWireDeck, deleteWireDeckGroup, updateWireDeckGroup } from '../db/items'
-import type { Condition } from '../models/types'
+import { CONDITIONS, type Condition } from '../models/types'
 
 function draftFromRow(row: WireDeckRow): WireDeckDraft {
   const knownChannelCount = (CHANNEL_COUNT_OPTIONS as readonly string[]).includes(row.channelCount)
   const knownStyles = row.style.filter((s) => (WIRE_DECK_STYLE_OPTIONS as readonly string[]).includes(s))
   const unknownStyles = row.style.filter((s) => !(WIRE_DECK_STYLE_OPTIONS as readonly string[]).includes(s))
+  const knownCondition = (CONDITIONS as readonly string[]).includes(row.condition)
 
   return {
     length: String(row.length),
@@ -17,7 +18,8 @@ function draftFromRow(row: WireDeckRow): WireDeckDraft {
     channelCountOther: knownChannelCount ? '' : row.channelCount,
     style: unknownStyles.length > 0 ? [...knownStyles, 'Other'] : knownStyles,
     styleOther: unknownStyles.join(', '),
-    condition: row.condition,
+    condition: knownCondition ? row.condition : 'Other',
+    conditionOther: knownCondition ? '' : row.condition,
     quantity: String(row.quantity),
     bundleSize: row.bundleSize,
     zone: row.zone,
@@ -53,12 +55,13 @@ export default function EditWireDeckDialog({ row, siteId, mode, onClose }: EditW
     try {
       const channelCount = draft.channelCount === 'Other' ? draft.channelCountOther : draft.channelCount
       const style = draft.style.map((s) => (s === 'Other' ? draft.styleOther : s)).filter(Boolean)
+      const condition = (draft.condition === 'Other' ? draft.conditionOther : draft.condition) as Condition
 
       if (mode === 'duplicate') {
         await createWireDeck({
           siteId,
           quantity: Number(draft.quantity) || 0,
-          condition: draft.condition as Condition,
+          condition,
           bundleSize: draft.bundleSize,
           zone: draft.zone,
           notes: draft.notes,
@@ -73,7 +76,7 @@ export default function EditWireDeckDialog({ row, siteId, mode, onClose }: EditW
           survivingId: row.ids[0],
           otherIds: row.ids.slice(1),
           quantity: Number(draft.quantity) || 0,
-          condition: draft.condition as Condition,
+          condition,
           bundleSize: draft.bundleSize,
           zone: draft.zone,
           notes: draft.notes,

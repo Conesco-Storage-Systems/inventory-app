@@ -4,13 +4,16 @@ import { Link, useParams } from 'react-router-dom'
 import BeamTable from '../components/BeamTable'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import EditBeamDialog from '../components/EditBeamDialog'
+import EditMiscItemDialog from '../components/EditMiscItemDialog'
 import EditUprightDialog from '../components/EditUprightDialog'
 import EditWireDeckDialog from '../components/EditWireDeckDialog'
+import MiscItemTable from '../components/MiscItemTable'
 import SitePhotoPicker from '../components/SitePhotoPicker'
 import UprightTable from '../components/UprightTable'
 import WireDeckTable from '../components/WireDeckTable'
 import { db } from '../db/db'
 import { groupBeams, type BeamRow } from '../db/groupBeams'
+import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import {
@@ -18,9 +21,11 @@ import {
   createUpright,
   createWireDeck,
   deleteBeamGroup,
+  deleteMiscItemGroup,
   deleteUprightGroup,
   deleteWireDeckGroup,
   listBeamsBySite,
+  listMiscItemsBySite,
   listUprightsBySite,
   listWireDecksBySite,
 } from '../db/items'
@@ -53,12 +58,12 @@ function matchesSearch<T extends object>(row: T, term: string): boolean {
   })
 }
 
-type ItemKind = 'upright' | 'beam' | 'wireDeck'
+type ItemKind = 'upright' | 'beam' | 'wireDeck' | 'misc'
 
 interface SelectedItem {
   itemType: ItemKind
   key: string
-  row: UprightRow | BeamRow | WireDeckRow
+  row: UprightRow | BeamRow | WireDeckRow | MiscItemRow
 }
 
 export default function LocationDetail() {
@@ -67,6 +72,7 @@ export default function LocationDetail() {
   const uprights = useLiveQuery(() => (siteId ? listUprightsBySite(siteId) : []), [siteId]) ?? []
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
+  const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
 
   const toolbarObserverRef = useRef<IntersectionObserver | null>(null)
   const [toolbarStuck, setToolbarStuck] = useState(false)
@@ -158,6 +164,7 @@ export default function LocationDetail() {
   const uprightRows = groupUprights(uprights)
   const beamRows = groupBeams(beams)
   const wireDeckRows = groupWireDecks(wireDecks)
+  const miscRows = groupMiscItems(miscItems)
 
   const normalizedSearch = normalizeForSearch(searchTerm)
   const displayedUprightRows = normalizedSearch
@@ -167,7 +174,7 @@ export default function LocationDetail() {
     ? beamRows.filter((row) => matchesSearch(row, normalizedSearch))
     : beamRows
 
-  function toggleSelect(itemType: ItemKind, row: UprightRow | BeamRow | WireDeckRow) {
+  function toggleSelect(itemType: ItemKind, row: UprightRow | BeamRow | WireDeckRow | MiscItemRow) {
     setSelectedItem((prev) =>
       prev && prev.itemType === itemType && prev.key === row.key ? null : { itemType, key: row.key, row },
     )
@@ -182,12 +189,16 @@ export default function LocationDetail() {
     if (!selectedItem) return
     if (selectedItem.itemType === 'upright') await deleteUprightGroup(selectedItem.row.ids)
     else if (selectedItem.itemType === 'beam') await deleteBeamGroup(selectedItem.row.ids)
-    else await deleteWireDeckGroup(selectedItem.row.ids)
+    else if (selectedItem.itemType === 'wireDeck') await deleteWireDeckGroup(selectedItem.row.ids)
+    else await deleteMiscItemGroup(selectedItem.row.ids)
   }
 
   const displayedWireDeckRows = normalizedSearch
     ? wireDeckRows.filter((row) => matchesSearch(row, normalizedSearch))
     : wireDeckRows
+  const displayedMiscRows = normalizedSearch
+    ? miscRows.filter((row) => matchesSearch(row, normalizedSearch))
+    : miscRows
 
   if (site === undefined) {
     return (
@@ -247,6 +258,7 @@ export default function LocationDetail() {
       'Hole Size': '',
       Gauge: '',
       'Number of Channels': '',
+      'Item Description': '',
       Condition: '',
       Stamp: '',
       Stickers: '',
@@ -306,6 +318,18 @@ export default function LocationDetail() {
         Notes: row.notes,
         Photos: row.photoIds.length,
       })),
+      ...miscRows.map((row) => ({
+        ...blankRow,
+        Quantity: row.quantity,
+        Item: 'Other',
+        Style: row.description,
+        'Item Description': row.itemDescription,
+        Condition: row.condition,
+        'Bundle Size': row.bundleSize,
+        Zone: row.zone,
+        Notes: row.notes,
+        Photos: row.photoIds.length,
+      })),
     ]
 
     exportSheetsToExcel(
@@ -314,7 +338,8 @@ export default function LocationDetail() {
     )
   }
 
-  const hasItems = uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0
+  const hasItems =
+    uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0 || miscRows.length > 0
 
   return (
     <main className="page page-wide">
@@ -525,6 +550,18 @@ export default function LocationDetail() {
         </section>
       )}
 
+      {miscRows.length > 0 && (
+        <section className="item-section">
+          <h2>Other</h2>
+          <MiscItemTable
+            rows={displayedMiscRows}
+            siteId={site.id}
+            selectedKey={selectedItem?.itemType === 'misc' ? selectedItem.key : null}
+            onToggleSelect={(row) => toggleSelect('misc', row)}
+          />
+        </section>
+      )}
+
       {selectedItem?.itemType === 'upright' && (activeAction === 'edit' || activeAction === 'duplicate') && (
         <EditUprightDialog
           row={selectedItem.row as UprightRow}
@@ -544,6 +581,14 @@ export default function LocationDetail() {
       {selectedItem?.itemType === 'wireDeck' && (activeAction === 'edit' || activeAction === 'duplicate') && (
         <EditWireDeckDialog
           row={selectedItem.row as WireDeckRow}
+          siteId={site.id}
+          mode={activeAction}
+          onClose={closeAction}
+        />
+      )}
+      {selectedItem?.itemType === 'misc' && (activeAction === 'edit' || activeAction === 'duplicate') && (
+        <EditMiscItemDialog
+          row={selectedItem.row as MiscItemRow}
           siteId={site.id}
           mode={activeAction}
           onClose={closeAction}

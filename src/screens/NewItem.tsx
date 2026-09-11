@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import BeamForm, { emptyBeamDraft, type BeamDraft } from '../components/BeamForm'
+import MiscItemForm, { emptyMiscItemDraft, type MiscItemDraft } from '../components/MiscItemForm'
 import UprightForm, { emptyUprightDraft, type UprightDraft } from '../components/UprightForm'
 import WireDeckForm, { emptyWireDeckDraft, type WireDeckDraft } from '../components/WireDeckForm'
-import { createBeam, createUpright, createWireDeck } from '../db/items'
+import { createBeam, createMiscItem, createUpright, createWireDeck } from '../db/items'
 import { ITEM_TYPE_LABELS, type Condition, type ItemType } from '../models/types'
 
 const ITEM_TYPE_ORDER: ItemType[] = ['beam', 'wireDeck', 'upright', 'misc']
@@ -15,11 +16,13 @@ export default function NewItem() {
   const [beamDraft, setBeamDraft] = useState<BeamDraft>(emptyBeamDraft)
   const [wireDeckDraft, setWireDeckDraft] = useState<WireDeckDraft>(emptyWireDeckDraft)
   const [uprightDraft, setUprightDraft] = useState<UprightDraft>(emptyUprightDraft)
+  const [miscDraft, setMiscDraft] = useState<MiscItemDraft>(emptyMiscItemDraft)
   const [saving, setSaving] = useState(false)
 
   const beamReady = beamDraft.condition !== '' && beamDraft.quantity.trim() !== ''
   const wireDeckReady = wireDeckDraft.condition !== '' && wireDeckDraft.quantity.trim() !== ''
   const uprightReady = uprightDraft.condition !== '' && uprightDraft.quantity.trim() !== ''
+  const miscReady = miscDraft.condition !== '' && miscDraft.quantity.trim() !== ''
 
   async function handleSaveBeam() {
     if (!siteId || !beamReady) return
@@ -28,7 +31,7 @@ export default function NewItem() {
       await createBeam({
         siteId,
         quantity: Number(beamDraft.quantity),
-        condition: beamDraft.condition as Condition,
+        condition: (beamDraft.condition === 'Other' ? beamDraft.conditionOther : beamDraft.condition) as Condition,
         bundleSize: beamDraft.bundleSize,
         zone: beamDraft.zone,
         notes: beamDraft.notes,
@@ -55,7 +58,9 @@ export default function NewItem() {
       await createWireDeck({
         siteId,
         quantity: Number(wireDeckDraft.quantity),
-        condition: wireDeckDraft.condition as Condition,
+        condition: (wireDeckDraft.condition === 'Other'
+          ? wireDeckDraft.conditionOther
+          : wireDeckDraft.condition) as Condition,
         bundleSize: wireDeckDraft.bundleSize,
         zone: wireDeckDraft.zone,
         notes: wireDeckDraft.notes,
@@ -83,7 +88,9 @@ export default function NewItem() {
       await createUpright({
         siteId,
         quantity: Number(uprightDraft.quantity),
-        condition: uprightDraft.condition as Condition,
+        condition: (uprightDraft.condition === 'Other'
+          ? uprightDraft.conditionOther
+          : uprightDraft.condition) as Condition,
         bundleSize: uprightDraft.bundleSize,
         zone: uprightDraft.zone,
         notes: uprightDraft.notes,
@@ -101,6 +108,27 @@ export default function NewItem() {
         gauge: uprightDraft.gauge === 'Other' ? uprightDraft.gaugeOther : uprightDraft.gauge,
         stamp: uprightDraft.stamp,
         photoFiles: uprightDraft.photos,
+      })
+      navigate(`/locations/${siteId}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSaveMisc() {
+    if (!siteId || !miscReady) return
+    setSaving(true)
+    try {
+      await createMiscItem({
+        siteId,
+        quantity: Number(miscDraft.quantity),
+        condition: (miscDraft.condition === 'Other' ? miscDraft.conditionOther : miscDraft.condition) as Condition,
+        bundleSize: miscDraft.bundleSize,
+        zone: miscDraft.zone,
+        notes: miscDraft.notes,
+        description: miscDraft.description === 'Other' ? miscDraft.descriptionOther : miscDraft.description,
+        itemDescription: miscDraft.itemDescription,
+        photoFiles: miscDraft.photos,
       })
       navigate(`/locations/${siteId}`)
     } finally {
@@ -165,11 +193,15 @@ export default function NewItem() {
         </>
       )}
 
-      {itemType && itemType !== 'beam' && itemType !== 'wireDeck' && itemType !== 'upright' && (
-        <p className="placeholder-note">
-          {ITEM_TYPE_LABELS[itemType]} fields are coming in the next round of changes. Nothing is
-          saved yet.
-        </p>
+      {itemType === 'misc' && (
+        <>
+          <MiscItemForm value={miscDraft} onChange={setMiscDraft} siteId={siteId} />
+          <div className="save-item-row">
+            <button type="button" onClick={handleSaveMisc} disabled={!miscReady || saving}>
+              Save item
+            </button>
+          </div>
+        </>
       )}
     </main>
   )

@@ -39,6 +39,7 @@ export interface BeamDraft {
   step: string
   stepOther: string
   condition: string
+  conditionOther: string
   quantity: string
   bundleSize: string
   zone: string
@@ -60,6 +61,7 @@ export const emptyBeamDraft: BeamDraft = {
   step: '',
   stepOther: '',
   condition: '',
+  conditionOther: '',
   quantity: '',
   bundleSize: '',
   zone: '',
@@ -280,22 +282,33 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
       </label>
     ),
     condition: (
-      <label>
-        Condition
-        <select
-          value={value.condition}
-          onChange={(e) => onChange({ ...value, condition: e.target.value })}
-        >
-          <option value="" disabled>
-            Select condition…
-          </option>
-          {CONDITIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
+      <>
+        <label>
+          Condition
+          <select
+            value={value.condition}
+            onChange={(e) => onChange({ ...value, condition: e.target.value })}
+          >
+            <option value="" disabled>
+              Select condition…
             </option>
-          ))}
-        </select>
-      </label>
+            {CONDITIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        {value.condition === 'Other' && (
+          <input
+            type="text"
+            placeholder="Enter condition"
+            value={value.conditionOther}
+            onChange={(e) => onChange({ ...value, conditionOther: e.target.value })}
+            className="other-input"
+          />
+        )}
+      </>
     ),
     quantity: (
       <label>

@@ -31,6 +31,10 @@ async function activeValuesForField(siteId: string, fieldKey: SiteFieldKey): Pro
       const wireDecks = await db.wireDecks.where('siteId').equals(siteId).toArray()
       return wireDecks.flatMap((w) => w.style)
     }
+    case 'miscItem': {
+      const miscItems = await db.miscItems.where('siteId').equals(siteId).toArray()
+      return miscItems.map((m) => m.description)
+    }
     default:
       return []
   }

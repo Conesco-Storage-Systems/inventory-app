@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
 import { touchSiteUpdated } from './locations'
 import { enqueuePendingDeletes } from './pendingDeletes'
-import type { Beam, Condition, ItemType, Upright, WireDeck } from '../models/types'
+import type { Beam, Condition, ItemType, MiscItem, Upright, WireDeck } from '../models/types'
 
 export interface NewBeamInput {
   siteId: string
@@ -392,5 +392,100 @@ export async function deleteUprightGroup(ids: string[]): Promise<void> {
   await deletePhotosForItems(ids)
   await enqueuePendingDeletes('uprights', ids)
   await db.uprights.bulkDelete(ids)
+  if (existing) await touchSiteUpdated(existing.siteId)
+}
+
+export interface NewMiscItemInput {
+  siteId: string
+  quantity: number
+  condition: Condition
+  bundleSize: string
+  zone: string
+  notes: string
+  description: string
+  itemDescription: string
+  photoFiles: File[]
+}
+
+export async function createMiscItem(input: NewMiscItemInput): Promise<string> {
+  const id = uuidv4()
+  const now = Date.now()
+  const photoIds = await savePhotos('misc', id, input.photoFiles)
+
+  const miscItem: MiscItem = {
+    id,
+    siteId: input.siteId,
+    areaId: '',
+    aisleOrBay: '',
+    quantity: input.quantity,
+    condition: input.condition,
+    bundleSize: input.bundleSize,
+    zone: input.zone,
+    notes: input.notes,
+    photoIds,
+    recordedBy: '',
+    createdAt: now,
+    updatedAt: now,
+    syncStatus: 'pending',
+    description: input.description,
+    itemDescription: input.itemDescription,
+  }
+
+  await db.miscItems.add(miscItem)
+  await touchSiteUpdated(input.siteId)
+  return id
+}
+
+export async function listMiscItemsBySite(siteId: string): Promise<MiscItem[]> {
+  return db.miscItems.where('siteId').equals(siteId).toArray()
+}
+
+export interface MiscItemEditInput {
+  survivingId: string
+  otherIds: string[]
+  quantity: number
+  condition: Condition
+  bundleSize: string
+  zone: string
+  notes: string
+  description: string
+  itemDescription: string
+  existingPhotoIds: string[]
+  newPhotoFiles: File[]
+}
+
+export async function updateMiscItemGroup(input: MiscItemEditInput): Promise<void> {
+  const existing = await db.miscItems.get(input.survivingId)
+  if (!existing) return
+
+  const newPhotoIds = await savePhotos('misc', input.survivingId, input.newPhotoFiles)
+  const photoIds = [...input.existingPhotoIds, ...newPhotoIds]
+
+  if (input.otherIds.length > 0) {
+    await db.photos.where('itemId').anyOf(input.otherIds).modify({ itemId: input.survivingId })
+    await enqueuePendingDeletes('miscItems', input.otherIds)
+    await db.miscItems.bulkDelete(input.otherIds)
+  }
+
+  await db.miscItems.update(input.survivingId, {
+    quantity: input.quantity,
+    condition: input.condition,
+    bundleSize: input.bundleSize,
+    zone: input.zone,
+    notes: input.notes,
+    description: input.description,
+    itemDescription: input.itemDescription,
+    photoIds,
+    updatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+  await touchSiteUpdated(existing.siteId)
+}
+
+export async function deleteMiscItemGroup(ids: string[]): Promise<void> {
+  const existing = await db.miscItems.get(ids[0])
+  await deletePhotosForItems(ids)
+  await enqueuePendingDeletes('miscItems', ids)
+  await db.miscItems.bulkDelete(ids)
   if (existing) await touchSiteUpdated(existing.siteId)
 }

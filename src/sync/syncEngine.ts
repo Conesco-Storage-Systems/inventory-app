@@ -275,7 +275,7 @@ function siteToRemote(site: Site): Record<string, unknown> {
     address: site.address,
     other_info: site.otherInfo,
     active: site.active ?? true,
-    site_photo_path: site.sitePhotoPath ?? null,
+    site_photo_path: site.sitePhotoPath || null,
     created_at: site.createdAt,
     last_updated_by: site.lastUpdatedBy,
     last_updated_at: site.lastUpdatedAt,
@@ -348,10 +348,14 @@ async function pullSites(): Promise<void> {
     }
 
     let sitePhoto = local?.sitePhoto
-    const sitePhotoPath = (remoteRow.site_photo_path as string | null) ?? undefined
+    const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
     if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
       const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
       if (blob) sitePhoto = blob
+    } else if (!sitePhotoPath) {
+      // Remote has no photo (removed elsewhere) — don't keep showing
+      // whatever this device happened to have downloaded before.
+      sitePhoto = undefined
     }
 
     await db.sites.put({

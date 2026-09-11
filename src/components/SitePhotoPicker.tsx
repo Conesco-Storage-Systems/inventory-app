@@ -7,12 +7,14 @@ interface SitePhotoPickerProps {
   photo?: Blob
   alt: string
   onSelect: (file: File) => void
+  onRemove: () => void
 }
 
-export default function SitePhotoPicker({ photo, alt, onSelect }: SitePhotoPickerProps) {
+export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: SitePhotoPickerProps) {
   const [showViewer, setShowViewer] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -71,6 +73,12 @@ export default function SitePhotoPicker({ photo, alt, onSelect }: SitePhotoPicke
   function closeViewer() {
     setShowViewer(false)
     setShowMenu(false)
+    setConfirmingRemove(false)
+  }
+
+  function handleRemoveConfirmed() {
+    onRemove()
+    closeViewer()
   }
 
   return (
@@ -128,35 +136,52 @@ export default function SitePhotoPicker({ photo, alt, onSelect }: SitePhotoPicke
               </button>
               <BlobImage blob={photo} alt={alt} />
             </div>
-            <div className="site-photo-viewer-actions">
-              <div className="photo-add-wrapper" ref={menuRef}>
-                <button type="button" onClick={handleReplaceClick}>
-                  Replace Photo
-                </button>
-                {!isMobileDevice && showMenu && (
-                  <div className="photo-add-menu photo-add-menu-up">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCamera(true)
-                        setShowMenu(false)
-                      }}
-                    >
-                      Take Photo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        fileInputRef.current?.click()
-                        setShowMenu(false)
-                      }}
-                    >
-                      Add From Files
-                    </button>
-                  </div>
-                )}
+            {confirmingRemove ? (
+              <div className="site-photo-viewer-actions">
+                <p>Remove this site photo?</p>
+                <div className="dialog-actions">
+                  <button type="button" onClick={() => setConfirmingRemove(false)}>
+                    Cancel
+                  </button>
+                  <button type="button" className="delete-button" onClick={handleRemoveConfirmed}>
+                    Remove Photo
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="site-photo-viewer-actions">
+                <div className="photo-add-wrapper" ref={menuRef}>
+                  <button type="button" onClick={handleReplaceClick}>
+                    Replace Photo
+                  </button>
+                  {!isMobileDevice && showMenu && (
+                    <div className="photo-add-menu photo-add-menu-up">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCamera(true)
+                          setShowMenu(false)
+                        }}
+                      >
+                        Take Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fileInputRef.current?.click()
+                          setShowMenu(false)
+                        }}
+                      >
+                        Add From Files
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button type="button" className="delete-button" onClick={() => setConfirmingRemove(true)}>
+                  Remove Photo
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

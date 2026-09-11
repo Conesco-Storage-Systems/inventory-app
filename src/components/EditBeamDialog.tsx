@@ -139,6 +139,11 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
       ) : (
         <form onSubmit={handleSave}>
           <h2>{mode === 'duplicate' ? 'Duplicate beam' : 'Edit beam'}</h2>
+          {mode === 'duplicate' && (
+            <p className="existing-photos-note">
+              Photos are not copied to the new item — add photos below if needed.
+            </p>
+          )}
           {mode === 'edit' && row.photoIds.length > 0 && (
             <p className="existing-photos-note">
               {row.photoIds.length} existing photo{row.photoIds.length === 1 ? '' : 's'} kept — add more

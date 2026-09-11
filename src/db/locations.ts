@@ -117,6 +117,21 @@ export async function setSitePhoto(siteId: string, file: File): Promise<void> {
   })
 }
 
+export async function removeSitePhoto(siteId: string): Promise<void> {
+  const site = await db.sites.get(siteId)
+  if (!site) return
+  delete site.sitePhoto
+
+  await db.sites.put({
+    ...site,
+    sitePhotoPath: '',
+    sitePhotoDirty: true,
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
 export async function createArea(
   siteId: string,
   name: string,

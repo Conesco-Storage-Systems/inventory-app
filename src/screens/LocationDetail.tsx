@@ -29,7 +29,7 @@ import {
   listUprightsBySite,
   listWireDecksBySite,
 } from '../db/items'
-import { setSitePhoto, updateSite } from '../db/locations'
+import { removeSitePhoto, setSitePhoto, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
 
@@ -240,6 +240,10 @@ export default function LocationDetail() {
     if (siteId) await setSitePhoto(siteId, file)
   }
 
+  async function handleSitePhotoRemoved() {
+    if (siteId) await removeSitePhoto(siteId)
+  }
+
   function handleExport() {
     if (!site) return
 
@@ -398,6 +402,7 @@ export default function LocationDetail() {
             photo={site.sitePhoto}
             alt={`${site.name} site photo`}
             onSelect={handleSitePhotoSelected}
+            onRemove={handleSitePhotoRemoved}
           />
           <p className="project-images-link">
             <Link to={`/locations/${site.id}/project-images`}>View project images</Link>

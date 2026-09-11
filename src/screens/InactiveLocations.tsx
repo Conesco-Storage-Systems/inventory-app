@@ -7,8 +7,8 @@ import MarkActiveDialog from '../components/MarkActiveDialog'
 
 export default function InactiveLocations() {
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
-  const inactiveSites = sites.filter((site) => site.active === false)
-  const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null)
+  const inactiveSites = sites.filter((site) => site.active === false && !site.deletedAt)
+  const [deletingSite, setDeletingSite] = useState<{ id: string; name: string } | null>(null)
   const [markingActiveSiteId, setMarkingActiveSiteId] = useState<string | null>(null)
 
   return (
@@ -35,7 +35,7 @@ export default function InactiveLocations() {
                 <button
                   type="button"
                   className="delete-button"
-                  onClick={() => setDeletingSiteId(site.id)}
+                  onClick={() => setDeletingSite({ id: site.id, name: site.name })}
                 >
                   Delete
                 </button>
@@ -45,11 +45,12 @@ export default function InactiveLocations() {
         </ul>
       )}
 
-      {deletingSiteId && (
+      {deletingSite && (
         <DeleteLocationDialog
-          siteId={deletingSiteId}
-          onClose={() => setDeletingSiteId(null)}
-          onDeleted={() => setDeletingSiteId(null)}
+          siteId={deletingSite.id}
+          siteName={deletingSite.name}
+          onClose={() => setDeletingSite(null)}
+          onDeleted={() => setDeletingSite(null)}
         />
       )}
 

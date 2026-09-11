@@ -71,7 +71,37 @@ export async function markSiteActive(siteId: string): Promise<void> {
   })
 }
 
+const RECENTLY_DELETED_RETENTION_MS = 60 * 24 * 60 * 60 * 1000
+
+// Soft delete — moves the location to "Recently Deleted" instead of erasing
+// it. All of its items/photos stay exactly as they are; only the site
+// record itself is flagged, so it drops out of every list until restored or
+// permanently purged after 60 days.
 export async function deleteSite(siteId: string): Promise<void> {
+  await db.sites.update(siteId, {
+    deletedAt: Date.now(),
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
+export async function restoreSite(siteId: string): Promise<void> {
+  const site = await db.sites.get(siteId)
+  if (!site) return
+  delete site.deletedAt
+
+  await db.sites.put({
+    ...site,
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
+// The real, irreversible cascade delete — only ever called once a location
+// has sat in "Recently Deleted" past its retention window.
+export async function permanentlyDeleteSite(siteId: string): Promise<void> {
   const [beams, uprights, wireDecks, miscItems, projectPhotos] = await Promise.all([
     db.beams.where('siteId').equals(siteId).toArray(),
     db.uprights.where('siteId').equals(siteId).toArray(),
@@ -105,6 +135,20 @@ export async function deleteSite(siteId: string): Promise<void> {
   await db.projectPhotos.where('siteId').equals(siteId).delete()
   await db.areas.where('siteId').equals(siteId).delete()
   await db.sites.delete(siteId)
+}
+
+// Runs on app load: anything that's been sitting in "Recently Deleted"
+// longer than the retention window gets permanently removed. There's no
+// background server process to do this on a schedule, so it only actually
+// happens the next time someone opens the app after the window has passed.
+export async function purgeExpiredDeletedSites(): Promise<void> {
+  const now = Date.now()
+  const expired = await db.sites
+    .filter((site) => !!site.deletedAt && now - site.deletedAt! >= RECENTLY_DELETED_RETENTION_MS)
+    .toArray()
+  for (const site of expired) {
+    await permanentlyDeleteSite(site.id)
+  }
 }
 
 export async function setSitePhoto(siteId: string, file: File): Promise<void> {

@@ -8,6 +8,7 @@ create table sites (
   address text not null default '',
   other_info text not null default '',
   active boolean not null default true,
+  deleted_at bigint,
   site_photo_path text,
   created_at bigint not null,
   last_updated_by text not null default '',
@@ -150,3 +151,6 @@ alter table beams add column if not exists step text not null default '';
 
 -- Migration: adds the "Other" item type's Item Description field.
 alter table misc_items add column if not exists item_description text not null default '';
+
+-- Migration: adds soft-delete support ("Recently Deleted", 60-day retention).
+alter table sites add column if not exists deleted_at bigint;

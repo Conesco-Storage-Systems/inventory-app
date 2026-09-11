@@ -5,11 +5,12 @@ const DELETE_PASSWORD = 'Conesco'
 
 interface DeleteLocationDialogProps {
   siteId: string
+  siteName: string
   onClose: () => void
   onDeleted: () => void
 }
 
-export default function DeleteLocationDialog({ siteId, onClose, onDeleted }: DeleteLocationDialogProps) {
+export default function DeleteLocationDialog({ siteId, siteName, onClose, onDeleted }: DeleteLocationDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [step, setStep] = useState<'confirm' | 'password'>('confirm')
   const [password, setPassword] = useState('')
@@ -39,7 +40,10 @@ export default function DeleteLocationDialog({ siteId, onClose, onDeleted }: Del
     <dialog ref={dialogRef} className="location-dialog" onClose={onClose}>
       {step === 'confirm' ? (
         <div className="delete-confirm">
-          <p>Are you sure you want to delete this location?</p>
+          <p>
+            Are you sure you want to delete {siteName}? It will move to Recently Deleted and be
+            permanently removed in 60 days unless restored.
+          </p>
           <div className="dialog-actions">
             <button type="button" onClick={onClose}>
               Go Back

@@ -9,8 +9,8 @@ import MarkInactiveDialog from '../components/MarkInactiveDialog'
 export default function LocationsList() {
   const navigate = useNavigate()
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
-  const activeSites = sites.filter((site) => site.active !== false)
-  const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null)
+  const activeSites = sites.filter((site) => site.active !== false && !site.deletedAt)
+  const [deletingSite, setDeletingSite] = useState<{ id: string; name: string } | null>(null)
   const [markingInactiveSiteId, setMarkingInactiveSiteId] = useState<string | null>(null)
 
   return (
@@ -33,7 +33,6 @@ export default function LocationsList() {
             <li key={site.id} className="location-list-row">
               <div className="location-list-info">
                 <Link to={`/locations/${site.id}`}>{site.name}</Link>
-                {site.address && <span className="location-address"> — {site.address}</span>}
               </div>
               <div className="location-list-actions">
                 <button type="button" onClick={() => setMarkingInactiveSiteId(site.id)}>
@@ -42,7 +41,7 @@ export default function LocationsList() {
                 <button
                   type="button"
                   className="delete-button"
-                  onClick={() => setDeletingSiteId(site.id)}
+                  onClick={() => setDeletingSite({ id: site.id, name: site.name })}
                 >
                   Delete
                 </button>
@@ -54,13 +53,16 @@ export default function LocationsList() {
 
       <p className="inactive-offsites-link">
         <Link to="/inactive-locations">Inactive Offsites</Link>
+        {' · '}
+        <Link to="/recently-deleted">Recently Deleted</Link>
       </p>
 
-      {deletingSiteId && (
+      {deletingSite && (
         <DeleteLocationDialog
-          siteId={deletingSiteId}
-          onClose={() => setDeletingSiteId(null)}
-          onDeleted={() => setDeletingSiteId(null)}
+          siteId={deletingSite.id}
+          siteName={deletingSite.name}
+          onClose={() => setDeletingSite(null)}
+          onDeleted={() => setDeletingSite(null)}
         />
       )}
 

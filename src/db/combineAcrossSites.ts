@@ -13,7 +13,7 @@ export function combineRowsAcrossSites<TItem extends ItemBase, TRow extends { ke
   sites: Site[],
   groupFn: (items: TItem[]) => TRow[],
 ): (TRow & WithSite)[] {
-  const activeSites = sites.filter((site) => site.active !== false)
+  const activeSites = sites.filter((site) => site.active !== false && !site.deletedAt)
   const nameById = new Map(activeSites.map((site) => [site.id, site.name]))
 
   const bySite = new Map<string, TItem[]>()

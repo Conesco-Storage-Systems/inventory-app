@@ -38,6 +38,9 @@ export interface Site {
   // last uploaded."
   sitePhotoDirty?: boolean
   active?: boolean
+  // Set when a location is deleted — it moves to "Recently Deleted" instead
+  // of disappearing immediately, and is permanently purged 60 days later.
+  deletedAt?: number
   syncStatus: SyncStatus
 }
 

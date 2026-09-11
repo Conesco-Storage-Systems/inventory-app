@@ -73,6 +73,7 @@ export default function MiscItemTable({ rows, siteId, selectedKey, onToggleSelec
         <table className="item-table">
           <thead>
             <tr>
+              <th className="col-edit"></th>
               {visibleOrder.map((key) => (
                 <DraggableColumnHeader
                   key={key}
@@ -87,7 +88,6 @@ export default function MiscItemTable({ rows, siteId, selectedKey, onToggleSelec
                   {columns[key].label}
                 </DraggableColumnHeader>
               ))}
-              <th className="col-edit"></th>
             </tr>
           </thead>
           <tbody>
@@ -98,11 +98,6 @@ export default function MiscItemTable({ rows, siteId, selectedKey, onToggleSelec
             )}
             {rows.map((row) => (
               <tr key={row.key}>
-                {visibleOrder.map((key) => (
-                  <td key={key} className={key === 'notes' || key === 'itemDescription' ? 'col-notes' : undefined}>
-                    {columns[key].render(row)}
-                  </td>
-                ))}
                 <td>
                   <input
                     type="checkbox"
@@ -110,6 +105,11 @@ export default function MiscItemTable({ rows, siteId, selectedKey, onToggleSelec
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>
+                {visibleOrder.map((key) => (
+                  <td key={key} className={key === 'notes' || key === 'itemDescription' ? 'col-notes' : undefined}>
+                    {columns[key].render(row)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

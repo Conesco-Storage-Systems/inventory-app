@@ -93,6 +93,7 @@ export default function UprightTable({ rows, siteId, selectedKey, onToggleSelect
         <table className="item-table">
           <thead>
             <tr>
+              <th className="col-edit"></th>
               {visibleOrder.map((key) => (
                 <DraggableColumnHeader
                   key={key}
@@ -107,7 +108,6 @@ export default function UprightTable({ rows, siteId, selectedKey, onToggleSelect
                   {columns[key].label}
                 </DraggableColumnHeader>
               ))}
-              <th className="col-edit"></th>
             </tr>
           </thead>
           <tbody>
@@ -118,11 +118,6 @@ export default function UprightTable({ rows, siteId, selectedKey, onToggleSelect
             )}
             {rows.map((row) => (
               <tr key={row.key}>
-                {visibleOrder.map((key) => (
-                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
-                    {columns[key].render(row)}
-                  </td>
-                ))}
                 <td>
                   <input
                     type="checkbox"
@@ -130,6 +125,11 @@ export default function UprightTable({ rows, siteId, selectedKey, onToggleSelect
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>
+                {visibleOrder.map((key) => (
+                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
+                    {columns[key].render(row)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

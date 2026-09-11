@@ -109,6 +109,41 @@ class InventoryDB extends Dexie {
         photo.uploadStatus = 'pending'
       })
     })
+    // Beam Pin Count switched from spelled-out numbers ("Two") to digits
+    // ("2") — renumber anything already saved and re-flag it for sync so
+    // the change propagates to Supabase and other devices too.
+    this.version(6).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+    }).upgrade(async (tx) => {
+      const PIN_COUNT_RENAME: Record<string, string> = {
+        One: '1',
+        Two: '2',
+        Three: '3',
+        Four: '4',
+        Five: '5',
+        Six: '6',
+      }
+      await tx.table('beams').toCollection().modify((beam) => {
+        const renamed = PIN_COUNT_RENAME[beam.pinCount]
+        if (renamed) {
+          beam.pinCount = renamed
+          beam.syncStatus = 'pending'
+          beam.updatedAt = Date.now()
+        }
+      })
+    })
   }
 }
 

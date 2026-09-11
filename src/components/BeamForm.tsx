@@ -7,17 +7,7 @@ import { CONDITIONS } from '../models/types'
 
 export const BEAM_COLOR_OPTIONS = ['Orange', 'Green', 'Blue', 'Gray', 'Other'] as const
 
-export const BEAM_PIN_COUNT_OPTIONS = [
-  'One',
-  'Two',
-  'Three',
-  'Four',
-  'Five',
-  'Six',
-  'TBOLT',
-  'N/A',
-  'Other',
-] as const
+export const BEAM_PIN_COUNT_OPTIONS = ['1', '2', '3', '4', '5', '6', 'TBOLT', 'N/A', 'Other'] as const
 
 export const BEAM_STYLE_OPTIONS = ['Teardrop', 'New Style', 'TBOLT', 'Ridg-U-Rak', 'Other'] as const
 

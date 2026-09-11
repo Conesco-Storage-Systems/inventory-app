@@ -7,6 +7,7 @@ interface DraggableColumnHeaderProps<T extends string> {
   onDragOverKey: (key: T) => void
   onDragEnd: () => void
   children: ReactNode
+  draggable?: boolean
 }
 
 export default function DraggableColumnHeader<T extends string>({
@@ -16,13 +17,15 @@ export default function DraggableColumnHeader<T extends string>({
   onDragOverKey,
   onDragEnd,
   children,
+  draggable = true,
 }: DraggableColumnHeaderProps<T>) {
   return (
     <th
-      className={`draggable-column-header${isDragging ? ' dragging' : ''}`}
-      draggable
-      onDragStart={() => onDragStartKey(columnKey)}
+      className={`draggable-column-header${isDragging ? ' dragging' : ''}${draggable ? '' : ' not-draggable'}`}
+      draggable={draggable}
+      onDragStart={() => draggable && onDragStartKey(columnKey)}
       onDragOver={(e) => {
+        if (!draggable) return
         e.preventDefault()
         onDragOverKey(columnKey)
       }}

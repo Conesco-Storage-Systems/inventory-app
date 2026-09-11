@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import ReadOnlyItemTable from '../components/ReadOnlyItemTable'
+import ReadOnlyItemTable, { type ColumnDef } from '../components/ReadOnlyItemTable'
 import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
 import { groupBeams, type BeamRow } from '../db/groupBeams'
@@ -9,6 +9,7 @@ import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { exportSheetsToExcel } from '../export/exportToExcel'
+import { applyColumnFilters, computeFilterOptions } from '../utils/columnFilters'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
 
 type AllBeamRow = BeamRow & WithSite
@@ -20,6 +21,23 @@ function locationLink(siteId: string, siteName: string) {
   return <Link to={`/locations/${siteId}`}>{siteName}</Link>
 }
 
+function photosLink(siteId: string, ids: string[], photoIds: string[]) {
+  return photoIds.length > 0 ? (
+    <Link to={`/locations/${siteId}/photos?ids=${ids.join(',')}`}>View photos ({photoIds.length})</Link>
+  ) : (
+    '—'
+  )
+}
+
+// Beam width can be a free-form string ("4" or a range like "3.5-4.5"), so
+// pull out the leading number for sorting rather than treating it as text.
+function leadingNumber(text: string): number {
+  const match = text.match(/-?\d+(\.\d+)?/)
+  return match ? parseFloat(match[0]) : 0
+}
+
+type FilterMap = Partial<Record<string, Set<string>>>
+
 export default function AllInventory() {
   const sites = useLiveQuery(() => db.sites.toArray(), []) ?? []
   const beams = useLiveQuery(() => db.beams.toArray(), []) ?? []
@@ -28,25 +46,15 @@ export default function AllInventory() {
   const miscItems = useLiveQuery(() => db.miscItems.toArray(), []) ?? []
 
   const [searchTerm, setSearchTerm] = useState('')
+  const [uprightFilters, setUprightFilters] = useState<FilterMap>({})
+  const [beamFilters, setBeamFilters] = useState<FilterMap>({})
+  const [wireDeckFilters, setWireDeckFilters] = useState<FilterMap>({})
+  const [miscFilters, setMiscFilters] = useState<FilterMap>({})
 
   const uprightRows = combineRowsAcrossSites(uprights, sites, groupUprights)
   const beamRows = combineRowsAcrossSites(beams, sites, groupBeams)
   const wireDeckRows = combineRowsAcrossSites(wireDecks, sites, groupWireDecks)
   const miscRows = combineRowsAcrossSites(miscItems, sites, groupMiscItems)
-
-  const normalizedSearch = normalizeForSearch(searchTerm)
-  const displayedUprightRows = normalizedSearch
-    ? uprightRows.filter((row) => matchesSearch(row, normalizedSearch))
-    : uprightRows
-  const displayedBeamRows = normalizedSearch
-    ? beamRows.filter((row) => matchesSearch(row, normalizedSearch))
-    : beamRows
-  const displayedWireDeckRows = normalizedSearch
-    ? wireDeckRows.filter((row) => matchesSearch(row, normalizedSearch))
-    : wireDeckRows
-  const displayedMiscRows = normalizedSearch
-    ? miscRows.filter((row) => matchesSearch(row, normalizedSearch))
-    : miscRows
 
   const hasItems =
     uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0 || miscRows.length > 0
@@ -149,32 +157,82 @@ export default function AllInventory() {
     exportSheetsToExcel([{ name: 'All Inventory', rows }], 'all-offsite-inventory.xlsx')
   }
 
-  const uprightColumns: Record<string, { label: string; render: (row: AllUprightRow) => ReactNode }> = {
-    location: { label: 'Location', render: (row) => locationLink(row.siteId, row.siteName) },
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
-    style: { label: 'Style', render: (row) => row.style },
-    widthByHeight: { label: 'Width x Height', render: (row) => row.widthByHeight },
-    color: { label: 'Color', render: (row) => row.color },
-    columnSize: { label: 'Column Size', render: (row) => row.columnSizeDisplay },
-    footplateSize: { label: 'Footplate Size', render: (row) => row.footplateSizeDisplay },
-    anchorHoleCount: { label: 'Anchor Hole Count', render: (row) => row.anchorHoleCount },
-    holeSize: { label: 'Hole Size', render: (row) => row.holeSize || '—' },
-    gauge: { label: 'Gauge', render: (row) => row.gauge },
-    condition: { label: 'Condition', render: (row) => row.condition },
-    stamp: { label: 'Stamp', render: (row) => row.stamp || '—' },
-    bundleSize: { label: 'Bundle Size', render: (row) => row.bundleSize || '—' },
-    zone: { label: 'Zone', render: (row) => row.zone || '—' },
-    notes: { label: 'Notes', render: (row) => <span className="notes-text">{row.notes || '—'}</span> },
+  const uprightColumns: Record<string, ColumnDef<AllUprightRow>> = {
+    location: {
+      label: 'Location',
+      render: (row) => locationLink(row.siteId, row.siteName),
+      getValue: (row) => row.siteName,
+      sortValue: (row) => row.siteName,
+    },
+    quantity: { label: 'Quantity', render: (row) => row.quantity, getValue: (row) => String(row.quantity), filterable: false },
+    style: { label: 'Style', render: (row) => row.style, getValue: (row) => row.style, sortValue: (row) => row.style },
+    widthByHeight: {
+      label: 'Width x Height',
+      render: (row) => row.widthByHeight,
+      getValue: (row) => row.widthByHeight,
+      sortValue: (row) => row.width * 100000 + (row.heightFeet * 12 + row.heightInches),
+    },
+    color: { label: 'Color', render: (row) => row.color, getValue: (row) => row.color, sortValue: (row) => row.color },
+    columnSize: {
+      label: 'Column Size',
+      render: (row) => row.columnSizeDisplay,
+      getValue: (row) => row.columnSizeDisplay,
+      sortValue: (row) => row.columnLength * 100000 + row.columnWidth,
+    },
+    footplateSize: {
+      label: 'Footplate Size',
+      render: (row) => row.footplateSizeDisplay,
+      getValue: (row) => row.footplateSizeDisplay,
+      sortValue: (row) => row.footplateLength * 100000 + row.footplateWidth,
+    },
+    anchorHoleCount: {
+      label: 'Anchor Hole Count',
+      render: (row) => row.anchorHoleCount,
+      getValue: (row) => String(row.anchorHoleCount),
+      sortValue: (row) => row.anchorHoleCount,
+    },
+    holeSize: {
+      label: 'Hole Size',
+      render: (row) => row.holeSize || '—',
+      getValue: (row) => row.holeSize,
+      sortValue: (row) => row.holeSize,
+    },
+    gauge: { label: 'Gauge', render: (row) => row.gauge, getValue: (row) => row.gauge, sortValue: (row) => row.gauge },
+    condition: {
+      label: 'Condition',
+      render: (row) => row.condition,
+      getValue: (row) => row.condition,
+      sortValue: (row) => row.condition,
+    },
+    stamp: {
+      label: 'Stamp',
+      render: (row) => row.stamp || '—',
+      getValue: (row) => row.stamp,
+      sortValue: (row) => row.stamp,
+    },
+    bundleSize: {
+      label: 'Bundle Size',
+      render: (row) => row.bundleSize || '—',
+      getValue: (row) => row.bundleSize,
+      sortValue: (row) => row.bundleSize,
+    },
+    zone: {
+      label: 'Zone',
+      render: (row) => row.zone || '—',
+      getValue: (row) => row.zone,
+      sortValue: (row) => row.zone,
+    },
+    notes: {
+      label: 'Notes',
+      render: (row) => <span className="notes-text">{row.notes || '—'}</span>,
+      getValue: (row) => row.notes,
+      filterable: false,
+    },
     photos: {
       label: 'Photos',
-      render: (row) =>
-        row.photoIds.length > 0 ? (
-          <Link to={`/locations/${row.siteId}/photos?ids=${row.ids.join(',')}`}>
-            View photos ({row.photoIds.length})
-          </Link>
-        ) : (
-          '—'
-        ),
+      render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
+      getValue: (row) => String(row.photoIds.length),
+      filterable: false,
     },
   }
   const uprightOrder = [
@@ -196,30 +254,75 @@ export default function AllInventory() {
     'photos',
   ]
 
-  const beamColumns: Record<string, { label: string; render: (row: AllBeamRow) => ReactNode }> = {
-    location: { label: 'Location', render: (row) => locationLink(row.siteId, row.siteName) },
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
-    style: { label: 'Style', render: (row) => row.style },
-    widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
-    color: { label: 'Color', render: (row) => row.color },
-    pinCount: { label: 'Pin Count', render: (row) => row.pinCount },
-    step: { label: 'Step', render: (row) => row.step || '—' },
-    condition: { label: 'Condition', render: (row) => row.condition },
-    stamp: { label: 'Stamp', render: (row) => row.stamp || '—' },
-    stickers: { label: 'Stickers', render: (row) => row.stickers },
-    bundleSize: { label: 'Bundle Size', render: (row) => row.bundleSize || '—' },
-    zone: { label: 'Zone', render: (row) => row.zone || '—' },
-    notes: { label: 'Notes', render: (row) => <span className="notes-text">{row.notes || '—'}</span> },
+  const beamColumns: Record<string, ColumnDef<AllBeamRow>> = {
+    location: {
+      label: 'Location',
+      render: (row) => locationLink(row.siteId, row.siteName),
+      getValue: (row) => row.siteName,
+      sortValue: (row) => row.siteName,
+    },
+    quantity: { label: 'Quantity', render: (row) => row.quantity, getValue: (row) => String(row.quantity), filterable: false },
+    style: { label: 'Style', render: (row) => row.style, getValue: (row) => row.style, sortValue: (row) => row.style },
+    widthByLength: {
+      label: 'Width x Length',
+      render: (row) => row.widthByLength,
+      getValue: (row) => row.widthByLength,
+      sortValue: (row) => leadingNumber(row.width) * 100000 + row.length,
+    },
+    color: { label: 'Color', render: (row) => row.color, getValue: (row) => row.color, sortValue: (row) => row.color },
+    pinCount: {
+      label: 'Pin Count',
+      render: (row) => row.pinCount,
+      getValue: (row) => row.pinCount,
+      sortValue: (row) => row.pinCount,
+    },
+    step: {
+      label: 'Step',
+      render: (row) => row.step || '—',
+      getValue: (row) => row.step,
+      sortValue: (row) => row.step,
+    },
+    condition: {
+      label: 'Condition',
+      render: (row) => row.condition,
+      getValue: (row) => row.condition,
+      sortValue: (row) => row.condition,
+    },
+    stamp: {
+      label: 'Stamp',
+      render: (row) => row.stamp || '—',
+      getValue: (row) => row.stamp,
+      sortValue: (row) => row.stamp,
+    },
+    stickers: {
+      label: 'Stickers',
+      render: (row) => row.stickers,
+      getValue: (row) => row.stickers,
+      sortValue: (row) => row.stickers,
+    },
+    bundleSize: {
+      label: 'Bundle Size',
+      render: (row) => row.bundleSize || '—',
+      getValue: (row) => row.bundleSize,
+      sortValue: (row) => row.bundleSize,
+    },
+    zone: {
+      label: 'Zone',
+      render: (row) => row.zone || '—',
+      getValue: (row) => row.zone,
+      sortValue: (row) => row.zone,
+    },
+    notes: {
+      label: 'Notes',
+      render: (row) => <span className="notes-text">{row.notes || '—'}</span>,
+      getValue: (row) => row.notes,
+      filterable: false,
+    },
     photos: {
       label: 'Photos',
-      render: (row) =>
-        row.photoIds.length > 0 ? (
-          <Link to={`/locations/${row.siteId}/photos?ids=${row.ids.join(',')}`}>
-            View photos ({row.photoIds.length})
-          </Link>
-        ) : (
-          '—'
-        ),
+      render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
+      getValue: (row) => String(row.photoIds.length),
+      filterable: false,
     },
   }
   const beamOrder = [
@@ -239,26 +342,61 @@ export default function AllInventory() {
     'photos',
   ]
 
-  const wireDeckColumns: Record<string, { label: string; render: (row: AllWireDeckRow) => ReactNode }> = {
-    location: { label: 'Location', render: (row) => locationLink(row.siteId, row.siteName) },
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
-    style: { label: 'Style', render: (row) => row.style.join(', ') || '—' },
-    widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
-    channelCount: { label: 'Number of Channels', render: (row) => row.channelCount },
-    condition: { label: 'Condition', render: (row) => row.condition },
-    bundleSize: { label: 'Bundle Size', render: (row) => row.bundleSize || '—' },
-    zone: { label: 'Zone', render: (row) => row.zone || '—' },
-    notes: { label: 'Notes', render: (row) => <span className="notes-text">{row.notes || '—'}</span> },
+  const wireDeckColumns: Record<string, ColumnDef<AllWireDeckRow>> = {
+    location: {
+      label: 'Location',
+      render: (row) => locationLink(row.siteId, row.siteName),
+      getValue: (row) => row.siteName,
+      sortValue: (row) => row.siteName,
+    },
+    quantity: { label: 'Quantity', render: (row) => row.quantity, getValue: (row) => String(row.quantity), filterable: false },
+    style: {
+      label: 'Style',
+      render: (row) => row.style.join(', ') || '—',
+      getValue: (row) => row.style,
+      sortValue: (row) => row.style.join(', '),
+    },
+    widthByLength: {
+      label: 'Width x Length',
+      render: (row) => row.widthByLength,
+      getValue: (row) => row.widthByLength,
+      sortValue: (row) => row.width * 100000 + row.length,
+    },
+    channelCount: {
+      label: 'Number of Channels',
+      render: (row) => row.channelCount,
+      getValue: (row) => row.channelCount,
+      sortValue: (row) => row.channelCount,
+    },
+    condition: {
+      label: 'Condition',
+      render: (row) => row.condition,
+      getValue: (row) => row.condition,
+      sortValue: (row) => row.condition,
+    },
+    bundleSize: {
+      label: 'Bundle Size',
+      render: (row) => row.bundleSize || '—',
+      getValue: (row) => row.bundleSize,
+      sortValue: (row) => row.bundleSize,
+    },
+    zone: {
+      label: 'Zone',
+      render: (row) => row.zone || '—',
+      getValue: (row) => row.zone,
+      sortValue: (row) => row.zone,
+    },
+    notes: {
+      label: 'Notes',
+      render: (row) => <span className="notes-text">{row.notes || '—'}</span>,
+      getValue: (row) => row.notes,
+      filterable: false,
+    },
     photos: {
       label: 'Photos',
-      render: (row) =>
-        row.photoIds.length > 0 ? (
-          <Link to={`/locations/${row.siteId}/photos?ids=${row.ids.join(',')}`}>
-            View photos ({row.photoIds.length})
-          </Link>
-        ) : (
-          '—'
-        ),
+      render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
+      getValue: (row) => String(row.photoIds.length),
+      filterable: false,
     },
   }
   const wireDeckOrder = [
@@ -274,28 +412,55 @@ export default function AllInventory() {
     'photos',
   ]
 
-  const miscColumns: Record<string, { label: string; render: (row: AllMiscItemRow) => ReactNode }> = {
-    location: { label: 'Location', render: (row) => locationLink(row.siteId, row.siteName) },
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
-    description: { label: 'Item', render: (row) => row.description || '—' },
+  const miscColumns: Record<string, ColumnDef<AllMiscItemRow>> = {
+    location: {
+      label: 'Location',
+      render: (row) => locationLink(row.siteId, row.siteName),
+      getValue: (row) => row.siteName,
+      sortValue: (row) => row.siteName,
+    },
+    quantity: { label: 'Quantity', render: (row) => row.quantity, getValue: (row) => String(row.quantity), filterable: false },
+    description: {
+      label: 'Item',
+      render: (row) => row.description || '—',
+      getValue: (row) => row.description,
+      sortValue: (row) => row.description,
+    },
     itemDescription: {
       label: 'Item Description',
       render: (row) => <span className="notes-text">{row.itemDescription || '—'}</span>,
+      getValue: (row) => row.itemDescription,
+      sortValue: (row) => row.itemDescription,
     },
-    condition: { label: 'Condition', render: (row) => row.condition },
-    bundleSize: { label: 'Bundle Size', render: (row) => row.bundleSize || '—' },
-    zone: { label: 'Zone', render: (row) => row.zone || '—' },
-    notes: { label: 'Notes', render: (row) => <span className="notes-text">{row.notes || '—'}</span> },
+    condition: {
+      label: 'Condition',
+      render: (row) => row.condition,
+      getValue: (row) => row.condition,
+      sortValue: (row) => row.condition,
+    },
+    bundleSize: {
+      label: 'Bundle Size',
+      render: (row) => row.bundleSize || '—',
+      getValue: (row) => row.bundleSize,
+      sortValue: (row) => row.bundleSize,
+    },
+    zone: {
+      label: 'Zone',
+      render: (row) => row.zone || '—',
+      getValue: (row) => row.zone,
+      sortValue: (row) => row.zone,
+    },
+    notes: {
+      label: 'Notes',
+      render: (row) => <span className="notes-text">{row.notes || '—'}</span>,
+      getValue: (row) => row.notes,
+      filterable: false,
+    },
     photos: {
       label: 'Photos',
-      render: (row) =>
-        row.photoIds.length > 0 ? (
-          <Link to={`/locations/${row.siteId}/photos?ids=${row.ids.join(',')}`}>
-            View photos ({row.photoIds.length})
-          </Link>
-        ) : (
-          '—'
-        ),
+      render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
+      getValue: (row) => String(row.photoIds.length),
+      filterable: false,
     },
   }
   const miscOrder = [
@@ -309,6 +474,27 @@ export default function AllInventory() {
     'notes',
     'photos',
   ]
+
+  const uprightFilterOptions = computeFilterOptions(uprightRows, uprightColumns)
+  const beamFilterOptions = computeFilterOptions(beamRows, beamColumns)
+  const wireDeckFilterOptions = computeFilterOptions(wireDeckRows, wireDeckColumns)
+  const miscFilterOptions = computeFilterOptions(miscRows, miscColumns)
+
+  const normalizedSearch = normalizeForSearch(searchTerm)
+
+  function displayRows<TRow extends { key: string }>(
+    rows: TRow[],
+    columns: Record<string, ColumnDef<TRow>>,
+    filters: FilterMap,
+  ): TRow[] {
+    const searched = normalizedSearch ? rows.filter((row) => matchesSearch(row, normalizedSearch)) : rows
+    return applyColumnFilters(searched, columns, filters)
+  }
+
+  const displayedUprightRows = displayRows(uprightRows, uprightColumns, uprightFilters)
+  const displayedBeamRows = displayRows(beamRows, beamColumns, beamFilters)
+  const displayedWireDeckRows = displayRows(wireDeckRows, wireDeckColumns, wireDeckFilters)
+  const displayedMiscRows = displayRows(miscRows, miscColumns, miscFilters)
 
   return (
     <main className="page page-wide">
@@ -347,7 +533,10 @@ export default function AllInventory() {
             columns={uprightColumns}
             defaultOrder={uprightOrder}
             rows={displayedUprightRows}
-            emptyMessage="No uprights match your search."
+            filterOptions={uprightFilterOptions}
+            filters={uprightFilters}
+            onFilterChange={(key, values) => setUprightFilters((prev) => ({ ...prev, [key]: values }))}
+            emptyMessage="No uprights match your search or filters."
             wrapColumnKeys={['notes']}
           />
         </section>
@@ -362,7 +551,10 @@ export default function AllInventory() {
             columns={beamColumns}
             defaultOrder={beamOrder}
             rows={displayedBeamRows}
-            emptyMessage="No beams match your search."
+            filterOptions={beamFilterOptions}
+            filters={beamFilters}
+            onFilterChange={(key, values) => setBeamFilters((prev) => ({ ...prev, [key]: values }))}
+            emptyMessage="No beams match your search or filters."
             wrapColumnKeys={['notes']}
           />
         </section>
@@ -377,7 +569,10 @@ export default function AllInventory() {
             columns={wireDeckColumns}
             defaultOrder={wireDeckOrder}
             rows={displayedWireDeckRows}
-            emptyMessage="No wire decks match your search."
+            filterOptions={wireDeckFilterOptions}
+            filters={wireDeckFilters}
+            onFilterChange={(key, values) => setWireDeckFilters((prev) => ({ ...prev, [key]: values }))}
+            emptyMessage="No wire decks match your search or filters."
             wrapColumnKeys={['notes']}
           />
         </section>
@@ -392,7 +587,10 @@ export default function AllInventory() {
             columns={miscColumns}
             defaultOrder={miscOrder}
             rows={displayedMiscRows}
-            emptyMessage="No items match your search."
+            filterOptions={miscFilterOptions}
+            filters={miscFilters}
+            onFilterChange={(key, values) => setMiscFilters((prev) => ({ ...prev, [key]: values }))}
+            emptyMessage="No items match your search or filters."
             wrapColumnKeys={['notes', 'itemDescription']}
           />
         </section>

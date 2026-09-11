@@ -86,6 +86,10 @@ button {
   font-weight: 500;
 }
 
+.all-inventory-row a {
+  font-weight: 700;
+}
+
 .location-header-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -24,6 +24,11 @@ export default function LocationsList() {
         <p>No locations yet. Add one to get started.</p>
       ) : (
         <ul className="location-list">
+          <li className="location-list-row all-inventory-row">
+            <div className="location-list-info">
+              <Link to="/all-inventory">View all Offsite Inventory</Link>
+            </div>
+          </li>
           {activeSites.map((site) => (
             <li key={site.id} className="location-list-row">
               <div className="location-list-info">

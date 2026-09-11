@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Route, BrowserRouter, Routes } from 'react-router-dom'
 import LoginGate from './components/LoginGate'
+import AllInventory from './screens/AllInventory'
 import InactiveLocations from './screens/InactiveLocations'
 import ItemPhotos from './screens/ItemPhotos'
 import LocationDetail from './screens/LocationDetail'
@@ -26,6 +27,7 @@ function App() {
         <img src="/conesco-logo.png" alt="Conesco" className="app-logo" />
         <Routes>
           <Route path="/" element={<LocationsList />} />
+          <Route path="/all-inventory" element={<AllInventory />} />
           <Route path="/inactive-locations" element={<InactiveLocations />} />
           <Route path="/locations/:siteId" element={<LocationDetail />} />
           <Route path="/locations/:siteId/items/new" element={<NewItem />} />

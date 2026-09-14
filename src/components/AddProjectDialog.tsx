@@ -1,22 +1,17 @@
 import { useRef, useState } from 'react'
-import { createSite } from '../db/locations'
+import { createProject } from '../db/projects'
 
-interface AddLocationDialogProps {
-  onCreated?: (siteId: string) => void
-  projectId?: string
+interface AddProjectDialogProps {
+  onCreated?: (projectId: string) => void
 }
 
-export default function AddLocationDialog({ onCreated, projectId }: AddLocationDialogProps) {
+export default function AddProjectDialog({ onCreated }: AddProjectDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-  const [otherInfo, setOtherInfo] = useState('')
   const [saving, setSaving] = useState(false)
 
   function open() {
     setName('')
-    setAddress('')
-    setOtherInfo('')
     dialogRef.current?.showModal()
   }
 
@@ -29,9 +24,9 @@ export default function AddLocationDialog({ onCreated, projectId }: AddLocationD
     if (!name.trim()) return
     setSaving(true)
     try {
-      const siteId = await createSite(name, address, otherInfo, projectId)
+      const projectId = await createProject(name)
       close()
-      onCreated?.(siteId)
+      onCreated?.(projectId)
     } finally {
       setSaving(false)
     }
@@ -40,13 +35,13 @@ export default function AddLocationDialog({ onCreated, projectId }: AddLocationD
   return (
     <>
       <button type="button" onClick={open}>
-        + Add location
+        + Add project
       </button>
       <dialog ref={dialogRef} className="location-dialog">
         <form onSubmit={handleSubmit}>
-          <h2>Add location</h2>
+          <h2>Add project</h2>
           <label>
-            Offsite location name
+            Project name
             <input
               type="text"
               value={name}
@@ -55,28 +50,12 @@ export default function AddLocationDialog({ onCreated, projectId }: AddLocationD
               autoFocus
             />
           </label>
-          <label>
-            Address
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-          </label>
-          <label>
-            Other info
-            <textarea
-              value={otherInfo}
-              onChange={(e) => setOtherInfo(e.target.value)}
-              rows={3}
-            />
-          </label>
           <div className="dialog-actions">
             <button type="button" onClick={close} disabled={saving}>
               Cancel
             </button>
             <button type="submit" disabled={saving || !name.trim()}>
-              Save location
+              Save project
             </button>
           </div>
         </form>

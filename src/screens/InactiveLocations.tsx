@@ -9,7 +9,9 @@ import { useRole } from '../state/RoleContext'
 export default function InactiveLocations() {
   const { permissions } = useRole()
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
-  const inactiveSites = sites.filter((site) => site.active === false && !site.deletedAt)
+  const inactiveSites = sites.filter(
+    (site) => site.active === false && !site.deletedAt && !site.projectId,
+  )
   const [deletingSite, setDeletingSite] = useState<{ id: string; name: string } | null>(null)
   const [markingActiveSiteId, setMarkingActiveSiteId] = useState<string | null>(null)
 

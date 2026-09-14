@@ -41,6 +41,25 @@ export interface Site {
   // Set when a location is deleted — it moves to "Recently Deleted" instead
   // of disappearing immediately, and is permanently purged 60 days later.
   deletedAt?: number
+  // Set when this location belongs to a Project (e.g. a big customer job
+  // like Automann with locations all over the country) instead of being a
+  // standalone Offsite Location. Project-owned locations and their items
+  // are excluded from the main "All Offsite Inventory" — that material
+  // belongs to the customer, not Conesco's own sellable stock.
+  projectId?: string
+  syncStatus: SyncStatus
+}
+
+export interface Project {
+  id: string
+  name: string
+  createdAt: number
+  lastUpdatedBy: string
+  lastUpdatedAt: number
+  active?: boolean
+  // Same soft-delete pattern as Site — moves to "Recently Deleted" for 60
+  // days before being permanently purged.
+  deletedAt?: number
   syncStatus: SyncStatus
 }
 
@@ -148,7 +167,15 @@ export interface ProjectPhoto {
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
-export type SyncTable = 'sites' | 'beams' | 'uprights' | 'wireDecks' | 'miscItems' | 'photos' | 'projectPhotos'
+export type SyncTable =
+  | 'sites'
+  | 'projects'
+  | 'beams'
+  | 'uprights'
+  | 'wireDecks'
+  | 'miscItems'
+  | 'photos'
+  | 'projectPhotos'
 
 export interface PendingDelete {
   id: string

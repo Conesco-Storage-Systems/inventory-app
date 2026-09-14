@@ -6,6 +6,7 @@ import type {
   PendingDelete,
   PickerOption,
   Photo,
+  Project,
   ProjectPhoto,
   Site,
   Upright,
@@ -23,6 +24,7 @@ class InventoryDB extends Dexie {
   photos!: Table<Photo, string>
   projectPhotos!: Table<ProjectPhoto, string>
   pendingDeletes!: Table<PendingDelete, string>
+  projects!: Table<Project, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -143,6 +145,26 @@ class InventoryDB extends Dexie {
           beam.updatedAt = Date.now()
         }
       })
+    })
+    // Adds Projects — folders for big customer jobs (e.g. Automann) that
+    // contain multiple locations. A location's projectId (a plain field,
+    // no index needed) marks it as belonging to one instead of being a
+    // standalone Offsite Location.
+    this.version(7).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
     })
   }
 }

@@ -29,7 +29,7 @@ import {
   listUprightsBySite,
   listWireDecksBySite,
 } from '../db/items'
-import { removeSitePhoto, setSitePhoto, updateSite } from '../db/locations'
+import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
 import { useRole } from '../state/RoleContext'
@@ -132,7 +132,9 @@ export default function LocationDetail() {
   const [nameDraft, setNameDraft] = useState('')
   const [addressDraft, setAddressDraft] = useState('')
   const [otherInfoDraft, setOtherInfoDraft] = useState('')
+  const [projectDraft, setProjectDraft] = useState('')
   const [savingSite, setSavingSite] = useState(false)
+  const projects = useLiveQuery(() => db.projects.orderBy('name').toArray(), []) ?? []
 
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
   const [activeAction, setActiveAction] = useState<'edit' | 'duplicate' | 'delete' | null>(null)
@@ -200,6 +202,7 @@ export default function LocationDetail() {
     setNameDraft(site.name)
     setAddressDraft(site.address)
     setOtherInfoDraft(site.otherInfo)
+    setProjectDraft(site.projectId ?? '')
     setEditingSite(true)
   }
 
@@ -208,6 +211,9 @@ export default function LocationDetail() {
     setSavingSite(true)
     try {
       await updateSite(site.id, nameDraft, addressDraft, otherInfoDraft)
+      if ((site.projectId ?? '') !== projectDraft) {
+        await setSiteProject(site.id, projectDraft || null)
+      }
       setEditingSite(false)
     } finally {
       setSavingSite(false)
@@ -352,6 +358,17 @@ export default function LocationDetail() {
                   onChange={(e) => setOtherInfoDraft(e.target.value)}
                   rows={3}
                 />
+              </label>
+              <label>
+                Project
+                <select value={projectDraft} onChange={(e) => setProjectDraft(e.target.value)}>
+                  <option value="">None — standalone Offsite Location</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
               </label>
               <div className="dialog-actions">
                 <button type="button" onClick={() => setEditingSite(false)} disabled={savingSite}>

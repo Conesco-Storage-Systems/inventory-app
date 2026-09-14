@@ -2,6 +2,16 @@
 -- Run this once in the Supabase SQL editor (Dashboard > SQL Editor > New query).
 -- Mirrors the local Dexie tables in src/models/types.ts.
 
+create table projects (
+  id text primary key,
+  name text not null,
+  active boolean not null default true,
+  deleted_at bigint,
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null
+);
+
 create table sites (
   id text primary key,
   name text not null,
@@ -9,6 +19,7 @@ create table sites (
   other_info text not null default '',
   active boolean not null default true,
   deleted_at bigint,
+  project_id text references projects(id) on delete set null,
   site_photo_path text,
   created_at bigint not null,
   last_updated_by text not null default '',
@@ -113,6 +124,7 @@ create table project_photos (
 -- Row Level Security: must be logged in to read or write anything.
 -- Everyone who's logged in shares full access — this is a shared company
 -- inventory system, not a multi-tenant app with per-user data.
+alter table projects enable row level security;
 alter table sites enable row level security;
 alter table beams enable row level security;
 alter table uprights enable row level security;
@@ -121,6 +133,8 @@ alter table misc_items enable row level security;
 alter table photos enable row level security;
 alter table project_photos enable row level security;
 
+create policy "Authenticated users can do anything" on projects
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on sites
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on beams
@@ -204,3 +218,25 @@ insert into public.profiles (id, email, role)
 select id, email, 'admin' from auth.users
 where id not in (select id from public.profiles)
 on conflict (id) do nothing;
+
+-- Migration: Projects — folders for bigger customer jobs (e.g. Automann)
+-- that contain multiple locations. Their material is excluded from "All
+-- Offsite Inventory" since it belongs to the customer, not Conesco's own
+-- sellable stock.
+create table if not exists projects (
+  id text primary key,
+  name text not null,
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null
+);
+
+alter table projects add column if not exists active boolean not null default true;
+alter table projects add column if not exists deleted_at bigint;
+
+alter table projects enable row level security;
+
+create policy "Authenticated users can do anything" on projects
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+alter table sites add column if not exists project_id text references projects(id) on delete set null;

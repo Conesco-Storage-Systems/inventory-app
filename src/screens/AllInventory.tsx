@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import ReadOnlyItemTable, { type ColumnDef } from '../components/ReadOnlyItemTable'
 import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
@@ -39,7 +39,13 @@ function leadingNumber(text: string): number {
 type FilterMap = Partial<Record<string, Set<string>>>
 
 export default function AllInventory() {
-  const sites = useLiveQuery(() => db.sites.toArray(), []) ?? []
+  // Present at /projects/:projectId/inventory, absent at /all-inventory —
+  // scopes everything below to just that project's locations instead of
+  // the standalone Offsite Locations.
+  const { projectId } = useParams<{ projectId?: string }>()
+  const project = useLiveQuery(() => (projectId ? db.projects.get(projectId) : undefined), [projectId])
+  const allSites = useLiveQuery(() => db.sites.toArray(), []) ?? []
+  const sites = allSites.filter((site) => (projectId ? site.projectId === projectId : !site.projectId))
   const beams = useLiveQuery(() => db.beams.toArray(), []) ?? []
   const uprights = useLiveQuery(() => db.uprights.toArray(), []) ?? []
   const wireDecks = useLiveQuery(() => db.wireDecks.toArray(), []) ?? []
@@ -55,6 +61,10 @@ export default function AllInventory() {
   const beamRows = combineRowsAcrossSites(beams, sites, groupBeams)
   const wireDeckRows = combineRowsAcrossSites(wireDecks, sites, groupWireDecks)
   const miscRows = combineRowsAcrossSites(miscItems, sites, groupMiscItems)
+
+  const pageTitle = projectId ? (project ? `All ${project.name} Inventory` : 'All Project Inventory') : 'All Offsite Inventory'
+  const backLink = projectId ? `/projects/${projectId}` : '/'
+  const backLabel = projectId ? '← Back' : '← Locations'
 
   const hasItems =
     uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0 || miscRows.length > 0
@@ -154,7 +164,10 @@ export default function AllInventory() {
       })),
     ]
 
-    exportSheetsToExcel([{ name: 'All Inventory', rows }], 'all-offsite-inventory.xlsx')
+    const filename = project
+      ? `${project.name.replace(/[^a-z0-9]+/gi, '-')}-inventory.xlsx`
+      : 'all-offsite-inventory.xlsx'
+    exportSheetsToExcel([{ name: 'All Inventory', rows }], filename)
   }
 
   const uprightColumns: Record<string, ColumnDef<AllUprightRow>> = {
@@ -499,9 +512,9 @@ export default function AllInventory() {
   return (
     <main className="page page-wide">
       <p>
-        <Link to="/">← Locations</Link>
+        <Link to={backLink}>{backLabel}</Link>
       </p>
-      <h1>All Offsite Inventory</h1>
+      <h1>{pageTitle}</h1>
 
       {hasItems && (
         <>

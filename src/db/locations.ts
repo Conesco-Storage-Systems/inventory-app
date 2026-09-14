@@ -4,7 +4,12 @@ import { enqueuePendingDelete, enqueuePendingDeletes } from './pendingDeletes'
 import type { AreaStatus } from '../models/types'
 import { getEditorName } from '../state/editor'
 
-export async function createSite(name: string, address: string, otherInfo: string): Promise<string> {
+export async function createSite(
+  name: string,
+  address: string,
+  otherInfo: string,
+  projectId?: string,
+): Promise<string> {
   const id = uuidv4()
   const now = Date.now()
   await db.sites.add({
@@ -16,6 +21,7 @@ export async function createSite(name: string, address: string, otherInfo: strin
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: now,
     active: true,
+    projectId,
     syncStatus: 'pending',
   })
   return id
@@ -39,6 +45,22 @@ export async function updateSite(
     name: name.trim(),
     address: address.trim(),
     otherInfo: otherInfo.trim(),
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
+// Moves a location in or out of a Project. Pass null to make it a
+// standalone Offsite Location again.
+export async function setSiteProject(siteId: string, projectId: string | null): Promise<void> {
+  const site = await db.sites.get(siteId)
+  if (!site) return
+  delete site.projectId
+
+  await db.sites.put({
+    ...site,
+    ...(projectId ? { projectId } : {}),
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
     syncStatus: 'pending',

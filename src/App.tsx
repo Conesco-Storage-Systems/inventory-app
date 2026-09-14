@@ -2,14 +2,18 @@ import { useEffect } from 'react'
 import { Route, BrowserRouter, Routes } from 'react-router-dom'
 import LoginGate from './components/LoginGate'
 import { purgeExpiredDeletedSites } from './db/locations'
+import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
 import InactiveLocations from './screens/InactiveLocations'
+import InactiveProjects from './screens/InactiveProjects'
 import ItemPhotos from './screens/ItemPhotos'
 import LocationDetail from './screens/LocationDetail'
 import LocationsList from './screens/LocationsList'
 import NewItem from './screens/NewItem'
+import ProjectDetail from './screens/ProjectDetail'
 import ProjectImages from './screens/ProjectImages'
 import RecentlyDeleted from './screens/RecentlyDeleted'
+import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
 import './App.css'
 
 function App() {
@@ -25,6 +29,7 @@ function App() {
 
   useEffect(() => {
     purgeExpiredDeletedSites()
+    purgeExpiredDeletedProjects()
   }, [])
 
   return (
@@ -36,6 +41,10 @@ function App() {
           <Route path="/all-inventory" element={<AllInventory />} />
           <Route path="/inactive-locations" element={<InactiveLocations />} />
           <Route path="/recently-deleted" element={<RecentlyDeleted />} />
+          <Route path="/inactive-projects" element={<InactiveProjects />} />
+          <Route path="/recently-deleted-projects" element={<RecentlyDeletedProjects />} />
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/inventory" element={<AllInventory />} />
           <Route path="/locations/:siteId" element={<LocationDetail />} />
           <Route path="/locations/:siteId/items/new" element={<NewItem />} />
           <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />

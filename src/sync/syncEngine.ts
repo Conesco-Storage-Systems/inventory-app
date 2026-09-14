@@ -1,6 +1,16 @@
 import { db } from '../db/db'
 import { supabase, supabaseConfigured } from './supabaseClient'
-import type { Beam, ItemType, MiscItem, Photo, ProjectPhoto, Site, Upright, WireDeck } from '../models/types'
+import type {
+  Beam,
+  ItemType,
+  MiscItem,
+  Photo,
+  Project,
+  ProjectPhoto,
+  Site,
+  Upright,
+  WireDeck,
+} from '../models/types'
 
 const STORAGE_BUCKET = 'inventory-photos'
 const CURSOR_KEY = 'inventoryApp.syncCursors'
@@ -276,6 +286,7 @@ function siteToRemote(site: Site): Record<string, unknown> {
     other_info: site.otherInfo,
     active: site.active ?? true,
     deleted_at: site.deletedAt ?? null,
+    project_id: site.projectId ?? null,
     site_photo_path: site.sitePhotoPath || null,
     created_at: site.createdAt,
     last_updated_by: site.lastUpdatedBy,
@@ -366,6 +377,7 @@ async function pullSites(): Promise<void> {
       otherInfo: remoteRow.other_info as string,
       active: remoteRow.active as boolean,
       deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
+      projectId: (remoteRow.project_id as string | null) ?? undefined,
       sitePhoto,
       sitePhotoPath,
       sitePhotoDirty: false,
@@ -376,6 +388,66 @@ async function pullSites(): Promise<void> {
     })
   }
   setCursor('sites', maxUpdatedAt)
+}
+
+// ---------- projects ----------
+
+function projectToRemote(project: Project): Record<string, unknown> {
+  return {
+    id: project.id,
+    name: project.name,
+    active: project.active ?? true,
+    deleted_at: project.deletedAt ?? null,
+    created_at: project.createdAt,
+    last_updated_by: project.lastUpdatedBy,
+    last_updated_at: project.lastUpdatedAt,
+  }
+}
+
+async function pushProjects(): Promise<void> {
+  const pending = await db.projects.where('syncStatus').equals('pending').toArray()
+  for (const project of pending) {
+    const { error } = await supabase.from('projects').upsert(projectToRemote(project))
+    if (!error) {
+      await db.projects.update(project.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push projects/${project.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullProjects(): Promise<void> {
+  const cursor = getCursors().projects ?? 0
+  const { data, error } = await supabase.from('projects').select('*').gt('last_updated_at', cursor)
+  if (error) {
+    console.error('[sync] pull projects failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.last_updated_at)
+    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+
+    const local = await db.projects.get(remoteRow.id as string)
+    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+      console.warn(`[sync] keeping local project/${remoteRow.id} over an older/equal remote change`)
+      continue
+    }
+
+    await db.projects.put({
+      id: remoteRow.id as string,
+      name: remoteRow.name as string,
+      active: remoteRow.active as boolean,
+      deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
+      createdAt: remoteRow.created_at as number,
+      lastUpdatedBy: remoteRow.last_updated_by as string,
+      lastUpdatedAt: updatedAt,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('projects', maxUpdatedAt)
 }
 
 // ---------- item photos ----------
@@ -557,11 +629,13 @@ export async function runSync(): Promise<void> {
   syncing = true
   try {
     await pushPendingDeletes()
+    await pushProjects()
     for (const config of ITEM_CONFIGS) await pushItemTable(config)
     await pushSites()
     await pushPhotos()
     await pushProjectPhotos()
 
+    await pullProjects()
     for (const config of ITEM_CONFIGS) await pullItemTable(config)
     await pullSites()
     await pullPhotos()
@@ -584,7 +658,16 @@ export function startAutoSync(): void {
   window.addEventListener('online', () => runSync())
   setInterval(runSync, 30_000)
 
-  const remoteTables = ['sites', 'beams', 'uprights', 'wire_decks', 'misc_items', 'photos', 'project_photos']
+  const remoteTables = [
+    'sites',
+    'projects',
+    'beams',
+    'uprights',
+    'wire_decks',
+    'misc_items',
+    'photos',
+    'project_photos',
+  ]
   for (const table of remoteTables) {
     supabase
       .channel(`realtime:${table}`)

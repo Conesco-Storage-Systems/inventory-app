@@ -1,4 +1,5 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import type { Role } from './roles'
 import { supabase } from '../sync/supabaseClient'
 
 const CACHED_EMAIL_KEY = 'inventoryApp.lastAuthedEmail'
@@ -53,6 +54,20 @@ export async function getCurrentSession(): Promise<Session | null> {
 export async function isSessionDefinitivelyInvalid(): Promise<boolean> {
   const { error } = await supabase.auth.getUser()
   return error?.name === 'AuthApiError'
+}
+
+// Reads this signed-in user's role from their profile row. Returns null if
+// it can't be determined (no session, no profile row yet, or unreachable —
+// callers should fall back to a cached role rather than treating null as
+// "definitely has no permissions").
+export async function getMyRole(): Promise<Role | null> {
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData.user?.id
+  if (!userId) return null
+
+  const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).single()
+  if (error || !data) return null
+  return data.role as Role
 }
 
 export function onAuthStateChange(

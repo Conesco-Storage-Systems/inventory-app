@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   getCachedAuthedEmail,
   getCurrentSession,
+  getMyRole,
   isSessionDefinitivelyInvalid,
   onAuthStateChange,
   setCachedAuthedEmail,
@@ -10,7 +11,9 @@ import {
   signOut,
 } from '../auth/authClient'
 import { consumeInviteOrRecoveryLink, type InviteLinkType } from '../auth/inviteFlow'
+import { getCachedRole, getPermissions, ROLE_LABELS, setCachedRole, type Role } from '../auth/roles'
 import { setEditorName } from '../state/editor'
+import { RoleProvider } from '../state/RoleContext'
 import { startAutoSync } from '../sync/syncEngine'
 import { supabaseConfigured } from '../sync/supabaseClient'
 
@@ -29,6 +32,10 @@ export default function LoginGate({ children }: { children: ReactNode }) {
   // reload while offline shows the app immediately instead of waiting on a
   // network call that may never come back.
   const [userEmail, setUserEmail] = useState<string | null>(() => getCachedAuthedEmail())
+  // Same offline-resilience reasoning as the cached email: start from
+  // whatever role this device last confirmed, so a refetch failing while
+  // offline doesn't strip an Inventory Manager down to viewer-only.
+  const [role, setRole] = useState<Role | null>(() => getCachedRole())
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -84,11 +91,21 @@ export default function LoginGate({ children }: { children: ReactNode }) {
     if (!userEmail) return
     setEditorName(userEmail)
     startAutoSync()
+    getMyRole().then((fetched) => {
+      // A failed/unreachable fetch returns null — keep trusting whatever
+      // role was already cached rather than dropping permissions.
+      if (fetched) {
+        setRole(fetched)
+        setCachedRole(fetched)
+      }
+    })
   }, [userEmail])
 
   async function handleSignOut() {
     await signOut()
     setUserEmail(null)
+    setRole(null)
+    setCachedRole(null)
   }
 
   async function handleSetNewPassword(e: React.FormEvent) {
@@ -170,12 +187,13 @@ export default function LoginGate({ children }: { children: ReactNode }) {
 
   if (userEmail) {
     return (
-      <>
+      <RoleProvider value={{ role, permissions: getPermissions(role) }}>
         <button type="button" className="sign-out-button" onClick={handleSignOut}>
-          Sign out ({userEmail})
+          Sign out ({userEmail}
+          {role ? ` · ${ROLE_LABELS[role]}` : ''})
         </button>
         {children}
-      </>
+      </RoleProvider>
     )
   }
 

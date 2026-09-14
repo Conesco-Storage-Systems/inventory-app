@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
 import RestoreSiteDialog from '../components/RestoreSiteDialog'
+import { useRole } from '../state/RoleContext'
 
 const RETENTION_DAYS = 60
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -13,6 +14,7 @@ function daysRemaining(deletedAt: number): number {
 }
 
 export default function RecentlyDeleted() {
+  const { permissions } = useRole()
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
   const deletedSites = sites.filter((site) => !!site.deletedAt)
   const [restoringSite, setRestoringSite] = useState<{ id: string; name: string } | null>(null)
@@ -42,14 +44,16 @@ export default function RecentlyDeleted() {
                   {daysRemaining(site.deletedAt!) === 1 ? '' : 's'}
                 </p>
               </div>
-              <div className="location-list-actions">
-                <button
-                  type="button"
-                  onClick={() => setRestoringSite({ id: site.id, name: site.name })}
-                >
-                  Restore
-                </button>
-              </div>
+              {permissions.restoreLocations && (
+                <div className="location-list-actions">
+                  <button
+                    type="button"
+                    onClick={() => setRestoringSite({ id: site.id, name: site.name })}
+                  >
+                    Restore
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

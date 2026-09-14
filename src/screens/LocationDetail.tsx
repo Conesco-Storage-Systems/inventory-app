@@ -32,6 +32,7 @@ import {
 import { removeSitePhoto, setSitePhoto, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
+import { useRole } from '../state/RoleContext'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
 
 type ItemKind = 'upright' | 'beam' | 'wireDeck' | 'misc'
@@ -43,6 +44,7 @@ interface SelectedItem {
 }
 
 export default function LocationDetail() {
+  const { permissions } = useRole()
   const { siteId } = useParams<{ siteId: string }>()
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
   const uprights = useLiveQuery(() => (siteId ? listUprightsBySite(siteId) : []), [siteId]) ?? []
@@ -365,11 +367,13 @@ export default function LocationDetail() {
               <h1>{site.name}</h1>
               {site.address && <p className="location-address">{site.address}</p>}
               {site.otherInfo && <p className="location-notes">{site.otherInfo}</p>}
-              <p className="edit-site-row">
-                <button type="button" onClick={startEditingSite}>
-                  Edit
-                </button>
-              </p>
+              {permissions.manageLocations && (
+                <p className="edit-site-row">
+                  <button type="button" onClick={startEditingSite}>
+                    Edit
+                  </button>
+                </p>
+              )}
             </>
           )}
         </div>
@@ -387,17 +391,21 @@ export default function LocationDetail() {
       </div>
 
       <p className="add-item-row">
-        <Link to={`/locations/${site.id}/items/new`}>
-          <button type="button">+ Add item</button>
-        </Link>
+        {permissions.addItems && (
+          <Link to={`/locations/${site.id}/items/new`}>
+            <button type="button">+ Add item</button>
+          </Link>
+        )}
         {hasItems && (
           <button type="button" onClick={handleExport} className="export-button">
             Export to Excel
           </button>
         )}
-        <button type="button" onClick={() => importFileInputRef.current?.click()}>
-          Import Data
-        </button>
+        {permissions.addItems && (
+          <button type="button" onClick={() => importFileInputRef.current?.click()}>
+            Import Data
+          </button>
+        )}
         <input
           ref={importFileInputRef}
           type="file"
@@ -474,20 +482,30 @@ export default function LocationDetail() {
               </p>
             )}
             <div className="selection-actions">
-              <button type="button" disabled={!selectedItem} onClick={() => setActiveAction('edit')}>
-                Edit
-              </button>
-              <button type="button" disabled={!selectedItem} onClick={() => setActiveAction('duplicate')}>
-                Duplicate
-              </button>
-              <button
-                type="button"
-                className="delete-button"
-                disabled={!selectedItem}
-                onClick={() => setActiveAction('delete')}
-              >
-                Delete
-              </button>
+              {permissions.editItems && (
+                <>
+                  <button type="button" disabled={!selectedItem} onClick={() => setActiveAction('edit')}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedItem}
+                    onClick={() => setActiveAction('duplicate')}
+                  >
+                    Duplicate
+                  </button>
+                </>
+              )}
+              {permissions.deleteItems && (
+                <button
+                  type="button"
+                  className="delete-button"
+                  disabled={!selectedItem}
+                  onClick={() => setActiveAction('delete')}
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
           </div>

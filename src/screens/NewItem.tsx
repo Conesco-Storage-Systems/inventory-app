@@ -6,10 +6,12 @@ import UprightForm, { emptyUprightDraft, type UprightDraft } from '../components
 import WireDeckForm, { emptyWireDeckDraft, type WireDeckDraft } from '../components/WireDeckForm'
 import { createBeam, createMiscItem, createUpright, createWireDeck } from '../db/items'
 import { ITEM_TYPE_LABELS, type Condition, type ItemType } from '../models/types'
+import { useRole } from '../state/RoleContext'
 
 const ITEM_TYPE_ORDER: ItemType[] = ['beam', 'wireDeck', 'upright', 'misc']
 
 export default function NewItem() {
+  const { permissions } = useRole()
   const { siteId } = useParams<{ siteId: string }>()
   const navigate = useNavigate()
   const [itemType, setItemType] = useState<ItemType | ''>('')
@@ -134,6 +136,17 @@ export default function NewItem() {
     } finally {
       setSaving(false)
     }
+  }
+
+  if (!permissions.addItems) {
+    return (
+      <main className="page">
+        <p>
+          <Link to={`/locations/${siteId}`}>← Back</Link>
+        </p>
+        <p>Your role doesn't have permission to add items.</p>
+      </main>
+    )
   }
 
   return (

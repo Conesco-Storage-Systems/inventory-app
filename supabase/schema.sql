@@ -154,3 +154,53 @@ alter table misc_items add column if not exists item_description text not null d
 
 -- Migration: adds soft-delete support ("Recently Deleted", 60-day retention).
 alter table sites add column if not exists deleted_at bigint;
+
+-- Migration: roles & permissions.
+-- One row per authenticated user, holding their role (admin,
+-- inventoryManager, sales, or viewer — see src/auth/roles.ts). The existing
+-- inventory tables stay open to "any authenticated user" for now — role
+-- enforcement starts at the UI layer; tightening table-level RLS by role is
+-- a later step once the roles below have been tried out for real.
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null default '',
+  role text not null default 'viewer',
+  created_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+-- Anyone logged in can see every profile (needed for an eventual "manage
+-- users" screen); only an admin can actually change a role.
+create policy "Authenticated users can view all profiles"
+  on profiles for select
+  using (auth.uid() is not null);
+
+create policy "Only admins can change roles"
+  on profiles for update
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'))
+  with check (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+-- New sign-ups automatically get a profile row. Defaults to 'viewer' — the
+-- safe, no-access-until-promoted default for anyone added going forward.
+create function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, role)
+  values (new.id, new.email, 'viewer');
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- One-time backfill for accounts that already existed before this feature
+-- shipped. They default to admin — preserving the full access everyone
+-- already had — rather than viewer, which only applies to brand-new
+-- sign-ups from here on.
+insert into public.profiles (id, email, role)
+select id, email, 'admin' from auth.users
+where id not in (select id from public.profiles)
+on conflict (id) do nothing;

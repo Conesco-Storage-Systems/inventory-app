@@ -5,8 +5,10 @@ import { db } from '../db/db'
 import AddLocationDialog from '../components/AddLocationDialog'
 import DeleteLocationDialog from '../components/DeleteLocationDialog'
 import MarkInactiveDialog from '../components/MarkInactiveDialog'
+import { useRole } from '../state/RoleContext'
 
 export default function LocationsList() {
+  const { permissions } = useRole()
   const navigate = useNavigate()
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
   const activeSites = sites.filter((site) => site.active !== false && !site.deletedAt)
@@ -17,7 +19,9 @@ export default function LocationsList() {
     <main className="page">
       <div className="page-header">
         <h1>Locations</h1>
-        <AddLocationDialog onCreated={(siteId) => navigate(`/locations/${siteId}`)} />
+        {permissions.manageLocations && (
+          <AddLocationDialog onCreated={(siteId) => navigate(`/locations/${siteId}`)} />
+        )}
       </div>
 
       {activeSites.length === 0 ? (
@@ -34,18 +38,24 @@ export default function LocationsList() {
               <div className="location-list-info">
                 <Link to={`/locations/${site.id}`}>{site.name}</Link>
               </div>
-              <div className="location-list-actions">
-                <button type="button" onClick={() => setMarkingInactiveSiteId(site.id)}>
-                  Mark as Inactive
-                </button>
-                <button
-                  type="button"
-                  className="delete-button"
-                  onClick={() => setDeletingSite({ id: site.id, name: site.name })}
-                >
-                  Delete
-                </button>
-              </div>
+              {(permissions.manageLocations || permissions.deleteLocations) && (
+                <div className="location-list-actions">
+                  {permissions.manageLocations && (
+                    <button type="button" onClick={() => setMarkingInactiveSiteId(site.id)}>
+                      Mark as Inactive
+                    </button>
+                  )}
+                  {permissions.deleteLocations && (
+                    <button
+                      type="button"
+                      className="delete-button"
+                      onClick={() => setDeletingSite({ id: site.id, name: site.name })}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>

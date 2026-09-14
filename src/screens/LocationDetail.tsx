@@ -499,7 +499,7 @@ export default function LocationDetail() {
           <h2>Bills of Lading</h2>
           <ul className="location-list">
             {bols.map((bol) => (
-              <li key={bol.id} className="location-list-row">
+              <li key={bol.id} className="location-list-row bol-list-row">
                 <div className="location-list-info">
                   <Link to={`/locations/${site.id}/bol/${bol.id}`}>
                     {bol.date || 'Undated'}

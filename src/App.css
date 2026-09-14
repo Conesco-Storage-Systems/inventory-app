@@ -89,6 +89,17 @@ button {
   margin-right: 0;
 }
 
+.bol-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.bol-list-row .location-list-info {
+  flex: 0 1 auto;
+}
+
 .location-list-actions {
   display: flex;
   gap: 8px;

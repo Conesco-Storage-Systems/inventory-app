@@ -29,6 +29,7 @@ import {
   listUprightsBySite,
   listWireDecksBySite,
 } from '../db/items'
+import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
@@ -51,6 +52,7 @@ export default function LocationDetail() {
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
+  const bols = useLiveQuery(() => (siteId ? listBolsBySite(siteId) : []), [siteId]) ?? []
 
   const toolbarObserverRef = useRef<IntersectionObserver | null>(null)
   const [toolbarStuck, setToolbarStuck] = useState(false)
@@ -136,8 +138,9 @@ export default function LocationDetail() {
   const [savingSite, setSavingSite] = useState(false)
   const projects = useLiveQuery(() => db.projects.orderBy('name').toArray(), []) ?? []
 
-  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
+  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
   const [activeAction, setActiveAction] = useState<'edit' | 'duplicate' | 'delete' | null>(null)
+  const [deletingBolId, setDeletingBolId] = useState<string | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -155,22 +158,31 @@ export default function LocationDetail() {
     : beamRows
 
   function toggleSelect(itemType: ItemKind, row: UprightRow | BeamRow | WireDeckRow | MiscItemRow) {
-    setSelectedItem((prev) =>
-      prev && prev.itemType === itemType && prev.key === row.key ? null : { itemType, key: row.key, row },
-    )
+    setSelectedItems((prev) => {
+      const exists = prev.some((si) => si.itemType === itemType && si.key === row.key)
+      if (exists) return prev.filter((si) => !(si.itemType === itemType && si.key === row.key))
+      return [...prev, { itemType, key: row.key, row }]
+    })
   }
 
   function closeAction() {
     setActiveAction(null)
-    setSelectedItem(null)
+    setSelectedItems([])
+  }
+
+  async function handleConfirmDeleteBol() {
+    if (!deletingBolId) return
+    await deleteBillOfLading(deletingBolId)
+    setDeletingBolId(null)
   }
 
   async function handleConfirmDelete() {
-    if (!selectedItem) return
-    if (selectedItem.itemType === 'upright') await deleteUprightGroup(selectedItem.row.ids)
-    else if (selectedItem.itemType === 'beam') await deleteBeamGroup(selectedItem.row.ids)
-    else if (selectedItem.itemType === 'wireDeck') await deleteWireDeckGroup(selectedItem.row.ids)
-    else await deleteMiscItemGroup(selectedItem.row.ids)
+    for (const item of selectedItems) {
+      if (item.itemType === 'upright') await deleteUprightGroup(item.row.ids)
+      else if (item.itemType === 'beam') await deleteBeamGroup(item.row.ids)
+      else if (item.itemType === 'wireDeck') await deleteWireDeckGroup(item.row.ids)
+      else await deleteMiscItemGroup(item.row.ids)
+    }
   }
 
   const displayedWireDeckRows = normalizedSearch
@@ -179,6 +191,16 @@ export default function LocationDetail() {
   const displayedMiscRows = normalizedSearch
     ? miscRows.filter((row) => matchesSearch(row, normalizedSearch))
     : miscRows
+
+  const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null
+  const selectedUprightKeys = new Set(
+    selectedItems.filter((si) => si.itemType === 'upright').map((si) => si.key),
+  )
+  const selectedBeamKeys = new Set(selectedItems.filter((si) => si.itemType === 'beam').map((si) => si.key))
+  const selectedWireDeckKeys = new Set(
+    selectedItems.filter((si) => si.itemType === 'wireDeck').map((si) => si.key),
+  )
+  const selectedMiscKeys = new Set(selectedItems.filter((si) => si.itemType === 'misc').map((si) => si.key))
 
   if (site === undefined) {
     return (
@@ -472,6 +494,34 @@ export default function LocationDetail() {
         </div>
       )}
 
+      {bols.length > 0 && (
+        <section className="item-section">
+          <h2>Bills of Lading</h2>
+          <ul className="location-list">
+            {bols.map((bol) => (
+              <li key={bol.id} className="location-list-row">
+                <div className="location-list-info">
+                  <Link to={`/locations/${site.id}/bol/${bol.id}`}>
+                    {bol.date || 'Undated'}
+                    {bol.loadNumber ? ` — Load #${bol.loadNumber}` : ''}
+                    {bol.direction === 'outbound' ? ` to ${bol.shipToCompany}` : ` from ${bol.shipFromCompany}`}
+                  </Link>
+                </div>
+                {permissions.generateBillOfLading && (
+                  <button
+                    type="button"
+                    className="delete-button"
+                    onClick={() => setDeletingBolId(bol.id)}
+                  >
+                    Delete
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {!hasItems && <p className="placeholder-note">No items added yet.</p>}
 
       {hasItems && (
@@ -499,14 +549,26 @@ export default function LocationDetail() {
               </p>
             )}
             <div className="selection-actions">
+              {permissions.generateBillOfLading && (
+                <Link
+                  to={`/locations/${site.id}/bol/new`}
+                  state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
+                >
+                  <button type="button">New BOL</button>
+                </Link>
+              )}
               {permissions.editItems && (
                 <>
-                  <button type="button" disabled={!selectedItem} onClick={() => setActiveAction('edit')}>
+                  <button
+                    type="button"
+                    disabled={selectedItems.length !== 1}
+                    onClick={() => setActiveAction('edit')}
+                  >
                     Edit
                   </button>
                   <button
                     type="button"
-                    disabled={!selectedItem}
+                    disabled={selectedItems.length !== 1}
                     onClick={() => setActiveAction('duplicate')}
                   >
                     Duplicate
@@ -517,7 +579,7 @@ export default function LocationDetail() {
                 <button
                   type="button"
                   className="delete-button"
-                  disabled={!selectedItem}
+                  disabled={selectedItems.length === 0}
                   onClick={() => setActiveAction('delete')}
                 >
                   Delete
@@ -535,7 +597,7 @@ export default function LocationDetail() {
           <UprightTable
             rows={displayedUprightRows}
             siteId={site.id}
-            selectedKey={selectedItem?.itemType === 'upright' ? selectedItem.key : null}
+            selectedKeys={selectedUprightKeys}
             onToggleSelect={(row) => toggleSelect('upright', row)}
           />
         </section>
@@ -547,7 +609,7 @@ export default function LocationDetail() {
           <BeamTable
             rows={displayedBeamRows}
             siteId={site.id}
-            selectedKey={selectedItem?.itemType === 'beam' ? selectedItem.key : null}
+            selectedKeys={selectedBeamKeys}
             onToggleSelect={(row) => toggleSelect('beam', row)}
           />
         </section>
@@ -559,7 +621,7 @@ export default function LocationDetail() {
           <WireDeckTable
             rows={displayedWireDeckRows}
             siteId={site.id}
-            selectedKey={selectedItem?.itemType === 'wireDeck' ? selectedItem.key : null}
+            selectedKeys={selectedWireDeckKeys}
             onToggleSelect={(row) => toggleSelect('wireDeck', row)}
             searchActive={!!normalizedSearch}
           />
@@ -572,46 +634,49 @@ export default function LocationDetail() {
           <MiscItemTable
             rows={displayedMiscRows}
             siteId={site.id}
-            selectedKey={selectedItem?.itemType === 'misc' ? selectedItem.key : null}
+            selectedKeys={selectedMiscKeys}
             onToggleSelect={(row) => toggleSelect('misc', row)}
           />
         </section>
       )}
 
-      {selectedItem?.itemType === 'upright' && (activeAction === 'edit' || activeAction === 'duplicate') && (
+      {singleSelected?.itemType === 'upright' && (activeAction === 'edit' || activeAction === 'duplicate') && (
         <EditUprightDialog
-          row={selectedItem.row as UprightRow}
+          row={singleSelected.row as UprightRow}
           siteId={site.id}
           mode={activeAction}
           onClose={closeAction}
         />
       )}
-      {selectedItem?.itemType === 'beam' && (activeAction === 'edit' || activeAction === 'duplicate') && (
+      {singleSelected?.itemType === 'beam' && (activeAction === 'edit' || activeAction === 'duplicate') && (
         <EditBeamDialog
-          row={selectedItem.row as BeamRow}
+          row={singleSelected.row as BeamRow}
           siteId={site.id}
           mode={activeAction}
           onClose={closeAction}
         />
       )}
-      {selectedItem?.itemType === 'wireDeck' && (activeAction === 'edit' || activeAction === 'duplicate') && (
+      {singleSelected?.itemType === 'wireDeck' && (activeAction === 'edit' || activeAction === 'duplicate') && (
         <EditWireDeckDialog
-          row={selectedItem.row as WireDeckRow}
+          row={singleSelected.row as WireDeckRow}
           siteId={site.id}
           mode={activeAction}
           onClose={closeAction}
         />
       )}
-      {selectedItem?.itemType === 'misc' && (activeAction === 'edit' || activeAction === 'duplicate') && (
+      {singleSelected?.itemType === 'misc' && (activeAction === 'edit' || activeAction === 'duplicate') && (
         <EditMiscItemDialog
-          row={selectedItem.row as MiscItemRow}
+          row={singleSelected.row as MiscItemRow}
           siteId={site.id}
           mode={activeAction}
           onClose={closeAction}
         />
       )}
-      {selectedItem && activeAction === 'delete' && (
+      {selectedItems.length > 0 && activeAction === 'delete' && (
         <ConfirmDeleteDialog onConfirm={handleConfirmDelete} onClose={closeAction} />
+      )}
+      {deletingBolId && (
+        <ConfirmDeleteDialog onConfirm={handleConfirmDeleteBol} onClose={() => setDeletingBolId(null)} />
       )}
     </main>
   )

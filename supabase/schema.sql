@@ -121,6 +121,34 @@ create table project_photos (
   created_at bigint not null
 );
 
+-- Generated shipping documents tied to a location. Line items are picked
+-- from that location's own tracked inventory at the time the BOL is made,
+-- but this table is a standalone document snapshot — it does not touch
+-- inventory quantities.
+create table bills_of_lading (
+  id text primary key,
+  site_id text not null references sites(id) on delete cascade,
+  direction text not null,
+  date text not null default '',
+  load_number text not null default '',
+  reference_doc text not null default '',
+  payment_term text not null default '',
+  ship_from_company text not null default '',
+  ship_from_address text not null default '',
+  ship_from_phone text not null default '',
+  ship_to_company text not null default '',
+  ship_to_contact text not null default '',
+  ship_to_address text not null default '',
+  ship_to_phone text not null default '',
+  carrier text not null default '',
+  driver_phone text not null default '',
+  broker_info text not null default '',
+  line_items jsonb not null default '[]',
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null
+);
+
 -- Row Level Security: must be logged in to read or write anything.
 -- Everyone who's logged in shares full access — this is a shared company
 -- inventory system, not a multi-tenant app with per-user data.
@@ -132,6 +160,7 @@ alter table wire_decks enable row level security;
 alter table misc_items enable row level security;
 alter table photos enable row level security;
 alter table project_photos enable row level security;
+alter table bills_of_lading enable row level security;
 
 create policy "Authenticated users can do anything" on projects
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -148,6 +177,8 @@ create policy "Authenticated users can do anything" on misc_items
 create policy "Authenticated users can do anything" on photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on project_photos
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on bills_of_lading
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- Storage bucket policy: creating the "inventory-photos" bucket in the
@@ -240,3 +271,36 @@ create policy "Authenticated users can do anything" on projects
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 alter table sites add column if not exists project_id text references projects(id) on delete set null;
+
+-- Migration: Bills of Lading — generated shipping documents tied to a
+-- location. Line items are picked from that location's own tracked
+-- inventory at the time the BOL is made, but this table is a standalone
+-- document snapshot — it does not touch inventory quantities.
+create table if not exists bills_of_lading (
+  id text primary key,
+  site_id text not null references sites(id) on delete cascade,
+  direction text not null,
+  date text not null default '',
+  load_number text not null default '',
+  reference_doc text not null default '',
+  payment_term text not null default '',
+  ship_from_company text not null default '',
+  ship_from_address text not null default '',
+  ship_from_phone text not null default '',
+  ship_to_company text not null default '',
+  ship_to_contact text not null default '',
+  ship_to_address text not null default '',
+  ship_to_phone text not null default '',
+  carrier text not null default '',
+  driver_phone text not null default '',
+  broker_info text not null default '',
+  line_items jsonb not null default '[]',
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null
+);
+
+alter table bills_of_lading enable row level security;
+
+create policy "Authenticated users can do anything" on bills_of_lading
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);

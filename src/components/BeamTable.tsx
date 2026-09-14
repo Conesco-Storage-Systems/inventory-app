@@ -39,11 +39,11 @@ const DEFAULT_BEAM_COLUMN_ORDER: BeamColumnKey[] = [
 interface BeamTableProps {
   rows: BeamRow[]
   siteId: string
-  selectedKey: string | null
+  selectedKeys: Set<string>
   onToggleSelect: (row: BeamRow) => void
 }
 
-export default function BeamTable({ rows, siteId, selectedKey, onToggleSelect }: BeamTableProps) {
+export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }: BeamTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<BeamColumnKey>(
     'beamColumns',
     DEFAULT_BEAM_COLUMN_ORDER,
@@ -115,7 +115,7 @@ export default function BeamTable({ rows, siteId, selectedKey, onToggleSelect }:
                 <td>
                   <input
                     type="checkbox"
-                    checked={selectedKey === row.key}
+                    checked={selectedKeys.has(row.key)}
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>

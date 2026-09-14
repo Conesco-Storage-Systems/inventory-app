@@ -33,12 +33,12 @@ const DEFAULT_WIRE_DECK_COLUMN_ORDER: WireDeckColumnKey[] = [
 interface WireDeckTableProps {
   rows: WireDeckRow[]
   siteId: string
-  selectedKey: string | null
+  selectedKeys: Set<string>
   onToggleSelect: (row: WireDeckRow) => void
   searchActive: boolean
 }
 
-export default function WireDeckTable({ rows, siteId, selectedKey, onToggleSelect, searchActive }: WireDeckTableProps) {
+export default function WireDeckTable({ rows, siteId, selectedKeys, onToggleSelect, searchActive }: WireDeckTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<WireDeckColumnKey>(
     'wireDeckColumns',
     DEFAULT_WIRE_DECK_COLUMN_ORDER,
@@ -224,7 +224,7 @@ export default function WireDeckTable({ rows, siteId, selectedKey, onToggleSelec
                 <td>
                   <input
                     type="checkbox"
-                    checked={selectedKey === row.key}
+                    checked={selectedKeys.has(row.key)}
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>

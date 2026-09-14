@@ -29,11 +29,11 @@ const DEFAULT_MISC_ITEM_COLUMN_ORDER: MiscItemColumnKey[] = [
 interface MiscItemTableProps {
   rows: MiscItemRow[]
   siteId: string
-  selectedKey: string | null
+  selectedKeys: Set<string>
   onToggleSelect: (row: MiscItemRow) => void
 }
 
-export default function MiscItemTable({ rows, siteId, selectedKey, onToggleSelect }: MiscItemTableProps) {
+export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSelect }: MiscItemTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } =
     useColumnConfig<MiscItemColumnKey>('miscItemColumns', DEFAULT_MISC_ITEM_COLUMN_ORDER)
   const [draggingKey, setDraggingKey] = useState<MiscItemColumnKey | null>(null)
@@ -101,7 +101,7 @@ export default function MiscItemTable({ rows, siteId, selectedKey, onToggleSelec
                 <td>
                   <input
                     type="checkbox"
-                    checked={selectedKey === row.key}
+                    checked={selectedKeys.has(row.key)}
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>

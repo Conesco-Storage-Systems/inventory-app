@@ -164,6 +164,45 @@ export interface ProjectPhoto {
   remoteUrl?: string
 }
 
+// 'outbound' = material leaving this location (it fills in Ship From).
+// 'inbound' = material coming into this location (it fills in Ship To).
+export type BolDirection = 'outbound' | 'inbound'
+
+export type PaymentTerm = 'PrePaid' | 'Collect' | '3rd Party'
+
+export interface BolLineItem {
+  item: string
+  description: string
+  qtyShipped: number
+  weight: string
+  qtyReceived: string
+}
+
+export interface BillOfLading {
+  id: string
+  siteId: string
+  direction: BolDirection
+  date: string
+  loadNumber: string
+  referenceDoc: string
+  paymentTerm: PaymentTerm | ''
+  shipFromCompany: string
+  shipFromAddress: string
+  shipFromPhone: string
+  shipToCompany: string
+  shipToContact: string
+  shipToAddress: string
+  shipToPhone: string
+  carrier: string
+  driverPhone: string
+  brokerInfo: string
+  lineItems: BolLineItem[]
+  createdAt: number
+  lastUpdatedBy: string
+  lastUpdatedAt: number
+  syncStatus: SyncStatus
+}
+
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
@@ -176,6 +215,7 @@ export type SyncTable =
   | 'miscItems'
   | 'photos'
   | 'projectPhotos'
+  | 'billsOfLading'
 
 export interface PendingDelete {
   id: string

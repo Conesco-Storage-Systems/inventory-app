@@ -2,6 +2,7 @@ import { db } from '../db/db'
 import { supabase, supabaseConfigured } from './supabaseClient'
 import type {
   Beam,
+  BillOfLading,
   ItemType,
   MiscItem,
   Photo,
@@ -450,6 +451,94 @@ async function pullProjects(): Promise<void> {
   setCursor('projects', maxUpdatedAt)
 }
 
+// ---------- bills of lading ----------
+
+function bolToRemote(bol: BillOfLading): Record<string, unknown> {
+  return {
+    id: bol.id,
+    site_id: bol.siteId,
+    direction: bol.direction,
+    date: bol.date,
+    load_number: bol.loadNumber,
+    reference_doc: bol.referenceDoc,
+    payment_term: bol.paymentTerm,
+    ship_from_company: bol.shipFromCompany,
+    ship_from_address: bol.shipFromAddress,
+    ship_from_phone: bol.shipFromPhone,
+    ship_to_company: bol.shipToCompany,
+    ship_to_contact: bol.shipToContact,
+    ship_to_address: bol.shipToAddress,
+    ship_to_phone: bol.shipToPhone,
+    carrier: bol.carrier,
+    driver_phone: bol.driverPhone,
+    broker_info: bol.brokerInfo,
+    line_items: bol.lineItems,
+    created_at: bol.createdAt,
+    last_updated_by: bol.lastUpdatedBy,
+    last_updated_at: bol.lastUpdatedAt,
+  }
+}
+
+async function pushBolsOfLading(): Promise<void> {
+  const pending = await db.billsOfLading.where('syncStatus').equals('pending').toArray()
+  for (const bol of pending) {
+    const { error } = await supabase.from('bills_of_lading').upsert(bolToRemote(bol))
+    if (!error) {
+      await db.billsOfLading.update(bol.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push bills_of_lading/${bol.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullBolsOfLading(): Promise<void> {
+  const cursor = getCursors().bills_of_lading ?? 0
+  const { data, error } = await supabase.from('bills_of_lading').select('*').gt('last_updated_at', cursor)
+  if (error) {
+    console.error('[sync] pull bills_of_lading failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.last_updated_at)
+    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+
+    const local = await db.billsOfLading.get(remoteRow.id as string)
+    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+      console.warn(`[sync] keeping local billsOfLading/${remoteRow.id} over an older/equal remote change`)
+      continue
+    }
+
+    await db.billsOfLading.put({
+      id: remoteRow.id as string,
+      siteId: remoteRow.site_id as string,
+      direction: remoteRow.direction as BillOfLading['direction'],
+      date: remoteRow.date as string,
+      loadNumber: remoteRow.load_number as string,
+      referenceDoc: remoteRow.reference_doc as string,
+      paymentTerm: remoteRow.payment_term as BillOfLading['paymentTerm'],
+      shipFromCompany: remoteRow.ship_from_company as string,
+      shipFromAddress: remoteRow.ship_from_address as string,
+      shipFromPhone: remoteRow.ship_from_phone as string,
+      shipToCompany: remoteRow.ship_to_company as string,
+      shipToContact: remoteRow.ship_to_contact as string,
+      shipToAddress: remoteRow.ship_to_address as string,
+      shipToPhone: remoteRow.ship_to_phone as string,
+      carrier: remoteRow.carrier as string,
+      driverPhone: remoteRow.driver_phone as string,
+      brokerInfo: remoteRow.broker_info as string,
+      lineItems: (remoteRow.line_items as BillOfLading['lineItems']) ?? [],
+      createdAt: remoteRow.created_at as number,
+      lastUpdatedBy: remoteRow.last_updated_by as string,
+      lastUpdatedAt: updatedAt,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('bills_of_lading', maxUpdatedAt)
+}
+
 // ---------- item photos ----------
 
 async function pushPhotos(): Promise<void> {
@@ -593,6 +682,7 @@ const REMOTE_TABLE_NAMES: Record<string, string> = {
   wireDecks: 'wire_decks',
   miscItems: 'misc_items',
   projectPhotos: 'project_photos',
+  billsOfLading: 'bills_of_lading',
 }
 
 async function pushPendingDeletes(): Promise<void> {
@@ -634,12 +724,14 @@ export async function runSync(): Promise<void> {
     await pushSites()
     await pushPhotos()
     await pushProjectPhotos()
+    await pushBolsOfLading()
 
     await pullProjects()
     for (const config of ITEM_CONFIGS) await pullItemTable(config)
     await pullSites()
     await pullPhotos()
     await pullProjectPhotos()
+    await pullBolsOfLading()
     console.log('[sync] finished')
   } catch (err) {
     console.error('[sync] sync run failed', err)
@@ -667,6 +759,7 @@ export function startAutoSync(): void {
     'misc_items',
     'photos',
     'project_photos',
+    'bills_of_lading',
   ]
   for (const table of remoteTables) {
     supabase

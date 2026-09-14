@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie'
 import type {
   Area,
   Beam,
+  BillOfLading,
   MiscItem,
   PendingDelete,
   PickerOption,
@@ -25,6 +26,7 @@ class InventoryDB extends Dexie {
   projectPhotos!: Table<ProjectPhoto, string>
   pendingDeletes!: Table<PendingDelete, string>
   projects!: Table<Project, string>
+  billsOfLading!: Table<BillOfLading, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -165,6 +167,27 @@ class InventoryDB extends Dexie {
       projectPhotos: 'id, siteId, uploadStatus, createdAt',
       pendingDeletes: 'id, table, recordId, deletedAt',
       projects: 'id, name, createdAt, syncStatus',
+    })
+    // Adds Bills of Lading — generated shipping documents tied to a
+    // location, with line items pulled from that location's own tracked
+    // inventory. Purely a document for now; it does not touch inventory
+    // quantities.
+    this.version(8).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
     })
   }
 }

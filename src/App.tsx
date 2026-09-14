@@ -9,11 +9,13 @@ import InactiveProjects from './screens/InactiveProjects'
 import ItemPhotos from './screens/ItemPhotos'
 import LocationDetail from './screens/LocationDetail'
 import LocationsList from './screens/LocationsList'
+import NewBillOfLading from './screens/NewBillOfLading'
 import NewItem from './screens/NewItem'
 import ProjectDetail from './screens/ProjectDetail'
 import ProjectImages from './screens/ProjectImages'
 import RecentlyDeleted from './screens/RecentlyDeleted'
 import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
+import ViewBillOfLading from './screens/ViewBillOfLading'
 import './App.css'
 
 function App() {
@@ -47,6 +49,8 @@ function App() {
           <Route path="/projects/:projectId/inventory" element={<AllInventory />} />
           <Route path="/locations/:siteId" element={<LocationDetail />} />
           <Route path="/locations/:siteId/items/new" element={<NewItem />} />
+          <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
+          <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />
           <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />
           <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
         </Routes>

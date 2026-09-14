@@ -43,11 +43,11 @@ const DEFAULT_UPRIGHT_COLUMN_ORDER: UprightColumnKey[] = [
 interface UprightTableProps {
   rows: UprightRow[]
   siteId: string
-  selectedKey: string | null
+  selectedKeys: Set<string>
   onToggleSelect: (row: UprightRow) => void
 }
 
-export default function UprightTable({ rows, siteId, selectedKey, onToggleSelect }: UprightTableProps) {
+export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelect }: UprightTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<UprightColumnKey>(
     'uprightColumns',
     DEFAULT_UPRIGHT_COLUMN_ORDER,
@@ -121,7 +121,7 @@ export default function UprightTable({ rows, siteId, selectedKey, onToggleSelect
                 <td>
                   <input
                     type="checkbox"
-                    checked={selectedKey === row.key}
+                    checked={selectedKeys.has(row.key)}
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>

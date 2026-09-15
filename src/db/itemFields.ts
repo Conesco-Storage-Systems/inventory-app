@@ -94,5 +94,5 @@ export function getItemFields(itemType: SelectableItemType, row: SelectableRow):
       break
     }
   }
-  return fields.filter((f) => f.value)
+  return [{ key: 'quantity', label: 'Quantity', value: String(row.quantity) }, ...fields].filter((f) => f.value)
 }

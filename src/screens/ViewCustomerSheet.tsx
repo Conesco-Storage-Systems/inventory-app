@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getCustomerSheet } from '../db/customerSheets'
 import { bolElementToPdfBlob } from '../export/exportBolToPdf'
+import { saveBlobAs } from '../export/saveBlob'
 
 function sheetPdfFileName(customerName: string, date: string): string {
   const parts = ['Customer-Sheet', customerName || 'customer', date || 'undated']
@@ -14,61 +15,20 @@ export default function ViewCustomerSheet() {
   const sheet = useLiveQuery(() => (sheetId ? getCustomerSheet(sheetId) : undefined), [sheetId])
   const sheetRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
-  const [emailing, setEmailing] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
-  const [emailNote, setEmailNote] = useState<string | null>(null)
 
   async function handleSave() {
     if (!sheetRef.current || !sheet) return
     setExportError(null)
-    setEmailNote(null)
     setSaving(true)
     try {
       const blob = await bolElementToPdfBlob(sheetRef.current)
       const fileName = sheetPdfFileName(sheet.customerName, sheet.date)
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      await saveBlobAs(blob, fileName)
     } catch {
       setExportError('Could not save the PDF. Please try again.')
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleEmail() {
-    if (!sheetRef.current || !sheet) return
-    setExportError(null)
-    setEmailNote(null)
-    setEmailing(true)
-    try {
-      const blob = await bolElementToPdfBlob(sheetRef.current)
-      const fileName = sheetPdfFileName(sheet.customerName, sheet.date)
-      const subject = `Material Spec Sheet${sheet.customerName ? ` — ${sheet.customerName}` : ''}`
-
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-
-      const body = `The customer sheet PDF has been downloaded as "${fileName}" — please attach it to this email before sending.`
-      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-      setEmailNote(
-        `Browsers won't let a web page attach a file to an email automatically — "${fileName}" was downloaded to your computer, and a new email draft is opening. Attach that file to the draft before sending.`,
-      )
-    } catch {
-      setExportError('Could not prepare the email. Please try again.')
-    } finally {
-      setEmailing(false)
     }
   }
 
@@ -101,12 +61,8 @@ export default function ViewCustomerSheet() {
         <button type="button" onClick={handleSave} disabled={saving}>
           {saving ? 'Saving…' : 'Save'}
         </button>
-        <button type="button" onClick={handleEmail} disabled={emailing}>
-          {emailing ? 'Preparing…' : 'Email'}
-        </button>
       </div>
       {exportError && <p className="field-error no-print">{exportError}</p>}
-      {emailNote && <p className="placeholder-note no-print">{emailNote}</p>}
 
       <div className="cs-sheet" ref={sheetRef}>
         <div className="cs-header">
@@ -150,9 +106,7 @@ export default function ViewCustomerSheet() {
         <div className="cs-items">
           {sheet.lineItems.map((li, index) => (
             <div className="cs-item-box" key={index}>
-              <div className="cs-item-header">
-                {li.itemLabel} — Qty {li.quantity}
-              </div>
+              <div className="cs-item-header">{li.itemLabel}</div>
               {li.fields.length > 0 && (
                 <div className="cs-item-fields">
                   {li.fields.map((field, fi) => (

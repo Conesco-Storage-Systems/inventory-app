@@ -45,9 +45,7 @@ function SelectedItemCard({
   return (
     <div className="customer-sheet-item-card">
       <div className="customer-sheet-item-card-header">
-        <strong>
-          {getItemLabel(item.itemType, item.row)} — Qty {item.row.quantity}
-        </strong>
+        <strong>{getItemLabel(item.itemType, item.row)}</strong>
         <button type="button" className="delete-button" onClick={onRemove}>
           Remove
         </button>
@@ -212,7 +210,6 @@ export default function NewCustomerSheet() {
         lineItems.push({
           itemType: item.itemType,
           itemLabel: getItemLabel(item.itemType, item.row),
-          quantity: item.row.quantity,
           fields,
           photos,
         })

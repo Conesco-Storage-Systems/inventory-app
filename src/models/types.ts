@@ -218,7 +218,6 @@ export interface CustomerSheetField {
 export interface CustomerSheetLineItem {
   itemType: CustomerSheetItemType
   itemLabel: string
-  quantity: number
   fields: CustomerSheetField[]
   photos: string[]
 }

@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getBillOfLading } from '../db/billsOfLading'
 import { bolElementToPdfBlob, bolPdfFileName } from '../export/exportBolToPdf'
 import { shrinkBolToOnePage } from '../export/fitBolToPage'
+import { saveBlobAs } from '../export/saveBlob'
 
 export default function ViewBillOfLading() {
   const { siteId, bolId } = useParams<{ siteId: string; bolId: string }>()
@@ -11,9 +12,7 @@ export default function ViewBillOfLading() {
   const frameRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
-  const [emailing, setEmailing] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
-  const [emailNote, setEmailNote] = useState<string | null>(null)
 
   useEffect(() => {
     function handleBeforePrint() {
@@ -40,58 +39,17 @@ export default function ViewBillOfLading() {
   async function handleSave() {
     if (!sheetRef.current || !frameRef.current || !bol) return
     setExportError(null)
-    setEmailNote(null)
     setSaving(true)
     const restore = shrinkBolToOnePage(sheetRef.current, frameRef.current)
     try {
       const blob = await bolElementToPdfBlob(sheetRef.current)
       const fileName = bolPdfFileName(bol.loadNumber, bol.date)
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      await saveBlobAs(blob, fileName)
     } catch {
       setExportError('Could not save the PDF. Please try again.')
     } finally {
       restore()
       setSaving(false)
-    }
-  }
-
-  async function handleEmail() {
-    if (!sheetRef.current || !frameRef.current || !bol) return
-    setExportError(null)
-    setEmailNote(null)
-    setEmailing(true)
-    const restore = shrinkBolToOnePage(sheetRef.current, frameRef.current)
-    try {
-      const blob = await bolElementToPdfBlob(sheetRef.current)
-      const fileName = bolPdfFileName(bol.loadNumber, bol.date)
-      const subject = `Bill of Lading${bol.loadNumber ? ` — Load #${bol.loadNumber}` : ''}`
-
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-
-      const body = `The Bill of Lading PDF has been downloaded as "${fileName}" — please attach it to this email before sending.`
-      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-      setEmailNote(
-        `Browsers won't let a web page attach a file to an email automatically — "${fileName}" was downloaded to your computer, and a new email draft is opening. Attach that file to the draft before sending.`,
-      )
-    } catch {
-      setExportError('Could not prepare the email. Please try again.')
-    } finally {
-      restore()
-      setEmailing(false)
     }
   }
 
@@ -124,12 +82,8 @@ export default function ViewBillOfLading() {
         <button type="button" onClick={handleSave} disabled={saving}>
           {saving ? 'Saving…' : 'Save'}
         </button>
-        <button type="button" onClick={handleEmail} disabled={emailing}>
-          {emailing ? 'Preparing…' : 'Email'}
-        </button>
       </div>
       {exportError && <p className="field-error no-print">{exportError}</p>}
-      {emailNote && <p className="placeholder-note no-print">{emailNote}</p>}
 
       <div className="bol-print-frame" ref={frameRef}>
         <div className="bol-sheet" ref={sheetRef}>

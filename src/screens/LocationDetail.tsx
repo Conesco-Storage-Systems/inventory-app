@@ -587,20 +587,32 @@ export default function LocationDetail() {
             )}
             <div className="selection-actions">
               {permissions.generateBillOfLading && (
-                <Link
-                  to={`/locations/${site.id}/bol/new`}
-                  state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
-                >
-                  <button type="button">New BOL</button>
-                </Link>
+                selectedItems.length > 0 ? (
+                  <Link
+                    to={`/locations/${site.id}/bol/new`}
+                    state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
+                  >
+                    <button type="button">New BOL</button>
+                  </Link>
+                ) : (
+                  <button type="button" disabled>
+                    New BOL
+                  </button>
+                )
               )}
               {permissions.generateCustomerSheet && (
-                <Link
-                  to={`/locations/${site.id}/customer-sheet/new`}
-                  state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
-                >
-                  <button type="button">Generate PDF</button>
-                </Link>
+                selectedItems.length > 0 ? (
+                  <Link
+                    to={`/locations/${site.id}/customer-sheet/new`}
+                    state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
+                  >
+                    <button type="button">Generate PDF</button>
+                  </Link>
+                ) : (
+                  <button type="button" disabled>
+                    Generate PDF
+                  </button>
+                )
               )}
               {permissions.editItems && (
                 <>

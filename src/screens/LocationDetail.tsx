@@ -504,9 +504,9 @@ export default function LocationDetail() {
       )}
 
       {bols.length > 0 && (
-        <section className="item-section">
-          <h2>Bills of Lading</h2>
-          <ul className="location-list">
+        <details className="item-section collapsible-section">
+          <summary className="collapsible-section-summary">Bills of Lading ({bols.length})</summary>
+          <ul className="location-list location-list--compact">
             {bols.map((bol) => (
               <li key={bol.id} className="location-list-row bol-list-row">
                 <div className="location-list-info">
@@ -528,13 +528,13 @@ export default function LocationDetail() {
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
 
       {customerSheets.length > 0 && (
-        <section className="item-section">
-          <h2>Customer Sheets</h2>
-          <ul className="location-list">
+        <details className="item-section collapsible-section">
+          <summary className="collapsible-section-summary">Customer Sheets ({customerSheets.length})</summary>
+          <ul className="location-list location-list--compact">
             {customerSheets.map((sheet) => (
               <li key={sheet.id} className="location-list-row bol-list-row">
                 <div className="location-list-info">
@@ -556,7 +556,7 @@ export default function LocationDetail() {
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
 
       {!hasItems && <p className="placeholder-note">No items added yet.</p>}

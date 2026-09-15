@@ -114,6 +114,25 @@ button {
   font-weight: 500;
 }
 
+.location-list--compact a {
+  font-size: 14.4px;
+}
+
+.location-list--compact li {
+  padding: 8px 0;
+}
+
+.collapsible-section-summary {
+  font-size: 19px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.collapsible-section[open] .collapsible-section-summary {
+  margin-bottom: 12px;
+}
+
 .all-inventory-row a {
   font-weight: 700;
 }

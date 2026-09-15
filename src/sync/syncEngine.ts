@@ -3,6 +3,7 @@ import { supabase, supabaseConfigured } from './supabaseClient'
 import type {
   Beam,
   BillOfLading,
+  CustomerSheet,
   ItemType,
   MiscItem,
   Photo,
@@ -539,6 +540,74 @@ async function pullBolsOfLading(): Promise<void> {
   setCursor('bills_of_lading', maxUpdatedAt)
 }
 
+function customerSheetToRemote(sheet: CustomerSheet): Record<string, unknown> {
+  return {
+    id: sheet.id,
+    site_id: sheet.siteId,
+    date: sheet.date,
+    customer_name: sheet.customerName,
+    customer_company: sheet.customerCompany,
+    customer_address: sheet.customerAddress,
+    customer_phone: sheet.customerPhone,
+    prepared_by: sheet.preparedBy,
+    line_items: sheet.lineItems,
+    created_at: sheet.createdAt,
+    last_updated_by: sheet.lastUpdatedBy,
+    last_updated_at: sheet.lastUpdatedAt,
+  }
+}
+
+async function pushCustomerSheets(): Promise<void> {
+  const pending = await db.customerSheets.where('syncStatus').equals('pending').toArray()
+  for (const sheet of pending) {
+    const { error } = await supabase.from('customer_sheets').upsert(customerSheetToRemote(sheet))
+    if (!error) {
+      await db.customerSheets.update(sheet.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push customer_sheets/${sheet.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullCustomerSheets(): Promise<void> {
+  const cursor = getCursors().customer_sheets ?? 0
+  const { data, error } = await supabase.from('customer_sheets').select('*').gt('last_updated_at', cursor)
+  if (error) {
+    console.error('[sync] pull customer_sheets failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.last_updated_at)
+    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+
+    const local = await db.customerSheets.get(remoteRow.id as string)
+    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+      console.warn(`[sync] keeping local customerSheets/${remoteRow.id} over an older/equal remote change`)
+      continue
+    }
+
+    await db.customerSheets.put({
+      id: remoteRow.id as string,
+      siteId: remoteRow.site_id as string,
+      date: remoteRow.date as string,
+      customerName: remoteRow.customer_name as string,
+      customerCompany: remoteRow.customer_company as string,
+      customerAddress: remoteRow.customer_address as string,
+      customerPhone: remoteRow.customer_phone as string,
+      preparedBy: remoteRow.prepared_by as string,
+      lineItems: (remoteRow.line_items as CustomerSheet['lineItems']) ?? [],
+      createdAt: remoteRow.created_at as number,
+      lastUpdatedBy: remoteRow.last_updated_by as string,
+      lastUpdatedAt: updatedAt,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('customer_sheets', maxUpdatedAt)
+}
+
 // ---------- item photos ----------
 
 async function pushPhotos(): Promise<void> {
@@ -683,6 +752,7 @@ const REMOTE_TABLE_NAMES: Record<string, string> = {
   miscItems: 'misc_items',
   projectPhotos: 'project_photos',
   billsOfLading: 'bills_of_lading',
+  customerSheets: 'customer_sheets',
 }
 
 async function pushPendingDeletes(): Promise<void> {
@@ -725,6 +795,7 @@ export async function runSync(): Promise<void> {
     await pushPhotos()
     await pushProjectPhotos()
     await pushBolsOfLading()
+    await pushCustomerSheets()
 
     await pullProjects()
     for (const config of ITEM_CONFIGS) await pullItemTable(config)
@@ -732,6 +803,7 @@ export async function runSync(): Promise<void> {
     await pullPhotos()
     await pullProjectPhotos()
     await pullBolsOfLading()
+    await pullCustomerSheets()
     console.log('[sync] finished')
   } catch (err) {
     console.error('[sync] sync run failed', err)
@@ -760,6 +832,7 @@ export function startAutoSync(): void {
     'photos',
     'project_photos',
     'bills_of_lading',
+    'customer_sheets',
   ]
   for (const table of remoteTables) {
     supabase

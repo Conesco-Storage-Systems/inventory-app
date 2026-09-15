@@ -3,6 +3,7 @@ import type {
   Area,
   Beam,
   BillOfLading,
+  CustomerSheet,
   MiscItem,
   PendingDelete,
   PickerOption,
@@ -27,6 +28,7 @@ class InventoryDB extends Dexie {
   pendingDeletes!: Table<PendingDelete, string>
   projects!: Table<Project, string>
   billsOfLading!: Table<BillOfLading, string>
+  customerSheets!: Table<CustomerSheet, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -188,6 +190,28 @@ class InventoryDB extends Dexie {
       pendingDeletes: 'id, table, recordId, deletedAt',
       projects: 'id, name, createdAt, syncStatus',
       billsOfLading: 'id, siteId, createdAt, syncStatus',
+    })
+    // Adds Customer Sheets — customer-facing spec sheets built from
+    // selected inventory items, with the user choosing exactly which
+    // fields and photos to include per item. Frozen documents, same as
+    // Bills of Lading — they don't stay linked to the source items.
+    this.version(9).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
     })
   }
 }

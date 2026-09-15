@@ -19,6 +19,7 @@ export interface Permissions {
   // these describe haven't been built. Defined now so the roles above
   // don't need to change shape once those tools exist.
   generateBillOfLading: boolean
+  generateCustomerSheet: boolean
   manageSalesOrders: boolean
   holdItemsForOrder: boolean
 }
@@ -33,6 +34,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     restoreLocations: true,
     manageUsers: true,
     generateBillOfLading: true,
+    generateCustomerSheet: true,
     manageSalesOrders: true,
     holdItemsForOrder: true,
   },
@@ -45,6 +47,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     restoreLocations: true,
     manageUsers: false,
     generateBillOfLading: true,
+    generateCustomerSheet: true,
     manageSalesOrders: false,
     holdItemsForOrder: false,
   },
@@ -57,6 +60,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     restoreLocations: false,
     manageUsers: false,
     generateBillOfLading: false,
+    generateCustomerSheet: true,
     manageSalesOrders: true,
     holdItemsForOrder: true,
   },
@@ -69,6 +73,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     restoreLocations: false,
     manageUsers: false,
     generateBillOfLading: false,
+    generateCustomerSheet: false,
     manageSalesOrders: false,
     holdItemsForOrder: false,
   },

@@ -149,6 +149,24 @@ create table bills_of_lading (
   last_updated_at bigint not null
 );
 
+-- Customer-facing spec sheets built from selected inventory items. Only
+-- the fields/photos the user chose to include are baked into line_items
+-- (photos as data URIs) — a frozen snapshot, same as Bills of Lading.
+create table customer_sheets (
+  id text primary key,
+  site_id text not null references sites(id) on delete cascade,
+  date text not null default '',
+  customer_name text not null default '',
+  customer_company text not null default '',
+  customer_address text not null default '',
+  customer_phone text not null default '',
+  prepared_by text not null default '',
+  line_items jsonb not null default '[]',
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null
+);
+
 -- Row Level Security: must be logged in to read or write anything.
 -- Everyone who's logged in shares full access — this is a shared company
 -- inventory system, not a multi-tenant app with per-user data.
@@ -161,6 +179,7 @@ alter table misc_items enable row level security;
 alter table photos enable row level security;
 alter table project_photos enable row level security;
 alter table bills_of_lading enable row level security;
+alter table customer_sheets enable row level security;
 
 create policy "Authenticated users can do anything" on projects
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -179,6 +198,8 @@ create policy "Authenticated users can do anything" on photos
 create policy "Authenticated users can do anything" on project_photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on bills_of_lading
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on customer_sheets
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- Storage bucket policy: creating the "inventory-photos" bucket in the
@@ -303,4 +324,29 @@ create table if not exists bills_of_lading (
 alter table bills_of_lading enable row level security;
 
 create policy "Authenticated users can do anything" on bills_of_lading
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: Customer Sheets — customer-facing spec sheets built from
+-- selected inventory items. Only the fields/photos the user chose to
+-- include are baked into line_items (photos as data URIs) — a frozen
+-- snapshot, same as Bills of Lading, so it never depends on the source
+-- items still existing.
+create table if not exists customer_sheets (
+  id text primary key,
+  site_id text not null references sites(id) on delete cascade,
+  date text not null default '',
+  customer_name text not null default '',
+  customer_company text not null default '',
+  customer_address text not null default '',
+  customer_phone text not null default '',
+  prepared_by text not null default '',
+  line_items jsonb not null default '[]',
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null
+);
+
+alter table customer_sheets enable row level security;
+
+create policy "Authenticated users can do anything" on customer_sheets
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

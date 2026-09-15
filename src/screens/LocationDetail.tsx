@@ -30,6 +30,7 @@ import {
   listWireDecksBySite,
 } from '../db/items'
 import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
+import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
 import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
@@ -53,6 +54,7 @@ export default function LocationDetail() {
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
   const bols = useLiveQuery(() => (siteId ? listBolsBySite(siteId) : []), [siteId]) ?? []
+  const customerSheets = useLiveQuery(() => (siteId ? listCustomerSheetsBySite(siteId) : []), [siteId]) ?? []
 
   const toolbarObserverRef = useRef<IntersectionObserver | null>(null)
   const [toolbarStuck, setToolbarStuck] = useState(false)
@@ -141,6 +143,7 @@ export default function LocationDetail() {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
   const [activeAction, setActiveAction] = useState<'edit' | 'duplicate' | 'delete' | null>(null)
   const [deletingBolId, setDeletingBolId] = useState<string | null>(null)
+  const [deletingCustomerSheetId, setDeletingCustomerSheetId] = useState<string | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -174,6 +177,12 @@ export default function LocationDetail() {
     if (!deletingBolId) return
     await deleteBillOfLading(deletingBolId)
     setDeletingBolId(null)
+  }
+
+  async function handleConfirmDeleteCustomerSheet() {
+    if (!deletingCustomerSheetId) return
+    await deleteCustomerSheet(deletingCustomerSheetId)
+    setDeletingCustomerSheetId(null)
   }
 
   async function handleConfirmDelete() {
@@ -522,6 +531,34 @@ export default function LocationDetail() {
         </section>
       )}
 
+      {customerSheets.length > 0 && (
+        <section className="item-section">
+          <h2>Customer Sheets</h2>
+          <ul className="location-list">
+            {customerSheets.map((sheet) => (
+              <li key={sheet.id} className="location-list-row bol-list-row">
+                <div className="location-list-info">
+                  <Link to={`/locations/${site.id}/customer-sheet/${sheet.id}`}>
+                    {sheet.date || 'Undated'}
+                    {sheet.customerName ? ` — ${sheet.customerName}` : ''}
+                    {sheet.customerCompany ? ` (${sheet.customerCompany})` : ''}
+                  </Link>
+                </div>
+                {permissions.generateCustomerSheet && (
+                  <button
+                    type="button"
+                    className="delete-button"
+                    onClick={() => setDeletingCustomerSheetId(sheet.id)}
+                  >
+                    Delete
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {!hasItems && <p className="placeholder-note">No items added yet.</p>}
 
       {hasItems && (
@@ -555,6 +592,14 @@ export default function LocationDetail() {
                   state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
                 >
                   <button type="button">New BOL</button>
+                </Link>
+              )}
+              {permissions.generateCustomerSheet && (
+                <Link
+                  to={`/locations/${site.id}/customer-sheet/new`}
+                  state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
+                >
+                  <button type="button">Generate PDF</button>
                 </Link>
               )}
               {permissions.editItems && (
@@ -677,6 +722,12 @@ export default function LocationDetail() {
       )}
       {deletingBolId && (
         <ConfirmDeleteDialog onConfirm={handleConfirmDeleteBol} onClose={() => setDeletingBolId(null)} />
+      )}
+      {deletingCustomerSheetId && (
+        <ConfirmDeleteDialog
+          onConfirm={handleConfirmDeleteCustomerSheet}
+          onClose={() => setDeletingCustomerSheetId(null)}
+        />
       )}
     </main>
   )

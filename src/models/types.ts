@@ -203,6 +203,42 @@ export interface BillOfLading {
   syncStatus: SyncStatus
 }
 
+// A customer-facing spec sheet: a snapshot of selected inventory items
+// (only the fields/photos the user chose to include) plus customer info.
+// Like a Bill of Lading, it's a frozen document — later edits or deletes
+// of the source items never change an already-generated sheet, so photos
+// are copied in as data URIs rather than referencing the original photo.
+export type CustomerSheetItemType = 'upright' | 'beam' | 'wireDeck' | 'misc'
+
+export interface CustomerSheetField {
+  label: string
+  value: string
+}
+
+export interface CustomerSheetLineItem {
+  itemType: CustomerSheetItemType
+  itemLabel: string
+  quantity: number
+  fields: CustomerSheetField[]
+  photos: string[]
+}
+
+export interface CustomerSheet {
+  id: string
+  siteId: string
+  date: string
+  customerName: string
+  customerCompany: string
+  customerAddress: string
+  customerPhone: string
+  preparedBy: string
+  lineItems: CustomerSheetLineItem[]
+  createdAt: number
+  lastUpdatedBy: string
+  lastUpdatedAt: number
+  syncStatus: SyncStatus
+}
+
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
@@ -216,6 +252,7 @@ export type SyncTable =
   | 'photos'
   | 'projectPhotos'
   | 'billsOfLading'
+  | 'customerSheets'
 
 export interface PendingDelete {
   id: string

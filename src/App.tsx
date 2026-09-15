@@ -10,12 +10,14 @@ import ItemPhotos from './screens/ItemPhotos'
 import LocationDetail from './screens/LocationDetail'
 import LocationsList from './screens/LocationsList'
 import NewBillOfLading from './screens/NewBillOfLading'
+import NewCustomerSheet from './screens/NewCustomerSheet'
 import NewItem from './screens/NewItem'
 import ProjectDetail from './screens/ProjectDetail'
 import ProjectImages from './screens/ProjectImages'
 import RecentlyDeleted from './screens/RecentlyDeleted'
 import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
 import ViewBillOfLading from './screens/ViewBillOfLading'
+import ViewCustomerSheet from './screens/ViewCustomerSheet'
 import './App.css'
 
 function App() {
@@ -51,6 +53,8 @@ function App() {
           <Route path="/locations/:siteId/items/new" element={<NewItem />} />
           <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
           <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />
+          <Route path="/locations/:siteId/customer-sheet/new" element={<NewCustomerSheet />} />
+          <Route path="/locations/:siteId/customer-sheet/:sheetId" element={<ViewCustomerSheet />} />
           <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />
           <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
         </Routes>

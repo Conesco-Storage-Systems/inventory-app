@@ -284,6 +284,8 @@ export default function LocationDetail() {
       'Bundle Size': '',
       Zone: '',
       Notes: '',
+      'Cost Per': '' as string | number,
+      'Sell Per': '' as string | number,
       Photos: 0 as string | number,
     }
 
@@ -305,6 +307,8 @@ export default function LocationDetail() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
       ...beamRows.map((row) => ({
@@ -322,6 +326,8 @@ export default function LocationDetail() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
       ...wireDeckRows.map((row) => ({
@@ -335,6 +341,8 @@ export default function LocationDetail() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
       ...miscRows.map((row) => ({
@@ -347,6 +355,8 @@ export default function LocationDetail() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
     ]

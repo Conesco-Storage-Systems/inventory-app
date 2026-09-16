@@ -25,6 +25,8 @@ export interface MiscItemDraft {
   bundleSize: string
   zone: string
   notes: string
+  costPer: string
+  sellPer: string
   photos: File[]
 }
 
@@ -38,6 +40,8 @@ export const emptyMiscItemDraft: MiscItemDraft = {
   bundleSize: '',
   zone: '',
   notes: '',
+  costPer: '',
+  sellPer: '',
   photos: [],
 }
 
@@ -49,6 +53,8 @@ type MiscItemFieldKey =
   | 'bundleSize'
   | 'zone'
   | 'notes'
+  | 'costPer'
+  | 'sellPer'
   | 'photos'
 
 const DEFAULT_MISC_ITEM_FIELD_ORDER: MiscItemFieldKey[] = [
@@ -60,6 +66,8 @@ const DEFAULT_MISC_ITEM_FIELD_ORDER: MiscItemFieldKey[] = [
   'bundleSize',
   'zone',
   'notes',
+  'costPer',
+  'sellPer',
 ]
 
 interface MiscItemFormProps {
@@ -185,6 +193,30 @@ export default function MiscItemForm({ value, onChange, siteId }: MiscItemFormPr
           value={value.notes}
           onChange={(e) => onChange({ ...value, notes: e.target.value })}
           rows={3}
+        />
+      </label>
+    ),
+    costPer: (
+      <label>
+        Cost Per
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          value={value.costPer}
+          onChange={(e) => onChange({ ...value, costPer: e.target.value })}
+        />
+      </label>
+    ),
+    sellPer: (
+      <label>
+        Sell Per
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          value={value.sellPer}
+          onChange={(e) => onChange({ ...value, sellPer: e.target.value })}
         />
       </label>
     ),

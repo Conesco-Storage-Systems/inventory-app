@@ -19,6 +19,8 @@ export interface NewBeamInput {
   style: string
   stickers: string
   step: string
+  costPer: number
+  sellPer: number
   photoFiles: File[]
 }
 
@@ -67,6 +69,8 @@ export async function createBeam(input: NewBeamInput): Promise<string> {
     style: input.style,
     stickers: input.stickers,
     step: input.step,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
   }
 
   await db.beams.add(beam)
@@ -94,6 +98,8 @@ export interface BeamEditInput {
   style: string
   stickers: string
   step: string
+  costPer: number
+  sellPer: number
   existingPhotoIds: string[]
   newPhotoFiles: File[]
 }
@@ -125,6 +131,8 @@ export async function updateBeamGroup(input: BeamEditInput): Promise<void> {
     style: input.style,
     stickers: input.stickers,
     step: input.step,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
     photoIds,
     updatedAt: Date.now(),
     syncStatus: 'pending',
@@ -164,6 +172,8 @@ export interface NewWireDeckInput {
   width: number
   channelCount: string
   style: string[]
+  costPer: number
+  sellPer: number
   photoFiles: File[]
 }
 
@@ -191,6 +201,8 @@ export async function createWireDeck(input: NewWireDeckInput): Promise<string> {
     width: input.width,
     channelCount: input.channelCount,
     style: input.style,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
   }
 
   await db.wireDecks.add(wireDeck)
@@ -214,6 +226,8 @@ export interface WireDeckEditInput {
   width: number
   channelCount: string
   style: string[]
+  costPer: number
+  sellPer: number
   existingPhotoIds: string[]
   newPhotoFiles: File[]
 }
@@ -241,6 +255,8 @@ export async function updateWireDeckGroup(input: WireDeckEditInput): Promise<voi
     width: input.width,
     channelCount: input.channelCount,
     style: input.style,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
     photoIds,
     updatedAt: Date.now(),
     syncStatus: 'pending',
@@ -276,6 +292,8 @@ export interface NewUprightInput {
   holeSize: string
   gauge: string
   stamp: string
+  costPer: number
+  sellPer: number
   photoFiles: File[]
 }
 
@@ -312,6 +330,8 @@ export async function createUpright(input: NewUprightInput): Promise<string> {
     holeSize: input.holeSize,
     gauge: input.gauge,
     stamp: input.stamp,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
   }
 
   await db.uprights.add(upright)
@@ -344,6 +364,8 @@ export interface UprightEditInput {
   holeSize: string
   gauge: string
   stamp: string
+  costPer: number
+  sellPer: number
   existingPhotoIds: string[]
   newPhotoFiles: File[]
 }
@@ -380,6 +402,8 @@ export async function updateUprightGroup(input: UprightEditInput): Promise<void>
     holeSize: input.holeSize,
     gauge: input.gauge,
     stamp: input.stamp,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
     photoIds,
     updatedAt: Date.now(),
     syncStatus: 'pending',
@@ -404,6 +428,8 @@ export interface NewMiscItemInput {
   notes: string
   description: string
   itemDescription: string
+  costPer: number
+  sellPer: number
   photoFiles: File[]
 }
 
@@ -429,6 +455,8 @@ export async function createMiscItem(input: NewMiscItemInput): Promise<string> {
     syncStatus: 'pending',
     description: input.description,
     itemDescription: input.itemDescription,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
   }
 
   await db.miscItems.add(miscItem)
@@ -450,6 +478,8 @@ export interface MiscItemEditInput {
   notes: string
   description: string
   itemDescription: string
+  costPer: number
+  sellPer: number
   existingPhotoIds: string[]
   newPhotoFiles: File[]
 }
@@ -475,6 +505,8 @@ export async function updateMiscItemGroup(input: MiscItemEditInput): Promise<voi
     notes: input.notes,
     description: input.description,
     itemDescription: input.itemDescription,
+    costPer: input.costPer,
+    sellPer: input.sellPer,
     photoIds,
     updatedAt: Date.now(),
     syncStatus: 'pending',

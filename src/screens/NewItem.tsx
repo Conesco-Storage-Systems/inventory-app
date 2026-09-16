@@ -45,6 +45,8 @@ export default function NewItem() {
         style: beamDraft.style === 'Other' ? beamDraft.styleOther : beamDraft.style,
         stickers: beamDraft.stickers,
         step: beamDraft.step === 'Other' ? beamDraft.stepOther : beamDraft.step,
+        costPer: Number(beamDraft.costPer) || 0,
+        sellPer: Number(beamDraft.sellPer) || 0,
         photoFiles: beamDraft.photos,
       })
       navigate(`/locations/${siteId}`)
@@ -75,6 +77,8 @@ export default function NewItem() {
         style: wireDeckDraft.style
           .map((s) => (s === 'Other' ? wireDeckDraft.styleOther : s))
           .filter(Boolean),
+        costPer: Number(wireDeckDraft.costPer) || 0,
+        sellPer: Number(wireDeckDraft.sellPer) || 0,
         photoFiles: wireDeckDraft.photos,
       })
       navigate(`/locations/${siteId}`)
@@ -109,6 +113,8 @@ export default function NewItem() {
         holeSize: uprightDraft.holeSize,
         gauge: uprightDraft.gauge === 'Other' ? uprightDraft.gaugeOther : uprightDraft.gauge,
         stamp: uprightDraft.stamp,
+        costPer: Number(uprightDraft.costPer) || 0,
+        sellPer: Number(uprightDraft.sellPer) || 0,
         photoFiles: uprightDraft.photos,
       })
       navigate(`/locations/${siteId}`)
@@ -130,6 +136,8 @@ export default function NewItem() {
         notes: miscDraft.notes,
         description: miscDraft.description === 'Other' ? miscDraft.descriptionOther : miscDraft.description,
         itemDescription: miscDraft.itemDescription,
+        costPer: Number(miscDraft.costPer) || 0,
+        sellPer: Number(miscDraft.sellPer) || 0,
         photoFiles: miscDraft.photos,
       })
       navigate(`/locations/${siteId}`)

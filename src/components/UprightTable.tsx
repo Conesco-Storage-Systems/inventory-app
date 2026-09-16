@@ -20,6 +20,8 @@ type UprightColumnKey =
   | 'bundleSize'
   | 'zone'
   | 'notes'
+  | 'costPer'
+  | 'sellPer'
   | 'photos'
 
 const DEFAULT_UPRIGHT_COLUMN_ORDER: UprightColumnKey[] = [
@@ -37,6 +39,8 @@ const DEFAULT_UPRIGHT_COLUMN_ORDER: UprightColumnKey[] = [
   'bundleSize',
   'zone',
   'notes',
+  'costPer',
+  'sellPer',
   'photos',
 ]
 
@@ -70,6 +74,8 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
     bundleSize: { label: 'Bundle Size', render: (row) => row.bundleSize || '—' },
     zone: { label: 'Zone', render: (row) => row.zone || '—' },
     notes: { label: 'Notes', render: (row) => <span className="notes-text">{row.notes || '—'}</span> },
+    costPer: { label: 'Cost Per', render: (row) => (row.costPer ? `$${row.costPer.toFixed(2)}` : '—') },
+    sellPer: { label: 'Sell Per', render: (row) => (row.sellPer ? `$${row.sellPer.toFixed(2)}` : '—') },
     photos: {
       label: 'Photos',
       render: (row) =>

@@ -43,6 +43,8 @@ create table beams (
   style text not null default '',
   stickers text not null default '',
   step text not null default '',
+  cost_per numeric not null default 0,
+  sell_per numeric not null default 0,
   created_at bigint not null,
   updated_at bigint not null
 );
@@ -69,6 +71,8 @@ create table uprights (
   hole_size text not null default '',
   gauge text not null default '',
   stamp text not null default '',
+  cost_per numeric not null default 0,
+  sell_per numeric not null default 0,
   created_at bigint not null,
   updated_at bigint not null
 );
@@ -86,6 +90,8 @@ create table wire_decks (
   width numeric not null default 0,
   channel_count text not null default '',
   style text[] not null default '{}',
+  cost_per numeric not null default 0,
+  sell_per numeric not null default 0,
   created_at bigint not null,
   updated_at bigint not null
 );
@@ -102,6 +108,8 @@ create table misc_items (
   recorded_by text not null default '',
   description text not null default '',
   item_description text not null default '',
+  cost_per numeric not null default 0,
+  sell_per numeric not null default 0,
   created_at bigint not null,
   updated_at bigint not null
 );
@@ -350,3 +358,14 @@ alter table customer_sheets enable row level security;
 
 create policy "Authenticated users can do anything" on customer_sheets
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: adds Cost Per / Sell Per to every item type, so every item
+-- can carry the numbers needed to track margin.
+alter table beams add column if not exists cost_per numeric not null default 0;
+alter table beams add column if not exists sell_per numeric not null default 0;
+alter table uprights add column if not exists cost_per numeric not null default 0;
+alter table uprights add column if not exists sell_per numeric not null default 0;
+alter table wire_decks add column if not exists cost_per numeric not null default 0;
+alter table wire_decks add column if not exists sell_per numeric not null default 0;
+alter table misc_items add column if not exists cost_per numeric not null default 0;
+alter table misc_items add column if not exists sell_per numeric not null default 0;

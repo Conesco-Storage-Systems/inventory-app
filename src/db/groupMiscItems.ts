@@ -11,6 +11,8 @@ export interface MiscItemRow {
   zone: string
   notes: string
   photoIds: string[]
+  costPer: number
+  sellPer: number
 }
 
 export function groupMiscItems(miscItems: MiscItem[]): MiscItemRow[] {
@@ -45,6 +47,8 @@ export function groupMiscItems(miscItems: MiscItem[]): MiscItemRow[] {
       zone: item.zone,
       notes: item.notes,
       photoIds: [...item.photoIds],
+      costPer: item.costPer,
+      sellPer: item.sellPer,
     })
   }
 

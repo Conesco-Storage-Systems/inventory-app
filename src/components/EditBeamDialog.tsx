@@ -38,6 +38,8 @@ function draftFromRow(row: BeamRow): BeamDraft {
     bundleSize: row.bundleSize,
     zone: row.zone,
     notes: row.notes,
+    costPer: row.costPer ? String(row.costPer) : '',
+    sellPer: row.sellPer ? String(row.sellPer) : '',
     photos: [],
   }
 }
@@ -89,6 +91,8 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           style,
           stickers: draft.stickers,
           step,
+          costPer: Number(draft.costPer) || 0,
+          sellPer: Number(draft.sellPer) || 0,
           photoFiles: draft.photos,
         })
       } else {
@@ -108,6 +112,8 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           style,
           stickers: draft.stickers,
           step,
+          costPer: Number(draft.costPer) || 0,
+          sellPer: Number(draft.sellPer) || 0,
           existingPhotoIds: row.photoIds,
           newPhotoFiles: draft.photos,
         })

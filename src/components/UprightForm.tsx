@@ -42,6 +42,8 @@ export interface UprightDraft {
   bundleSize: string
   zone: string
   notes: string
+  costPer: string
+  sellPer: string
 }
 
 export const emptyUprightDraft: UprightDraft = {
@@ -68,6 +70,8 @@ export const emptyUprightDraft: UprightDraft = {
   bundleSize: '',
   zone: '',
   notes: '',
+  costPer: '',
+  sellPer: '',
 }
 
 type UprightFieldKey =
@@ -87,6 +91,8 @@ type UprightFieldKey =
   | 'bundleSize'
   | 'zone'
   | 'notes'
+  | 'costPer'
+  | 'sellPer'
 
 const DEFAULT_UPRIGHT_FIELD_ORDER: UprightFieldKey[] = [
   'photos',
@@ -105,6 +111,8 @@ const DEFAULT_UPRIGHT_FIELD_ORDER: UprightFieldKey[] = [
   'bundleSize',
   'zone',
   'notes',
+  'costPer',
+  'sellPer',
 ]
 
 interface UprightFormProps {
@@ -375,6 +383,30 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
           value={value.notes}
           onChange={(e) => onChange({ ...value, notes: e.target.value })}
           rows={3}
+        />
+      </label>
+    ),
+    costPer: (
+      <label>
+        Cost Per
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          value={value.costPer}
+          onChange={(e) => onChange({ ...value, costPer: e.target.value })}
+        />
+      </label>
+    ),
+    sellPer: (
+      <label>
+        Sell Per
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          value={value.sellPer}
+          onChange={(e) => onChange({ ...value, sellPer: e.target.value })}
         />
       </label>
     ),

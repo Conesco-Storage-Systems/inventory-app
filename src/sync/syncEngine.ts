@@ -115,6 +115,8 @@ const beamConfig: ItemTableConfig = {
     style: b.style,
     stickers: b.stickers,
     step: b.step,
+    cost_per: b.costPer,
+    sell_per: b.sellPer,
     created_at: b.createdAt,
     updated_at: b.updatedAt,
   }),
@@ -139,6 +141,8 @@ const beamConfig: ItemTableConfig = {
     style: r.style as string,
     stickers: r.stickers as string,
     step: (r.step as string) ?? '',
+    costPer: (r.cost_per as number) ?? 0,
+    sellPer: (r.sell_per as number) ?? 0,
   }),
 }
 
@@ -168,6 +172,8 @@ const uprightConfig: ItemTableConfig = {
     hole_size: u.holeSize,
     gauge: u.gauge,
     stamp: u.stamp,
+    cost_per: u.costPer,
+    sell_per: u.sellPer,
     created_at: u.createdAt,
     updated_at: u.updatedAt,
   }),
@@ -197,6 +203,8 @@ const uprightConfig: ItemTableConfig = {
     holeSize: r.hole_size as string,
     gauge: r.gauge as string,
     stamp: r.stamp as string,
+    costPer: (r.cost_per as number) ?? 0,
+    sellPer: (r.sell_per as number) ?? 0,
   }),
 }
 
@@ -217,6 +225,8 @@ const wireDeckConfig: ItemTableConfig = {
     width: w.width,
     channel_count: w.channelCount,
     style: w.style,
+    cost_per: w.costPer,
+    sell_per: w.sellPer,
     created_at: w.createdAt,
     updated_at: w.updatedAt,
   }),
@@ -237,6 +247,8 @@ const wireDeckConfig: ItemTableConfig = {
     width: r.width as number,
     channelCount: r.channel_count as string,
     style: (r.style as string[]) ?? [],
+    costPer: (r.cost_per as number) ?? 0,
+    sellPer: (r.sell_per as number) ?? 0,
   }),
 }
 
@@ -255,6 +267,8 @@ const miscItemConfig: ItemTableConfig = {
     recorded_by: m.recordedBy,
     description: m.description,
     item_description: m.itemDescription,
+    cost_per: m.costPer,
+    sell_per: m.sellPer,
     created_at: m.createdAt,
     updated_at: m.updatedAt,
   }),
@@ -273,6 +287,8 @@ const miscItemConfig: ItemTableConfig = {
     updatedAt: r.updated_at as number,
     description: r.description as string,
     itemDescription: (r.item_description as string) ?? '',
+    costPer: (r.cost_per as number) ?? 0,
+    sellPer: (r.sell_per as number) ?? 0,
   }),
 }
 

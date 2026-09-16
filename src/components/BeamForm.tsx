@@ -34,6 +34,8 @@ export interface BeamDraft {
   bundleSize: string
   zone: string
   notes: string
+  costPer: string
+  sellPer: string
   photos: File[]
 }
 
@@ -56,6 +58,8 @@ export const emptyBeamDraft: BeamDraft = {
   bundleSize: '',
   zone: '',
   notes: '',
+  costPer: '',
+  sellPer: '',
   photos: [],
 }
 
@@ -73,6 +77,8 @@ type BeamFieldKey =
   | 'bundleSize'
   | 'zone'
   | 'notes'
+  | 'costPer'
+  | 'sellPer'
   | 'photos'
 
 const DEFAULT_BEAM_FIELD_ORDER: BeamFieldKey[] = [
@@ -90,6 +96,8 @@ const DEFAULT_BEAM_FIELD_ORDER: BeamFieldKey[] = [
   'bundleSize',
   'zone',
   'notes',
+  'costPer',
+  'sellPer',
 ]
 
 interface BeamFormProps {
@@ -338,6 +346,30 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
           value={value.notes}
           onChange={(e) => onChange({ ...value, notes: e.target.value })}
           rows={3}
+        />
+      </label>
+    ),
+    costPer: (
+      <label>
+        Cost Per
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          value={value.costPer}
+          onChange={(e) => onChange({ ...value, costPer: e.target.value })}
+        />
+      </label>
+    ),
+    sellPer: (
+      <label>
+        Sell Per
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          value={value.sellPer}
+          onChange={(e) => onChange({ ...value, sellPer: e.target.value })}
         />
       </label>
     ),

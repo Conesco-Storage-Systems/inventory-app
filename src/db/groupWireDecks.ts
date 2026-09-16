@@ -14,6 +14,8 @@ export interface WireDeckRow {
   zone: string
   notes: string
   photoIds: string[]
+  costPer: number
+  sellPer: number
 }
 
 export function groupWireDecks(wireDecks: WireDeck[]): WireDeckRow[] {
@@ -53,6 +55,8 @@ export function groupWireDecks(wireDecks: WireDeck[]): WireDeckRow[] {
       zone: wireDeck.zone,
       notes: wireDeck.notes,
       photoIds: [...wireDeck.photoIds],
+      costPer: wireDeck.costPer,
+      sellPer: wireDeck.sellPer,
     })
   }
 

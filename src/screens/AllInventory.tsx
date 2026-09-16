@@ -93,6 +93,8 @@ export default function AllInventory() {
       'Bundle Size': '',
       Zone: '',
       Notes: '',
+      'Cost Per': '' as string | number,
+      'Sell Per': '' as string | number,
       Photos: 0 as string | number,
     }
 
@@ -115,6 +117,8 @@ export default function AllInventory() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
       ...beamRows.map((row) => ({
@@ -133,6 +137,8 @@ export default function AllInventory() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
       ...wireDeckRows.map((row) => ({
@@ -147,6 +153,8 @@ export default function AllInventory() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
       ...miscRows.map((row) => ({
@@ -160,6 +168,8 @@ export default function AllInventory() {
         'Bundle Size': row.bundleSize,
         Zone: row.zone,
         Notes: row.notes,
+        'Cost Per': row.costPer,
+        'Sell Per': row.sellPer,
         Photos: row.photoIds.length,
       })),
     ]
@@ -241,6 +251,18 @@ export default function AllInventory() {
       getValue: (row) => row.notes,
       filterable: false,
     },
+    costPer: {
+      label: 'Cost Per',
+      render: (row) => (row.costPer ? `$${row.costPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.costPer),
+      sortValue: (row) => row.costPer,
+    },
+    sellPer: {
+      label: 'Sell Per',
+      render: (row) => (row.sellPer ? `$${row.sellPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.sellPer),
+      sortValue: (row) => row.sellPer,
+    },
     photos: {
       label: 'Photos',
       render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
@@ -264,6 +286,8 @@ export default function AllInventory() {
     'bundleSize',
     'zone',
     'notes',
+    'costPer',
+    'sellPer',
     'photos',
   ]
 
@@ -331,6 +355,18 @@ export default function AllInventory() {
       getValue: (row) => row.notes,
       filterable: false,
     },
+    costPer: {
+      label: 'Cost Per',
+      render: (row) => (row.costPer ? `$${row.costPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.costPer),
+      sortValue: (row) => row.costPer,
+    },
+    sellPer: {
+      label: 'Sell Per',
+      render: (row) => (row.sellPer ? `$${row.sellPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.sellPer),
+      sortValue: (row) => row.sellPer,
+    },
     photos: {
       label: 'Photos',
       render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
@@ -352,6 +388,8 @@ export default function AllInventory() {
     'bundleSize',
     'zone',
     'notes',
+    'costPer',
+    'sellPer',
     'photos',
   ]
 
@@ -405,6 +443,18 @@ export default function AllInventory() {
       getValue: (row) => row.notes,
       filterable: false,
     },
+    costPer: {
+      label: 'Cost Per',
+      render: (row) => (row.costPer ? `$${row.costPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.costPer),
+      sortValue: (row) => row.costPer,
+    },
+    sellPer: {
+      label: 'Sell Per',
+      render: (row) => (row.sellPer ? `$${row.sellPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.sellPer),
+      sortValue: (row) => row.sellPer,
+    },
     photos: {
       label: 'Photos',
       render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
@@ -422,6 +472,8 @@ export default function AllInventory() {
     'bundleSize',
     'zone',
     'notes',
+    'costPer',
+    'sellPer',
     'photos',
   ]
 
@@ -469,6 +521,18 @@ export default function AllInventory() {
       getValue: (row) => row.notes,
       filterable: false,
     },
+    costPer: {
+      label: 'Cost Per',
+      render: (row) => (row.costPer ? `$${row.costPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.costPer),
+      sortValue: (row) => row.costPer,
+    },
+    sellPer: {
+      label: 'Sell Per',
+      render: (row) => (row.sellPer ? `$${row.sellPer.toFixed(2)}` : '—'),
+      getValue: (row) => String(row.sellPer),
+      sortValue: (row) => row.sellPer,
+    },
     photos: {
       label: 'Photos',
       render: (row) => photosLink(row.siteId, row.ids, row.photoIds),
@@ -485,6 +549,8 @@ export default function AllInventory() {
     'bundleSize',
     'zone',
     'notes',
+    'costPer',
+    'sellPer',
     'photos',
   ]
 

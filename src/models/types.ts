@@ -104,6 +104,8 @@ export interface ItemBase {
   createdAt: number
   updatedAt: number
   syncStatus: SyncStatus
+  costPer: number
+  sellPer: number
 }
 
 export interface Beam extends ItemBase {

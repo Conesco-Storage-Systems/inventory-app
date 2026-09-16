@@ -24,6 +24,8 @@ function draftFromRow(row: WireDeckRow): WireDeckDraft {
     bundleSize: row.bundleSize,
     zone: row.zone,
     notes: row.notes,
+    costPer: row.costPer ? String(row.costPer) : '',
+    sellPer: row.sellPer ? String(row.sellPer) : '',
     photos: [],
   }
 }
@@ -69,6 +71,8 @@ export default function EditWireDeckDialog({ row, siteId, mode, onClose }: EditW
           width: Number(draft.width) || 0,
           channelCount,
           style,
+          costPer: Number(draft.costPer) || 0,
+          sellPer: Number(draft.sellPer) || 0,
           photoFiles: draft.photos,
         })
       } else {
@@ -84,6 +88,8 @@ export default function EditWireDeckDialog({ row, siteId, mode, onClose }: EditW
           width: Number(draft.width) || 0,
           channelCount,
           style,
+          costPer: Number(draft.costPer) || 0,
+          sellPer: Number(draft.sellPer) || 0,
           existingPhotoIds: row.photoIds,
           newPhotoFiles: draft.photos,
         })

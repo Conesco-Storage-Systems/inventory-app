@@ -18,6 +18,8 @@ export interface BeamRow {
   zone: string
   notes: string
   photoIds: string[]
+  costPer: number
+  sellPer: number
 }
 
 export function groupBeams(beams: Beam[]): BeamRow[] {
@@ -65,6 +67,8 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
       zone: beam.zone,
       notes: beam.notes,
       photoIds: [...beam.photoIds],
+      costPer: beam.costPer,
+      sellPer: beam.sellPer,
     })
   }
 

@@ -26,6 +26,8 @@ export interface UprightRow {
   zone: string
   notes: string
   photoIds: string[]
+  costPer: number
+  sellPer: number
 }
 
 export function groupUprights(uprights: Upright[]): UprightRow[] {
@@ -91,6 +93,8 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       zone: upright.zone,
       notes: upright.notes,
       photoIds: [...upright.photoIds],
+      costPer: upright.costPer,
+      sellPer: upright.sellPer,
     })
   }
 

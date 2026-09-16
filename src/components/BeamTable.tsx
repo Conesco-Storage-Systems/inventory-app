@@ -18,6 +18,8 @@ type BeamColumnKey =
   | 'bundleSize'
   | 'zone'
   | 'notes'
+  | 'costPer'
+  | 'sellPer'
   | 'photos'
 
 const DEFAULT_BEAM_COLUMN_ORDER: BeamColumnKey[] = [
@@ -33,6 +35,8 @@ const DEFAULT_BEAM_COLUMN_ORDER: BeamColumnKey[] = [
   'bundleSize',
   'zone',
   'notes',
+  'costPer',
+  'sellPer',
   'photos',
 ]
 
@@ -64,6 +68,8 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }
     bundleSize: { label: 'Bundle Size', render: (row) => row.bundleSize || '—' },
     zone: { label: 'Zone', render: (row) => row.zone || '—' },
     notes: { label: 'Notes', render: (row) => <span className="notes-text">{row.notes || '—'}</span> },
+    costPer: { label: 'Cost Per', render: (row) => (row.costPer ? `$${row.costPer.toFixed(2)}` : '—') },
+    sellPer: { label: 'Sell Per', render: (row) => (row.sellPer ? `$${row.sellPer.toFixed(2)}` : '—') },
     photos: {
       label: 'Photos',
       render: (row) =>

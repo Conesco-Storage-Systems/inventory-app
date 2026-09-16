@@ -294,6 +294,8 @@ function buildUpright(quantity: number, qtyFlagged: boolean, sizeRaw: string, no
     holeSize: holes.size,
     gauge: '',
     stamp: '',
+    costPer: 0,
+    sellPer: 0,
   }
 }
 
@@ -330,6 +332,8 @@ function buildBeam(quantity: number, qtyFlagged: boolean, sizeRaw: string, notes
     style: style.style,
     stickers: stickers.stickers,
     step: '',
+    costPer: 0,
+    sellPer: 0,
   }
 }
 
@@ -358,6 +362,8 @@ function buildWireDeck(quantity: number, qtyFlagged: boolean, sizeRaw: string, n
     width: dims?.width ?? 0,
     channelCount: channel.channelCount,
     style: style.styles,
+    costPer: 0,
+    sellPer: 0,
   }
 }
 

@@ -152,6 +152,12 @@ function extractHoles(text: string): { count: number | null; size: string; remai
   return { count: null, size: '', remaining: text }
 }
 
+function extractGauge(text: string): { gauge: string; remaining: string } {
+  const m = text.match(/(\d+)\s*ga\b/i)
+  if (m) return { gauge: m[1], remaining: text.replace(m[0], ' ') }
+  return { gauge: '', remaining: text }
+}
+
 const WIRE_DECK_STYLE_PATTERNS: [RegExp, string][] = [
   [/\bDWF\b/i, 'Double Waterfall'],
   [/\bDbl\.?\s*W(?:aterfall|F)\b/i, 'Double Waterfall'],
@@ -181,8 +187,11 @@ function extractChannelCount(text: string): { channelCount: string; remaining: s
 
 interface UprightDims {
   width: number
-  heightFeet: number
-  heightInches: number
+  // Free text, kept exactly as written on the sheet — usually a single
+  // height like "12'" or "12' 6"", but a cut/repaired upright is
+  // sometimes a range like "8' - 10'" or "19'6" - 20'", which is common
+  // enough here to just carry through as-is rather than treat as an error.
+  height: string
   columnLength: number
   columnWidth: number
 }
@@ -197,20 +206,8 @@ function parseUprightSize(sizeRaw: string): UprightDims | null {
   const width = parseFraction(parts[0])
   if (width == null) return null
 
-  const heightToken = stripQuotes(parts[1])
-  const wholeFeetMatch = heightToken.match(/^(\d+)'\s*(\d+)?$/)
-  const decimalFeetMatch = heightToken.match(/^(\d+(?:\.\d+)?)'$/)
-  let heightFeet: number | null = null
-  let heightInches = 0
-  if (wholeFeetMatch) {
-    heightFeet = Number(wholeFeetMatch[1])
-    heightInches = wholeFeetMatch[2] ? Number(wholeFeetMatch[2]) : 0
-  } else if (decimalFeetMatch) {
-    const decimal = Number(decimalFeetMatch[1])
-    heightFeet = Math.floor(decimal)
-    heightInches = Math.round((decimal - heightFeet) * 12)
-  }
-  if (heightFeet == null) return null
+  const height = parts[1]
+  if (!height) return null
 
   let columnLength = 0
   let columnWidth = 0
@@ -224,7 +221,7 @@ function parseUprightSize(sizeRaw: string): UprightDims | null {
     columnWidth = colParts[1] != null ? (parseFraction(colParts[1]) ?? 0) : 0
   }
 
-  return { width, heightFeet, heightInches, columnLength, columnWidth }
+  return { width, height, columnLength, columnWidth }
 }
 
 // Real beam "Size" cells carry a 3rd " x "-separated segment for the step —
@@ -288,6 +285,8 @@ function buildUpright(
   text = fp.remaining
   const holes = extractHoles(text)
   text = holes.remaining
+  const gauge = extractGauge(text)
+  text = gauge.remaining
   const color = extractColor(text)
   text = color.remaining
 
@@ -304,15 +303,14 @@ function buildUpright(
     color: color.color,
     style: style.style,
     width: dims?.width ?? 0,
-    heightFeet: dims?.heightFeet ?? 0,
-    heightInches: dims?.heightInches ?? 0,
+    height: dims?.height ?? '',
     columnLength: dims?.columnLength ?? 0,
     columnWidth: dims?.columnWidth ?? 0,
     footplateLength: fp.length ?? 0,
     footplateWidth: fp.width ?? 0,
     anchorHoleCount: holes.count ?? 0,
     holeSize: holes.size,
-    gauge: '',
+    gauge: gauge.gauge,
     stamp: '',
     costPer,
     sellPer,

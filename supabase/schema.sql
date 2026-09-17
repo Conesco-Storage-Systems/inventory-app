@@ -61,8 +61,7 @@ create table uprights (
   color text not null default '',
   style text not null default '',
   width numeric not null default 0,
-  height_feet numeric not null default 0,
-  height_inches numeric not null default 0,
+  height text not null default '',
   column_length numeric not null default 0,
   column_width numeric not null default 0,
   footplate_length numeric not null default 0,
@@ -369,3 +368,16 @@ alter table wire_decks add column if not exists cost_per numeric not null defaul
 alter table wire_decks add column if not exists sell_per numeric not null default 0;
 alter table misc_items add column if not exists cost_per numeric not null default 0;
 alter table misc_items add column if not exists sell_per numeric not null default 0;
+
+-- Migration: Upright height becomes free text (like Beam's width already
+-- is), so a cut/repaired upright's height can be a range exactly as
+-- written on the sheet (e.g. "8' - 10'" or "19'6" - 20'") instead of one
+-- exact number. Existing height_feet/height_inches values are folded into
+-- the new column before the old ones are dropped.
+alter table uprights add column if not exists height text not null default '';
+update uprights
+  set height = height_feet::text || ''''
+    || (case when height_inches > 0 then ' ' || height_inches::text || '"' else '' end)
+  where height = '' and height_feet is not null;
+alter table uprights drop column if exists height_feet;
+alter table uprights drop column if exists height_inches;

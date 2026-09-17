@@ -25,8 +25,7 @@ export interface UprightDraft {
   style: string
   styleOther: string
   width: string
-  heightFeet: string
-  heightInches: string
+  height: string
   columnLength: string
   columnWidth: string
   footplateLength: string
@@ -53,8 +52,7 @@ export const emptyUprightDraft: UprightDraft = {
   style: '',
   styleOther: '',
   width: '',
-  heightFeet: '',
-  heightInches: '',
+  height: '',
   columnLength: '',
   columnWidth: '',
   footplateLength: '',
@@ -207,26 +205,12 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
     height: (
       <label>
         Height
-        <div className="height-inputs">
-          <div className="input-with-unit">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={value.heightFeet}
-              onChange={(e) => onChange({ ...value, heightFeet: e.target.value })}
-            />
-            <span className="unit">Feet</span>
-          </div>
-          <div className="input-with-unit">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={value.heightInches}
-              onChange={(e) => onChange({ ...value, heightInches: e.target.value })}
-            />
-            <span className="unit">Inches</span>
-          </div>
-        </div>
+        <input
+          type="text"
+          placeholder={`e.g. 12' 6" or 8' - 10'`}
+          value={value.height}
+          onChange={(e) => onChange({ ...value, height: e.target.value })}
+        />
       </label>
     ),
     columnSize: (

@@ -213,6 +213,43 @@ class InventoryDB extends Dexie {
       billsOfLading: 'id, siteId, createdAt, syncStatus',
       customerSheets: 'id, siteId, createdAt, syncStatus',
     })
+    // Upright height becomes free text (same convention as Beam's width)
+    // so a cut/repaired upright can carry a range exactly as written on
+    // the sheet (e.g. "8' - 10'") instead of one exact number. Existing
+    // records only have heightFeet/heightInches — fold them into the new
+    // height field, and re-flag for sync so the fix reaches Supabase too.
+    this.version(10).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+    }).upgrade(async (tx) => {
+      await tx
+        .table('uprights')
+        .toCollection()
+        .modify((upright) => {
+          if (upright.height) return
+          const feet = upright.heightFeet ?? 0
+          const inches = upright.heightInches ?? 0
+          upright.height = inches > 0 ? `${feet}' ${inches}"` : `${feet}'`
+          delete upright.heightFeet
+          delete upright.heightInches
+          upright.syncStatus = 'pending'
+          upright.updatedAt = Date.now()
+        })
+    })
   }
 }
 

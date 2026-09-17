@@ -6,9 +6,7 @@ export interface UprightRow {
   color: string
   style: string
   width: number
-  heightFeet: number
-  heightInches: number
-  heightDisplay: string
+  height: string
   widthByHeight: string
   columnLength: number
   columnWidth: number
@@ -30,6 +28,16 @@ export interface UprightRow {
   sellPer: number
 }
 
+// Height is free text (like Beam's width) so it can hold a range for a
+// cut/repaired upright (e.g. "8' - 10'") — this pulls out a rough numeric
+// value (the low end when it's a range) for sorting only, never stored.
+export function uprightHeightSortValue(height: string | undefined | null): number {
+  if (!height) return 0
+  const m = height.match(/(\d+)'\s*(\d+)?/)
+  if (!m) return 0
+  return Number(m[1]) * 12 + (m[2] ? Number(m[2]) : 0)
+}
+
 export function groupUprights(uprights: Upright[]): UprightRow[] {
   const rows = new Map<string, UprightRow>()
 
@@ -38,8 +46,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       upright.color,
       upright.style,
       upright.width,
-      upright.heightFeet,
-      upright.heightInches,
+      upright.height,
       upright.columnLength,
       upright.columnWidth,
       upright.footplateLength,
@@ -62,21 +69,14 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       continue
     }
 
-    const heightDisplay =
-      upright.heightInches === 0
-        ? `${upright.heightFeet}'`
-        : `${upright.heightFeet}' ${upright.heightInches}"`
-
     rows.set(key, {
       key,
       ids: [upright.id],
       color: upright.color,
       style: upright.style,
       width: upright.width,
-      heightFeet: upright.heightFeet,
-      heightInches: upright.heightInches,
-      heightDisplay,
-      widthByHeight: `${upright.width}" x ${heightDisplay}`,
+      height: upright.height ?? '',
+      widthByHeight: `${upright.width}" x ${upright.height ?? ''}`,
       columnLength: upright.columnLength,
       columnWidth: upright.columnWidth,
       columnSizeDisplay: `${upright.columnLength}" x ${upright.columnWidth}"`,
@@ -100,8 +100,6 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
 
   return Array.from(rows.values()).sort((a, b) => {
     if (a.width !== b.width) return a.width - b.width
-    const aHeight = a.heightFeet * 12 + a.heightInches
-    const bHeight = b.heightFeet * 12 + b.heightInches
-    return aHeight - bHeight
+    return uprightHeightSortValue(a.height) - uprightHeightSortValue(b.height)
   })
 }

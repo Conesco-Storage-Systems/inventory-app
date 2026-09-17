@@ -282,8 +282,7 @@ export interface NewUprightInput {
   color: string
   style: string
   width: number
-  heightFeet: number
-  heightInches: number
+  height: string
   columnLength: number
   columnWidth: number
   footplateLength: number
@@ -320,8 +319,7 @@ export async function createUpright(input: NewUprightInput): Promise<string> {
     color: input.color,
     style: input.style,
     width: input.width,
-    heightFeet: input.heightFeet,
-    heightInches: input.heightInches,
+    height: input.height,
     columnLength: input.columnLength,
     columnWidth: input.columnWidth,
     footplateLength: input.footplateLength,
@@ -354,8 +352,7 @@ export interface UprightEditInput {
   color: string
   style: string
   width: number
-  heightFeet: number
-  heightInches: number
+  height: string
   columnLength: number
   columnWidth: number
   footplateLength: number
@@ -392,8 +389,7 @@ export async function updateUprightGroup(input: UprightEditInput): Promise<void>
     color: input.color,
     style: input.style,
     width: input.width,
-    heightFeet: input.heightFeet,
-    heightInches: input.heightInches,
+    height: input.height,
     columnLength: input.columnLength,
     columnWidth: input.columnWidth,
     footplateLength: input.footplateLength,

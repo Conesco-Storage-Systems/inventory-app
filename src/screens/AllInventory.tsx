@@ -6,7 +6,7 @@ import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
 import { groupBeams, type BeamRow } from '../db/groupBeams'
 import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
-import { groupUprights, type UprightRow } from '../db/groupUprights'
+import { groupUprights, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { applyColumnFilters, computeFilterOptions } from '../utils/columnFilters'
@@ -193,7 +193,7 @@ export default function AllInventory() {
       label: 'Width x Height',
       render: (row) => row.widthByHeight,
       getValue: (row) => row.widthByHeight,
-      sortValue: (row) => row.width * 100000 + (row.heightFeet * 12 + row.heightInches),
+      sortValue: (row) => row.width * 100000 + uprightHeightSortValue(row.height),
     },
     color: { label: 'Color', render: (row) => row.color, getValue: (row) => row.color, sortValue: (row) => row.color },
     columnSize: {

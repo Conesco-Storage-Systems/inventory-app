@@ -123,8 +123,10 @@ export interface Upright extends ItemBase {
   color: string
   style: string
   width: number
-  heightFeet: number
-  heightInches: number
+  // Free text, same convention as Beam's width — usually "12'" or
+  // "12' 6"", but a cut/repaired upright is sometimes a range as it's
+  // written on the sheet, e.g. "8' - 10'" or "19'6" - 20'".
+  height: string
   columnLength: number
   columnWidth: number
   footplateLength: number

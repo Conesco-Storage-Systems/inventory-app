@@ -34,6 +34,7 @@ import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
 import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
+import { exportSitePhotosZip } from '../export/exportSitePhotosZip'
 import {
   getWorkbookSheetNames,
   parseInventoryWorkbook,
@@ -85,6 +86,8 @@ export default function LocationDetail() {
   const [importParseError, setImportParseError] = useState<string | null>(null)
   const [importCommitting, setImportCommitting] = useState(false)
   const [importResultMessage, setImportResultMessage] = useState<string | null>(null)
+  const [downloadingPhotos, setDownloadingPhotos] = useState(false)
+  const [photoDownloadError, setPhotoDownloadError] = useState<string | null>(null)
 
   async function handleImportFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -412,6 +415,19 @@ export default function LocationDetail() {
     )
   }
 
+  async function handleDownloadPhotos() {
+    if (!site || !siteId) return
+    setDownloadingPhotos(true)
+    setPhotoDownloadError(null)
+    try {
+      await exportSitePhotosZip(site, siteId)
+    } catch (err) {
+      setPhotoDownloadError(err instanceof Error ? err.message : 'Could not download photos.')
+    } finally {
+      setDownloadingPhotos(false)
+    }
+  }
+
   const hasItems =
     uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0 || miscRows.length > 0
 
@@ -504,6 +520,11 @@ export default function LocationDetail() {
             Export to Excel
           </button>
         )}
+        {(hasItems || site.sitePhoto) && (
+          <button type="button" onClick={handleDownloadPhotos} disabled={downloadingPhotos}>
+            {downloadingPhotos ? 'Zipping…' : 'Download All Photos'}
+          </button>
+        )}
         {permissions.addItems && (
           <button type="button" onClick={() => importFileInputRef.current?.click()}>
             Import Data
@@ -517,6 +538,8 @@ export default function LocationDetail() {
           onChange={handleImportFileSelected}
         />
       </p>
+
+      {photoDownloadError && <p className="field-error">{photoDownloadError}</p>}
 
       {importParsing && <p className="placeholder-note">Reading {importFileName}…</p>}
 

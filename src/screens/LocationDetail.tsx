@@ -18,6 +18,7 @@ import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import {
   createBeam,
+  createMiscItem,
   createUpright,
   createWireDeck,
   deleteBeamGroup,
@@ -33,7 +34,11 @@ import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
 import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
-import { parseInventoryWorkbook, type ImportParseResult } from '../import/parseInventoryImport'
+import {
+  getWorkbookSheetNames,
+  parseInventoryWorkbook,
+  type ImportParseResult,
+} from '../import/parseInventoryImport'
 import { useRole } from '../state/RoleContext'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
 
@@ -71,7 +76,10 @@ export default function LocationDetail() {
   }, [])
 
   const importFileInputRef = useRef<HTMLInputElement>(null)
+  const [importFile, setImportFile] = useState<File | null>(null)
   const [importFileName, setImportFileName] = useState<string | null>(null)
+  const [importSheetNames, setImportSheetNames] = useState<string[]>([])
+  const [importSelectedSheet, setImportSelectedSheet] = useState('')
   const [importPreview, setImportPreview] = useState<ImportParseResult | null>(null)
   const [importParsing, setImportParsing] = useState(false)
   const [importParseError, setImportParseError] = useState<string | null>(null)
@@ -82,16 +90,40 @@ export default function LocationDetail() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    setImportFile(file)
     setImportFileName(file.name)
     setImportPreview(null)
     setImportParseError(null)
     setImportResultMessage(null)
+    setImportSheetNames([])
+    setImportSelectedSheet('')
     setImportParsing(true)
     try {
-      const result = await parseInventoryWorkbook(file)
-      setImportPreview(result)
+      const sheetNames = await getWorkbookSheetNames(file)
+      if (sheetNames.length === 1) {
+        const result = await parseInventoryWorkbook(file, sheetNames[0])
+        setImportSelectedSheet(sheetNames[0])
+        setImportPreview(result)
+      } else {
+        setImportSheetNames(sheetNames)
+      }
     } catch {
       setImportParseError('Could not read that file. Make sure it is a valid Excel file.')
+    } finally {
+      setImportParsing(false)
+    }
+  }
+
+  async function handleSelectImportSheet(sheetName: string) {
+    if (!importFile) return
+    setImportSelectedSheet(sheetName)
+    setImportParseError(null)
+    setImportParsing(true)
+    try {
+      const result = await parseInventoryWorkbook(importFile, sheetName)
+      setImportPreview(result)
+    } catch (err) {
+      setImportParseError(err instanceof Error ? err.message : 'Could not read that sheet.')
     } finally {
       setImportParsing(false)
     }
@@ -100,6 +132,9 @@ export default function LocationDetail() {
   function cancelImportPreview() {
     setImportPreview(null)
     setImportFileName(null)
+    setImportFile(null)
+    setImportSheetNames([])
+    setImportSelectedSheet('')
     setImportParseError(null)
   }
 
@@ -116,20 +151,30 @@ export default function LocationDetail() {
       for (const wireDeck of importPreview.wireDecks) {
         await createWireDeck({ ...wireDeck, siteId, photoFiles: [] })
       }
+      for (const misc of importPreview.miscItems) {
+        await createMiscItem({ ...misc, siteId, photoFiles: [] })
+      }
       setImportResultMessage(
-        `Imported ${importPreview.uprights.length} uprights, ${importPreview.beams.length} beams, and ${importPreview.wireDecks.length} wire decks.`,
+        `Imported ${importPreview.uprights.length} uprights, ${importPreview.beams.length} beams, ` +
+          `${importPreview.wireDecks.length} wire decks, and ${importPreview.miscItems.length} other items.`,
       )
       setImportPreview(null)
       setImportFileName(null)
+      setImportFile(null)
+      setImportSheetNames([])
+      setImportSelectedSheet('')
     } finally {
       setImportCommitting(false)
     }
   }
 
   const importFlaggedCount = importPreview
-    ? [...importPreview.uprights, ...importPreview.beams, ...importPreview.wireDecks].filter((row) =>
-        row.notes.startsWith('['),
-      ).length
+    ? [
+        ...importPreview.uprights,
+        ...importPreview.beams,
+        ...importPreview.wireDecks,
+        ...importPreview.miscItems,
+      ].filter((row) => row.notes.startsWith('[')).length
     : 0
 
   const [editingSite, setEditingSite] = useState(false)
@@ -479,20 +524,54 @@ export default function LocationDetail() {
 
       {importResultMessage && <p className="placeholder-note">{importResultMessage}</p>}
 
+      {importSheetNames.length > 0 && !importPreview && (
+        <div className="import-preview">
+          <p>
+            <strong>{importFileName}</strong> has multiple sheets. Pick the one that reflects current
+            inventory (usually the highest version number):
+          </p>
+          <div className="field-row">
+            <label>
+              Sheet
+              <select
+                value={importSelectedSheet}
+                onChange={(e) => handleSelectImportSheet(e.target.value)}
+              >
+                <option value="" disabled>
+                  Select a sheet…
+                </option>
+                {importSheetNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="dialog-actions">
+            <button type="button" onClick={cancelImportPreview}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {importPreview && (
         <div className="import-preview">
           <p>
-            Ready to import from <strong>{importFileName}</strong>:
+            Ready to import from <strong>{importFileName}</strong>
+            {importSelectedSheet ? ` (${importSelectedSheet})` : ''}:
           </p>
           <ul>
             <li>{importPreview.uprights.length} Uprights</li>
             <li>{importPreview.beams.length} Beams</li>
             <li>{importPreview.wireDecks.length} Wire Decks</li>
+            <li>{importPreview.miscItems.length} Other</li>
           </ul>
-          {importPreview.otherSkipped > 0 && (
+          {importPreview.soldOutSkipped > 0 && (
             <p className="placeholder-note">
-              {importPreview.otherSkipped} row{importPreview.otherSkipped === 1 ? '' : 's'} for other item
-              types (not supported yet) will be skipped.
+              {importPreview.soldOutSkipped} row{importPreview.soldOutSkipped === 1 ? '' : 's'} skipped —
+              nothing remaining in stock for those.
             </p>
           )}
           {importFlaggedCount > 0 && (

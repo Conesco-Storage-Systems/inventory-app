@@ -1,16 +1,21 @@
 import * as XLSX from 'xlsx'
-import type { NewBeamInput, NewUprightInput, NewWireDeckInput } from '../db/items'
+import type { NewBeamInput, NewMiscItemInput, NewUprightInput, NewWireDeckInput } from '../db/items'
 import type { Condition } from '../models/types'
 
 type ParsedUpright = Omit<NewUprightInput, 'siteId' | 'photoFiles'>
 type ParsedBeam = Omit<NewBeamInput, 'siteId' | 'photoFiles'>
 type ParsedWireDeck = Omit<NewWireDeckInput, 'siteId' | 'photoFiles'>
+type ParsedMiscItem = Omit<NewMiscItemInput, 'siteId' | 'photoFiles'>
 
 export interface ImportParseResult {
   uprights: ParsedUpright[]
   beams: ParsedBeam[]
   wireDecks: ParsedWireDeck[]
-  otherSkipped: number
+  miscItems: ParsedMiscItem[]
+  // Rows with a real item name but nothing left in stock (Quantity Remaining
+  // is 0) — everything already sold/shipped, so there's nothing current to
+  // bring in.
+  soldOutSkipped: number
 }
 
 function stripQuotes(text: string): string {
@@ -40,7 +45,9 @@ function prependFlag(notes: string, flag: string): string {
   return notes ? `[${flag}] ${notes}` : `[${flag}]`
 }
 
-const COLOR_WORDS = ['orange', 'green', 'blue', 'gray', 'grey']
+// 'red' was missing until we saw it in real data ("red & orange" beams) —
+// add more colors here only once a real sheet needs them, same reasoning.
+const COLOR_WORDS = ['orange', 'green', 'blue', 'red', 'gray', 'grey']
 
 function extractColor(text: string): { color: string; remaining: string } {
   const found: string[] = []
@@ -220,7 +227,11 @@ function parseUprightSize(sizeRaw: string): UprightDims | null {
   return { width, heightFeet, heightInches, columnLength, columnWidth }
 }
 
-function parseBeamSize(sizeRaw: string): { width: string; length: number } | null {
+// Real beam "Size" cells carry a 3rd " x "-separated segment for the step —
+// e.g. `3.75" - 4" x 96" x 1-5/8"` — which lines up exactly with the beam
+// step dropdown's own option text, so it's captured verbatim rather than
+// dropped.
+function parseBeamSize(sizeRaw: string): { width: string; length: number; step: string } | null {
   const parts = sizeRaw
     .split(/\s+x\s+/i)
     .map((s) => s.trim())
@@ -241,7 +252,9 @@ function parseBeamSize(sizeRaw: string): { width: string; length: number } | nul
   const length = parseFraction(parts[1])
   if (length == null) return null
 
-  return { width, length }
+  const step = parts.length >= 3 ? parts[2] : ''
+
+  return { width, length, step }
 }
 
 function parseWireDeckSize(sizeRaw: string): { width: number; length: number } | null {
@@ -256,7 +269,14 @@ function parseWireDeckSize(sizeRaw: string): { width: number; length: number } |
   return { width, length }
 }
 
-function buildUpright(quantity: number, qtyFlagged: boolean, sizeRaw: string, notesRaw: string): ParsedUpright {
+function buildUpright(
+  quantity: number,
+  qtyFlagged: boolean,
+  sizeRaw: string,
+  notesRaw: string,
+  costPer: number,
+  sellPer: number,
+): ParsedUpright {
   const dims = parseUprightSize(sizeRaw)
 
   let text = notesRaw
@@ -294,12 +314,19 @@ function buildUpright(quantity: number, qtyFlagged: boolean, sizeRaw: string, no
     holeSize: holes.size,
     gauge: '',
     stamp: '',
-    costPer: 0,
-    sellPer: 0,
+    costPer,
+    sellPer,
   }
 }
 
-function buildBeam(quantity: number, qtyFlagged: boolean, sizeRaw: string, notesRaw: string): ParsedBeam {
+function buildBeam(
+  quantity: number,
+  qtyFlagged: boolean,
+  sizeRaw: string,
+  notesRaw: string,
+  costPer: number,
+  sellPer: number,
+): ParsedBeam {
   const dims = parseBeamSize(sizeRaw)
 
   let text = notesRaw
@@ -331,13 +358,20 @@ function buildBeam(quantity: number, qtyFlagged: boolean, sizeRaw: string, notes
     stamp: '',
     style: style.style,
     stickers: stickers.stickers,
-    step: '',
-    costPer: 0,
-    sellPer: 0,
+    step: dims?.step ?? '',
+    costPer,
+    sellPer,
   }
 }
 
-function buildWireDeck(quantity: number, qtyFlagged: boolean, sizeRaw: string, notesRaw: string): ParsedWireDeck {
+function buildWireDeck(
+  quantity: number,
+  qtyFlagged: boolean,
+  sizeRaw: string,
+  notesRaw: string,
+  costPer: number,
+  sellPer: number,
+): ParsedWireDeck {
   const dims = parseWireDeckSize(sizeRaw)
 
   let text = notesRaw
@@ -362,39 +396,168 @@ function buildWireDeck(quantity: number, qtyFlagged: boolean, sizeRaw: string, n
     width: dims?.width ?? 0,
     channelCount: channel.channelCount,
     style: style.styles,
-    costPer: 0,
-    sellPer: 0,
+    costPer,
+    sellPer,
   }
 }
 
-export async function parseInventoryWorkbook(file: File): Promise<ImportParseResult> {
+// Everything that isn't an Upright/Beam/Wire Deck — Pallet Support, Row
+// Spacer, Column Protector, Monopost, conveyors, carts, forklifts,
+// shelving, etc. — lands here. The original "Item" label is kept verbatim
+// as the description so nothing is silently relabeled or lost.
+function buildMiscItem(
+  itemLabel: string,
+  quantity: number,
+  qtyFlagged: boolean,
+  sizeRaw: string,
+  notesRaw: string,
+  costPer: number,
+  sellPer: number,
+): ParsedMiscItem {
+  const condition = extractCondition(notesRaw)
+  const leftoverNotes = cleanupNotes(condition.remaining)
+  const itemDescription = [sizeRaw.trim(), leftoverNotes].filter(Boolean).join(' — ')
+
+  let notes = ''
+  if (qtyFlagged) notes = prependFlag(notes, 'Qty not listed on import')
+
+  return {
+    quantity,
+    condition: condition.condition,
+    bundleSize: '',
+    zone: '',
+    notes,
+    description: itemLabel,
+    itemDescription,
+    costPer,
+    sellPer,
+  }
+}
+
+type ItemKind = 'upright' | 'beam' | 'wireDeck' | 'misc'
+
+// "Monopost" is a real, recurring upright variant in these sheets, but per
+// Corbett's call it's filed under Misc/Other rather than the structured
+// Uprights table — everything except an exact "Upright"/"Beam"/"Wire Deck"
+// match falls through to Misc, so no special-casing is needed here.
+function classifyItem(itemRaw: string): ItemKind {
+  const v = itemRaw.trim().toLowerCase()
+  if (v === 'upright' || v === 'uprights') return 'upright'
+  if (v === 'beam' || v === 'beams') return 'beam'
+  if (v === 'wire deck' || v === 'wiredeck' || v === 'wire decks') return 'wireDeck'
+  return 'misc'
+}
+
+function normalizeHeader(cell: unknown): string {
+  return String(cell ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+// These consolidated-inventory workbooks bury the real header row under a
+// few rows of site metadata (name/address/contacts) plus a running-totals
+// row — so it's found by content rather than assumed to be a fixed row
+// index. "Item" + "Quantity Remaining" together are specific enough that
+// job-costing tabs (a completely different layout) or a wrong sheet won't
+// false-match.
+function findHeaderRowIndex(rows: unknown[][]): number {
+  const searchLimit = Math.min(rows.length, 25)
+  for (let i = 0; i < searchLimit; i++) {
+    const normalized = rows[i].map(normalizeHeader)
+    if (normalized.includes('item') && normalized.includes('quantity remaining')) return i
+  }
+  return -1
+}
+
+function buildColumnMap(headerRow: unknown[]): Map<string, number> {
+  const map = new Map<string, number>()
+  headerRow.forEach((cell, index) => {
+    const key = normalizeHeader(cell)
+    if (key && !map.has(key)) map.set(key, index)
+  })
+  return map
+}
+
+export async function getWorkbookSheetNames(file: File): Promise<string[]> {
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array' })
-  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  return workbook.SheetNames
+}
+
+export async function parseInventoryWorkbook(file: File, sheetName: string): Promise<ImportParseResult> {
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheet = workbook.Sheets[sheetName]
+  if (!sheet) throw new Error(`Sheet "${sheetName}" was not found in this file.`)
+
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+  const headerRowIndex = findHeaderRowIndex(rows)
+  if (headerRowIndex === -1) {
+    throw new Error(
+      'Could not find the expected columns ("Item", "Quantity Remaining", etc.) on this sheet. Try a different tab.',
+    )
+  }
 
-  const result: ImportParseResult = { uprights: [], beams: [], wireDecks: [], otherSkipped: 0 }
+  const columns = buildColumnMap(rows[headerRowIndex])
+  const itemCol = columns.get('item')
+  const sizeCol = columns.get('size')
+  const commentsCol = columns.get('type / comments') ?? columns.get('comments')
+  const quantityCol = columns.get('quantity remaining')
+  const costPerCol = columns.get('cost per')
+  const sellPerCol = columns.get('end user sell per') ?? columns.get('sell per')
 
-  for (let i = 1; i < rows.length; i++) {
+  if (itemCol === undefined || quantityCol === undefined) {
+    throw new Error(
+      'Could not find the expected columns ("Item", "Quantity Remaining") on this sheet. Try a different tab.',
+    )
+  }
+
+  function cellText(row: unknown[], col: number | undefined): string {
+    if (col === undefined) return ''
+    return String(row[col] ?? '').trim()
+  }
+
+  function cellNumber(row: unknown[], col: number | undefined): number {
+    if (col === undefined) return 0
+    const raw = row[col]
+    return typeof raw === 'number' ? raw : Number(raw) || 0
+  }
+
+  const result: ImportParseResult = { uprights: [], beams: [], wireDecks: [], miscItems: [], soldOutSkipped: 0 }
+
+  for (let i = headerRowIndex + 1; i < rows.length; i++) {
     const row = rows[i]
-    const qtyRaw = row[0]
-    const itemRaw = String(row[1] ?? '').trim()
-    const sizeRaw = String(row[2] ?? '').trim()
-    const notesRaw = String(row[3] ?? '').trim()
+    const itemRaw = cellText(row, itemCol)
     if (!itemRaw) continue
 
-    const qtyFlagged = qtyRaw === '' || qtyRaw == null
-    const quantity = typeof qtyRaw === 'number' ? qtyRaw : Number(qtyRaw) || 0
+    const quantityRaw = quantityCol !== undefined ? row[quantityCol] : ''
+    const qtyFlagged = quantityRaw === '' || quantityRaw == null
+    const quantity = cellNumber(row, quantityCol)
 
-    const itemLower = itemRaw.toLowerCase()
-    if (itemLower === 'upright') {
-      result.uprights.push(buildUpright(quantity, qtyFlagged, sizeRaw, notesRaw))
-    } else if (itemLower === 'beam') {
-      result.beams.push(buildBeam(quantity, qtyFlagged, sizeRaw, notesRaw))
-    } else if (itemLower === 'wire deck') {
-      result.wireDecks.push(buildWireDeck(quantity, qtyFlagged, sizeRaw, notesRaw))
+    // Already fully sold/shipped (0) or a negative-adjustment line with
+    // nothing physically here (a real value in these sheets, but not a
+    // thing a physical inventory count can represent) — nothing current
+    // to bring in either way.
+    if (!qtyFlagged && quantity <= 0) {
+      result.soldOutSkipped++
+      continue
+    }
+
+    const sizeRaw = cellText(row, sizeCol)
+    const commentsRaw = cellText(row, commentsCol)
+    const costPer = cellNumber(row, costPerCol)
+    const sellPer = cellNumber(row, sellPerCol)
+
+    const kind = classifyItem(itemRaw)
+    if (kind === 'upright') {
+      result.uprights.push(buildUpright(quantity, qtyFlagged, sizeRaw, commentsRaw, costPer, sellPer))
+    } else if (kind === 'beam') {
+      result.beams.push(buildBeam(quantity, qtyFlagged, sizeRaw, commentsRaw, costPer, sellPer))
+    } else if (kind === 'wireDeck') {
+      result.wireDecks.push(buildWireDeck(quantity, qtyFlagged, sizeRaw, commentsRaw, costPer, sellPer))
     } else {
-      result.otherSkipped++
+      result.miscItems.push(buildMiscItem(itemRaw, quantity, qtyFlagged, sizeRaw, commentsRaw, costPer, sellPer))
     }
   }
 

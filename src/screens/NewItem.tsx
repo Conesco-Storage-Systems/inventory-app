@@ -37,7 +37,7 @@ export default function NewItem() {
         bundleSize: beamDraft.bundleSize,
         zone: beamDraft.zone,
         notes: beamDraft.notes,
-        length: Number(beamDraft.length) || 0,
+        length: beamDraft.length,
         width: beamDraft.width,
         color: beamDraft.color === 'Other' ? beamDraft.colorOther : beamDraft.color,
         pinCount: beamDraft.pinCount === 'Other' ? beamDraft.pinCountOther : beamDraft.pinCount,

@@ -35,7 +35,7 @@ create table beams (
   zone text not null default '',
   notes text not null default '',
   recorded_by text not null default '',
-  length numeric not null default 0,
+  length text not null default '',
   width text not null default '',
   color text not null default '',
   pin_count text not null default '',
@@ -150,6 +150,13 @@ create table bills_of_lading (
   carrier text not null default '',
   driver_phone text not null default '',
   broker_info text not null default '',
+  trailer_loaded_by text not null default '',
+  freight_counted_by text not null default '',
+  shipper_signature_image text not null default '',
+  shipper_signed_at bigint not null default 0,
+  carrier_signature_image text not null default '',
+  carrier_signed_at bigint not null default 0,
+  shipped_at bigint not null default 0,
   line_items jsonb not null default '[]',
   created_at bigint not null,
   last_updated_by text not null default '',
@@ -322,6 +329,13 @@ create table if not exists bills_of_lading (
   carrier text not null default '',
   driver_phone text not null default '',
   broker_info text not null default '',
+  trailer_loaded_by text not null default '',
+  freight_counted_by text not null default '',
+  shipper_signature_image text not null default '',
+  shipper_signed_at bigint not null default 0,
+  carrier_signature_image text not null default '',
+  carrier_signed_at bigint not null default 0,
+  shipped_at bigint not null default 0,
   line_items jsonb not null default '[]',
   created_at bigint not null,
   last_updated_by text not null default '',
@@ -381,3 +395,33 @@ update uprights
   where height = '' and height_feet is not null;
 alter table uprights drop column if exists height_feet;
 alter table uprights drop column if exists height_inches;
+
+-- Migration: Beam length becomes free text (like width already is), so a
+-- cut beam's length can be a range exactly as written on the sheet (e.g.
+-- "101.5 - 102") instead of one exact number. Existing numeric values are
+-- cast straight to text, no data loss.
+alter table beams alter column length type text using length::text;
+alter table beams alter column length set default '';
+
+-- Migration: Bills of Lading gets the "Trailer Loaded" and "Freight
+-- Counted" checklist fields (By Shipper / By Driver, etc.) so those can be
+-- set from the in-app Edit view instead of only existing as unfillable
+-- checkboxes on the printed sheet.
+alter table bills_of_lading add column if not exists trailer_loaded_by text not null default '';
+alter table bills_of_lading add column if not exists freight_counted_by text not null default '';
+
+-- Migration: Bills of Lading gets hand-drawn e-signatures, captured
+-- directly on the Shipper/Carrier signature lines. Each can be signed
+-- independently (e.g. carrier signs later when the driver arrives), so
+-- each gets its own image + signed-at timestamp rather than one shared
+-- "shipped at" — a BOL counts as shipped once both are present.
+alter table bills_of_lading add column if not exists shipper_signature_image text not null default '';
+alter table bills_of_lading add column if not exists shipper_signed_at bigint not null default 0;
+alter table bills_of_lading add column if not exists carrier_signature_image text not null default '';
+alter table bills_of_lading add column if not exists carrier_signed_at bigint not null default 0;
+
+-- Migration: Bills of Lading gets an explicit "Mark as Shipped" action,
+-- separate from just having both signatures — appears once both Shipper
+-- and Carrier have signed, and confirms the shipment as an intentional
+-- final step.
+alter table bills_of_lading add column if not exists shipped_at bigint not null default 0;

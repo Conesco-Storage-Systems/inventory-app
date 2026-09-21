@@ -109,7 +109,10 @@ export interface ItemBase {
 }
 
 export interface Beam extends ItemBase {
-  length: number
+  // Free text, same convention as width — usually just a plain number
+  // ("144"), but a cut beam is sometimes a range as written on the sheet,
+  // e.g. "101.5 - 102".
+  length: string
   width: string
   color: string
   pinCount: string
@@ -174,6 +177,10 @@ export type BolDirection = 'outbound' | 'inbound'
 
 export type PaymentTerm = 'PrePaid' | 'Collect' | '3rd Party'
 
+export type TrailerLoadedBy = 'By Shipper' | 'By Driver' | ''
+
+export type FreightCountedBy = 'By Shipper' | 'By Driver/pallets said to contain' | 'By Driver/Pieces' | ''
+
 export interface BolLineItem {
   item: string
   description: string
@@ -200,6 +207,18 @@ export interface BillOfLading {
   carrier: string
   driverPhone: string
   brokerInfo: string
+  trailerLoadedBy: TrailerLoadedBy
+  freightCountedBy: FreightCountedBy
+  // Hand-drawn e-signatures (data URLs), captured directly on the
+  // signature line when clicked. Each has its own signed-at timestamp
+  // since Shipper and Carrier can sign separately, at different times.
+  shipperSignatureImage: string
+  shipperSignedAt: number
+  carrierSignatureImage: string
+  carrierSignedAt: number
+  // Explicit final confirmation, separate from having both signatures —
+  // set only when "Mark as Shipped" is clicked.
+  shippedAt: number
   lineItems: BolLineItem[]
   createdAt: number
   lastUpdatedBy: string

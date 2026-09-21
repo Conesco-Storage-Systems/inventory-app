@@ -3,7 +3,7 @@ import type { Beam } from '../models/types'
 export interface BeamRow {
   key: string
   ids: string[]
-  length: number
+  length: string
   width: string
   widthByLength: string
   color: string
@@ -52,7 +52,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
     rows.set(key, {
       key,
       ids: [beam.id],
-      length: beam.length,
+      length: beam.length ?? '',
       width: beam.width,
       widthByLength: `${beam.width} x ${beam.length}`,
       color: beam.color,
@@ -73,6 +73,6 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
   }
 
   return Array.from(rows.values()).sort(
-    (a, b) => a.length - b.length || parseFloat(a.width) - parseFloat(b.width),
+    (a, b) => parseFloat(a.length) - parseFloat(b.length) || parseFloat(a.width) - parseFloat(b.width),
   )
 }

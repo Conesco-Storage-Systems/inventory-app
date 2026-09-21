@@ -82,7 +82,10 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       columnSizeDisplay: `${upright.columnLength}" x ${upright.columnWidth}"`,
       footplateLength: upright.footplateLength,
       footplateWidth: upright.footplateWidth,
-      footplateSizeDisplay: `${upright.footplateLength}" x ${upright.footplateWidth}"`,
+      footplateSizeDisplay:
+        upright.footplateLength || upright.footplateWidth
+          ? `${upright.footplateLength}" x ${upright.footplateWidth}"`
+          : '',
       anchorHoleCount: upright.anchorHoleCount,
       holeSize: upright.holeSize,
       gauge: upright.gauge,

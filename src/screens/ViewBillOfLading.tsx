@@ -1,18 +1,76 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getBillOfLading } from '../db/billsOfLading'
+import { getBillOfLading, markBillOfLadingShipped, signBillOfLading, updateBillOfLading } from '../db/billsOfLading'
+import SignaturePad from '../components/SignaturePad'
 import { bolElementToPdfBlob, bolPdfFileName } from '../export/exportBolToPdf'
 import { shrinkBolToOnePage } from '../export/fitBolToPage'
 import { saveBlobAs } from '../export/saveBlob'
+import type { BillOfLading, BolLineItem, FreightCountedBy, PaymentTerm, TrailerLoadedBy } from '../models/types'
+import { useRole } from '../state/RoleContext'
+
+const PAYMENT_TERMS: PaymentTerm[] = ['PrePaid', 'Collect', '3rd Party']
+const TRAILER_LOADED_OPTIONS: TrailerLoadedBy[] = ['By Shipper', 'By Driver']
+const FREIGHT_COUNTED_OPTIONS: FreightCountedBy[] = ['By Shipper', 'By Driver/pallets said to contain', 'By Driver/Pieces']
+
+interface EditableLineItem extends Omit<BolLineItem, 'qtyShipped'> {
+  qtyShipped: number | ''
+}
+
+interface BolDraft {
+  date: string
+  loadNumber: string
+  referenceDoc: string
+  paymentTerm: PaymentTerm | ''
+  shipFromCompany: string
+  shipFromAddress: string
+  shipFromPhone: string
+  shipToCompany: string
+  shipToContact: string
+  shipToAddress: string
+  shipToPhone: string
+  carrier: string
+  driverPhone: string
+  trailerLoadedBy: TrailerLoadedBy
+  freightCountedBy: FreightCountedBy
+  lineItems: EditableLineItem[]
+}
+
+function draftFromBol(bol: BillOfLading): BolDraft {
+  return {
+    date: bol.date,
+    loadNumber: bol.loadNumber,
+    referenceDoc: bol.referenceDoc,
+    paymentTerm: bol.paymentTerm,
+    shipFromCompany: bol.shipFromCompany,
+    shipFromAddress: bol.shipFromAddress,
+    shipFromPhone: bol.shipFromPhone,
+    shipToCompany: bol.shipToCompany,
+    shipToContact: bol.shipToContact,
+    shipToAddress: bol.shipToAddress,
+    shipToPhone: bol.shipToPhone,
+    carrier: bol.carrier,
+    driverPhone: bol.driverPhone,
+    trailerLoadedBy: bol.trailerLoadedBy ?? '',
+    freightCountedBy: bol.freightCountedBy ?? '',
+    lineItems: bol.lineItems.map((li) => ({ ...li })),
+  }
+}
 
 export default function ViewBillOfLading() {
+  const { permissions } = useRole()
   const { siteId, bolId } = useParams<{ siteId: string; bolId: string }>()
   const bol = useLiveQuery(() => (bolId ? getBillOfLading(bolId) : undefined), [bolId])
   const frameRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState<BolDraft | null>(null)
+  const [savingEdits, setSavingEdits] = useState(false)
+  const [signingRole, setSigningRole] = useState<'shipper' | 'carrier' | null>(null)
+  const [signing, setSigning] = useState(false)
+  const [markingShipped, setMarkingShipped] = useState(false)
 
   useEffect(() => {
     function handleBeforePrint() {
@@ -53,6 +111,76 @@ export default function ViewBillOfLading() {
     }
   }
 
+  function startEditing() {
+    if (!bol) return
+    setDraft(draftFromBol(bol))
+    setIsEditing(true)
+  }
+
+  function cancelEditing() {
+    setIsEditing(false)
+    setDraft(null)
+  }
+
+  function updateDraft(changes: Partial<BolDraft>) {
+    setDraft((prev) => (prev ? { ...prev, ...changes } : prev))
+  }
+
+  function updateDraftLineItem(index: number, changes: Partial<EditableLineItem>) {
+    setDraft((prev) =>
+      prev ? { ...prev, lineItems: prev.lineItems.map((li, i) => (i === index ? { ...li, ...changes } : li)) } : prev,
+    )
+  }
+
+  function addDraftLineItem() {
+    setDraft((prev) =>
+      prev
+        ? { ...prev, lineItems: [...prev.lineItems, { item: '', description: '', qtyShipped: '', weight: '', qtyReceived: '' }] }
+        : prev,
+    )
+  }
+
+  function removeDraftLineItem(index: number) {
+    setDraft((prev) => (prev ? { ...prev, lineItems: prev.lineItems.filter((_, i) => i !== index) } : prev))
+  }
+
+  async function handleSaveEdits() {
+    if (!bol || !draft) return
+    setSavingEdits(true)
+    try {
+      await updateBillOfLading(bol.id, {
+        ...draft,
+        brokerInfo: bol.brokerInfo,
+        lineItems: draft.lineItems.map((li) => ({ ...li, qtyShipped: li.qtyShipped === '' ? 0 : li.qtyShipped })),
+      })
+      setIsEditing(false)
+      setDraft(null)
+    } finally {
+      setSavingEdits(false)
+    }
+  }
+
+  async function handleSaveSignature(dataUrl: string) {
+    if (!bol || !signingRole) return
+    setSigning(true)
+    try {
+      await signBillOfLading(bol.id, signingRole, dataUrl)
+      setSigningRole(null)
+    } finally {
+      setSigning(false)
+    }
+  }
+
+  async function handleMarkShipped() {
+    if (!bol) return
+    setMarkingShipped(true)
+    try {
+      await markBillOfLadingShipped(bol.id)
+    } finally {
+      setMarkingShipped(false)
+    }
+  }
+
   if (bol === undefined) {
     return (
       <main className="page">
@@ -70,18 +198,35 @@ export default function ViewBillOfLading() {
     )
   }
 
+  const canEditSignatures = permissions.generateBillOfLading && !bol.shippedAt
+
   return (
     <main className="page page-wide bol-document">
       <p className="no-print">
         <Link to={`/locations/${siteId}`}>← Back</Link>
       </p>
       <div className="dialog-actions no-print">
-        <button type="button" onClick={() => window.print()}>
+        <button type="button" onClick={() => window.print()} disabled={isEditing}>
           Print
         </button>
-        <button type="button" onClick={handleSave} disabled={saving}>
+        <button type="button" onClick={handleSave} disabled={isEditing || saving}>
           {saving ? 'Saving…' : 'Save'}
         </button>
+        {!isEditing && permissions.generateBillOfLading && (
+          <button type="button" onClick={startEditing}>
+            Edit
+          </button>
+        )}
+        {isEditing && (
+          <>
+            <button type="button" onClick={handleSaveEdits} disabled={savingEdits}>
+              {savingEdits ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button type="button" onClick={cancelEditing} disabled={savingEdits}>
+              Cancel
+            </button>
+          </>
+        )}
       </div>
       {exportError && <p className="field-error no-print">{exportError}</p>}
 
@@ -91,24 +236,72 @@ export default function ViewBillOfLading() {
             <table className="bol-header-table">
               <tbody>
                 <tr>
-                  <td>Date: {bol.date}</td>
+                  <td>
+                    Date:{' '}
+                    {isEditing && draft ? (
+                      <input
+                        type="date"
+                        className="bol-inline-input"
+                        value={draft.date}
+                        onChange={(e) => updateDraft({ date: e.target.value })}
+                      />
+                    ) : (
+                      bol.date
+                    )}
+                  </td>
                 </tr>
                 <tr>
-                  <td>Reference Doc: {bol.referenceDoc}</td>
+                  <td>
+                    Reference Doc:{' '}
+                    {isEditing && draft ? (
+                      <input
+                        type="text"
+                        className="bol-inline-input"
+                        value={draft.referenceDoc}
+                        onChange={(e) => updateDraft({ referenceDoc: e.target.value })}
+                      />
+                    ) : (
+                      bol.referenceDoc
+                    )}
+                  </td>
                 </tr>
                 <tr>
-                  <td>Load #: {bol.loadNumber}</td>
+                  <td>
+                    Truck #:{' '}
+                    {isEditing && draft ? (
+                      <input
+                        type="text"
+                        className="bol-inline-input"
+                        value={draft.loadNumber}
+                        onChange={(e) => updateDraft({ loadNumber: e.target.value })}
+                      />
+                    ) : (
+                      bol.loadNumber
+                    )}
+                  </td>
                 </tr>
               </tbody>
             </table>
             <div className="bol-title">
               <h1>BILL OF LADING</h1>
               <div className="bol-payment-terms">
-                {(['PrePaid', 'Collect', '3rd Party'] as const).map((term) => (
-                  <span key={term}>
-                    {bol.paymentTerm === term ? '☑' : '☐'} {term}
-                  </span>
-                ))}
+                {isEditing && draft
+                  ? PAYMENT_TERMS.map((term) => (
+                      <label key={term} className="bol-inline-radio">
+                        <input
+                          type="radio"
+                          name="bol-payment-term"
+                          checked={draft.paymentTerm === term}
+                          onChange={() => updateDraft({ paymentTerm: term })}
+                        />
+                        {term}
+                      </label>
+                    ))
+                  : PAYMENT_TERMS.map((term) => (
+                      <span key={term}>
+                        {bol.paymentTerm === term ? '☑' : '☐'} {term}
+                      </span>
+                    ))}
               </div>
             </div>
             <div className="bol-logo">
@@ -128,34 +321,129 @@ export default function ViewBillOfLading() {
           <div className="bol-parties">
             <div className="bol-party">
               <h3>SHIP FROM</h3>
-              <p>
-                <strong>Company:</strong> {bol.shipFromCompany}
-              </p>
-              <p>
-                <strong>Address:</strong> {bol.shipFromAddress}
-              </p>
-              <p>
-                <strong>Phone:</strong> {bol.shipFromPhone}
-              </p>
-              <p>
-                <strong>Carrier:</strong> {bol.carrier}
-              </p>
-              <p>
-                <strong>Driver Phone:</strong> {bol.driverPhone}
-              </p>
+              {isEditing && draft ? (
+                <>
+                  <p>
+                    <strong>Company:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipFromCompany}
+                      onChange={(e) => updateDraft({ shipFromCompany: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Address:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipFromAddress}
+                      onChange={(e) => updateDraft({ shipFromAddress: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Phone:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipFromPhone}
+                      onChange={(e) => updateDraft({ shipFromPhone: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Carrier:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.carrier}
+                      onChange={(e) => updateDraft({ carrier: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Driver Phone:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.driverPhone}
+                      onChange={(e) => updateDraft({ driverPhone: e.target.value })}
+                    />
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    <strong>Company:</strong> {bol.shipFromCompany}
+                  </p>
+                  <p>
+                    <strong>Address:</strong> {bol.shipFromAddress}
+                  </p>
+                  <p>
+                    <strong>Phone:</strong> {bol.shipFromPhone}
+                  </p>
+                  <p>
+                    <strong>Carrier:</strong> {bol.carrier}
+                  </p>
+                  <p>
+                    <strong>Driver Phone:</strong> {bol.driverPhone}
+                  </p>
+                </>
+              )}
             </div>
             <div className="bol-party">
               <h3>SHIP TO</h3>
-              <p>
-                <strong>Company:</strong> {bol.shipToCompany}
-                {bol.shipToContact ? ` (Attn: ${bol.shipToContact})` : ''}
-              </p>
-              <p>
-                <strong>Address:</strong> {bol.shipToAddress}
-              </p>
-              <p>
-                <strong>Phone:</strong> {bol.shipToPhone}
-              </p>
+              {isEditing && draft ? (
+                <>
+                  <p>
+                    <strong>Company:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipToCompany}
+                      onChange={(e) => updateDraft({ shipToCompany: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Attn:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipToContact}
+                      onChange={(e) => updateDraft({ shipToContact: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Address:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipToAddress}
+                      onChange={(e) => updateDraft({ shipToAddress: e.target.value })}
+                    />
+                  </p>
+                  <p>
+                    <strong>Phone:</strong>{' '}
+                    <input
+                      type="text"
+                      className="bol-inline-input"
+                      value={draft.shipToPhone}
+                      onChange={(e) => updateDraft({ shipToPhone: e.target.value })}
+                    />
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    <strong>Company:</strong> {bol.shipToCompany}
+                    {bol.shipToContact ? ` (Attn: ${bol.shipToContact})` : ''}
+                  </p>
+                  <p>
+                    <strong>Address:</strong> {bol.shipToAddress}
+                  </p>
+                  <p>
+                    <strong>Phone:</strong> {bol.shipToPhone}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -166,37 +454,131 @@ export default function ViewBillOfLading() {
                 <th>Weight (lbs)</th>
                 <th>QTY Received</th>
                 <th>Item Description</th>
+                {isEditing && <th className="no-print"></th>}
               </tr>
             </thead>
             <tbody>
-              {bol.lineItems.map((li, index) => (
-                <tr key={index}>
-                  <td>{li.qtyShipped}</td>
-                  <td>{li.weight}</td>
-                  <td>{li.qtyReceived}</td>
-                  <td>{[li.item, li.description].filter(Boolean).join(' — ')}</td>
-                </tr>
-              ))}
-              {Array.from({ length: Math.max(0, 5 - bol.lineItems.length) }).map((_, i) => (
-                <tr key={`blank-${i}`}>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                </tr>
-              ))}
+              {isEditing && draft
+                ? draft.lineItems.map((li, index) => (
+                    <tr key={index}>
+                      <td>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          className="bol-inline-input"
+                          value={li.qtyShipped}
+                          onChange={(e) =>
+                            updateDraftLineItem(index, {
+                              qtyShipped: e.target.value === '' ? '' : Number(e.target.value),
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="bol-inline-input"
+                          value={li.weight}
+                          onChange={(e) => updateDraftLineItem(index, { weight: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="bol-inline-input"
+                          value={li.qtyReceived}
+                          onChange={(e) => updateDraftLineItem(index, { qtyReceived: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="bol-inline-input"
+                          placeholder="Item"
+                          value={li.item}
+                          onChange={(e) => updateDraftLineItem(index, { item: e.target.value })}
+                        />
+                        <input
+                          type="text"
+                          className="bol-inline-input"
+                          placeholder="Description"
+                          value={li.description}
+                          onChange={(e) => updateDraftLineItem(index, { description: e.target.value })}
+                        />
+                      </td>
+                      <td className="no-print">
+                        <button type="button" className="delete-button" onClick={() => removeDraftLineItem(index)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                : bol.lineItems.map((li, index) => (
+                    <tr key={index}>
+                      <td>{li.qtyShipped}</td>
+                      <td>{li.weight}</td>
+                      <td>{li.qtyReceived}</td>
+                      <td>{[li.item, li.description].filter(Boolean).join(' — ')}</td>
+                    </tr>
+                  ))}
+              {!isEditing &&
+                Array.from({ length: Math.max(0, 5 - bol.lineItems.length) }).map((_, i) => (
+                  <tr key={`blank-${i}`}>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                  </tr>
+                ))}
               <tr className="bol-totals-row">
                 <td></td>
                 <td>lbs.</td>
                 <td></td>
                 <td className="bol-totals-label">← TOTALS</td>
+                {isEditing && <td className="no-print"></td>}
               </tr>
             </tbody>
           </table>
 
+          {isEditing && (
+            <div className="no-print">
+              <button type="button" onClick={addDraftLineItem}>
+                + Add Line
+              </button>
+            </div>
+          )}
+
           <div className="bol-signatures">
             <div className="bol-signature-block">
-              <p className="bol-signature-line">X ________________________________ Date: __________</p>
+              {bol.shipperSignatureImage ? (
+                canEditSignatures ? (
+                  <button
+                    type="button"
+                    className="bol-signature-line bol-signature-signed bol-signature-signed-editable"
+                    onClick={() => setSigningRole('shipper')}
+                    disabled={isEditing}
+                  >
+                    <img src={bol.shipperSignatureImage} alt="Shipper signature" className="bol-signature-image" />
+                    <span>Date: {new Date(bol.shipperSignedAt).toLocaleDateString()}</span>
+                  </button>
+                ) : (
+                  <p className="bol-signature-line bol-signature-signed">
+                    <img src={bol.shipperSignatureImage} alt="Shipper signature" className="bol-signature-image" />
+                    <span>Date: {new Date(bol.shipperSignedAt).toLocaleDateString()}</span>
+                  </p>
+                )
+              ) : canEditSignatures ? (
+                <button
+                  type="button"
+                  className="bol-signature-line bol-signature-blank"
+                  onClick={() => setSigningRole('shipper')}
+                  disabled={isEditing}
+                >
+                  X ________________________________ Date: __________
+                </button>
+              ) : (
+                <p className="bol-signature-line">X ________________________________ Date: __________</p>
+              )}
               <p className="bol-signature-label">SHIPPER SIGNATURE</p>
               <p className="bol-signature-fine">
                 This certifies that the above-named materials are properly classified, packaged, marked, and
@@ -206,7 +588,35 @@ export default function ViewBillOfLading() {
               </p>
             </div>
             <div className="bol-signature-block">
-              <p className="bol-signature-line">X ________________________________ Date: __________</p>
+              {bol.carrierSignatureImage ? (
+                canEditSignatures ? (
+                  <button
+                    type="button"
+                    className="bol-signature-line bol-signature-signed bol-signature-signed-editable"
+                    onClick={() => setSigningRole('carrier')}
+                    disabled={isEditing}
+                  >
+                    <img src={bol.carrierSignatureImage} alt="Carrier signature" className="bol-signature-image" />
+                    <span>Date: {new Date(bol.carrierSignedAt).toLocaleDateString()}</span>
+                  </button>
+                ) : (
+                  <p className="bol-signature-line bol-signature-signed">
+                    <img src={bol.carrierSignatureImage} alt="Carrier signature" className="bol-signature-image" />
+                    <span>Date: {new Date(bol.carrierSignedAt).toLocaleDateString()}</span>
+                  </p>
+                )
+              ) : canEditSignatures ? (
+                <button
+                  type="button"
+                  className="bol-signature-line bol-signature-blank"
+                  onClick={() => setSigningRole('carrier')}
+                  disabled={isEditing}
+                >
+                  X ________________________________ Date: __________
+                </button>
+              ) : (
+                <p className="bol-signature-line">X ________________________________ Date: __________</p>
+              )}
               <p className="bol-signature-label">CARRIER SIGNATURE</p>
               <p className="bol-signature-fine">
                 Carrier acknowledges receipt of materials and required placecards. Carrier certifies
@@ -230,14 +640,43 @@ export default function ViewBillOfLading() {
           <div className="bol-footer-row">
             <div className="bol-checklist">
               <p className="bol-signature-label">Trailer Loaded</p>
-              <p>☐ By Shipper</p>
-              <p>☐ By Driver</p>
+              {isEditing && draft
+                ? TRAILER_LOADED_OPTIONS.map((option) => (
+                    <label key={option} className="bol-inline-radio">
+                      <input
+                        type="radio"
+                        name="bol-trailer-loaded-by"
+                        checked={draft.trailerLoadedBy === option}
+                        onChange={() => updateDraft({ trailerLoadedBy: option })}
+                      />
+                      {option}
+                    </label>
+                  ))
+                : TRAILER_LOADED_OPTIONS.map((option) => (
+                    <p key={option}>
+                      {bol.trailerLoadedBy === option ? '☑' : '☐'} {option}
+                    </p>
+                  ))}
             </div>
             <div className="bol-checklist">
               <p className="bol-signature-label">Freight Counted</p>
-              <p>☐ By Shipper</p>
-              <p>☐ By Driver/pallets said to contain</p>
-              <p>☐ By Driver/Pieces</p>
+              {isEditing && draft
+                ? FREIGHT_COUNTED_OPTIONS.map((option) => (
+                    <label key={option} className="bol-inline-radio">
+                      <input
+                        type="radio"
+                        name="bol-freight-counted-by"
+                        checked={draft.freightCountedBy === option}
+                        onChange={() => updateDraft({ freightCountedBy: option })}
+                      />
+                      {option}
+                    </label>
+                  ))
+                : FREIGHT_COUNTED_OPTIONS.map((option) => (
+                    <p key={option}>
+                      {bol.freightCountedBy === option ? '☑' : '☐'} {option}
+                    </p>
+                  ))}
             </div>
             <div className="bol-signature-block">
               <p className="bol-signature-line">X ________________________________ Date: __________</p>
@@ -256,6 +695,32 @@ export default function ViewBillOfLading() {
           </div>
         </div>
       </div>
+
+      {!!bol.shippedAt && (
+        <div className="bol-mark-shipped">
+          <p className="bol-shipped-confirmation">
+            ✔ Marked as Shipped — {new Date(bol.shippedAt).toLocaleString()}
+          </p>
+        </div>
+      )}
+
+      {!bol.shippedAt && bol.shipperSignatureImage && bol.carrierSignatureImage && permissions.generateBillOfLading && (
+        <div className="bol-mark-shipped no-print">
+          <button type="button" onClick={handleMarkShipped} disabled={markingShipped || isEditing}>
+            {markingShipped ? 'Marking…' : 'Mark as Shipped'}
+          </button>
+        </div>
+      )}
+
+      {signingRole && (
+        <SignaturePad
+          title={signingRole === 'shipper' ? 'Shipper Signature' : 'Carrier Signature'}
+          existingImage={signingRole === 'shipper' ? bol.shipperSignatureImage : bol.carrierSignatureImage}
+          onSave={handleSaveSignature}
+          onCancel={() => setSigningRole(null)}
+          saving={signing}
+        />
+      )}
     </main>
   )
 }

@@ -304,7 +304,7 @@ export default function AllInventory() {
       label: 'Width x Length',
       render: (row) => row.widthByLength,
       getValue: (row) => row.widthByLength,
-      sortValue: (row) => leadingNumber(row.width) * 100000 + row.length,
+      sortValue: (row) => leadingNumber(row.width) * 100000 + leadingNumber(row.length),
     },
     color: { label: 'Color', render: (row) => row.color, getValue: (row) => row.color, sortValue: (row) => row.color },
     pinCount: {

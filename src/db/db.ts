@@ -250,6 +250,37 @@ class InventoryDB extends Dexie {
           upright.updatedAt = Date.now()
         })
     })
+    // Beam length becomes free text (same convention as width/upright
+    // height) so a cut beam can carry a range exactly as written on the
+    // sheet (e.g. "101.5 - 102") instead of one exact number.
+    this.version(11).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+    }).upgrade(async (tx) => {
+      await tx
+        .table('beams')
+        .toCollection()
+        .modify((beam) => {
+          if (typeof beam.length === 'string') return
+          beam.length = String(beam.length ?? '')
+          beam.syncStatus = 'pending'
+          beam.updatedAt = Date.now()
+        })
+    })
   }
 }
 

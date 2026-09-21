@@ -623,9 +623,8 @@ export default function LocationDetail() {
               <li key={bol.id} className="location-list-row bol-list-row">
                 <div className="location-list-info">
                   <Link to={`/locations/${site.id}/bol/${bol.id}`}>
-                    {bol.date || 'Undated'}
-                    {bol.loadNumber ? ` — Load #${bol.loadNumber}` : ''}
-                    {bol.direction === 'outbound' ? ` to ${bol.shipToCompany}` : ` from ${bol.shipFromCompany}`}
+                    {bol.referenceDoc || 'No Reference #'} - {bol.date || 'Undated'} -{' '}
+                    {bol.shippedAt ? 'Shipped' : 'Open'}
                   </Link>
                 </div>
                 {permissions.generateBillOfLading && (

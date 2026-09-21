@@ -47,7 +47,10 @@ function prependFlag(notes: string, flag: string): string {
 
 // 'red' was missing until we saw it in real data ("red & orange" beams) —
 // add more colors here only once a real sheet needs them, same reasoning.
-const COLOR_WORDS = ['orange', 'green', 'blue', 'red', 'gray', 'grey']
+// Any of these that isn't one of the app's standard dropdown colors still
+// lands in the color field as free text — the UI already shows an
+// unrecognized color under "Other" automatically, no extra handling needed.
+const COLOR_WORDS = ['orange', 'green', 'blue', 'red', 'gray', 'grey', 'yellow', 'white', 'pink']
 
 function extractColor(text: string): { color: string; remaining: string } {
   const found: string[] = []
@@ -63,6 +66,23 @@ function extractColor(text: string): { color: string; remaining: string } {
     return { color: found[0], remaining: text.replace(new RegExp(`\\b${found[0]}\\b`, 'i'), ' ') }
   }
   return { color: 'Mixed', remaining: text }
+}
+
+// A bundle that wasn't sorted sometimes says "mixed pins & colors" (or
+// either alone, in either order) instead of naming specific values —
+// written into both fields explicitly rather than left sitting in notes.
+function extractMixedPinsAndColors(text: string): { pinCount: string; color: string; remaining: string } {
+  const patterns: [RegExp, { pinCount: string; color: string }][] = [
+    [/\bmixed\s+pins?\s*(?:&|and|\/)\s*colors?\b/i, { pinCount: 'Mixed pins', color: 'Mixed Colors' }],
+    [/\bmixed\s+colors?\s*(?:&|and|\/)\s*pins?\b/i, { pinCount: 'Mixed pins', color: 'Mixed Colors' }],
+    [/\bmixed\s+pins?\b/i, { pinCount: 'Mixed pins', color: '' }],
+    [/\bmixed\s+colors?\b/i, { pinCount: '', color: 'Mixed Colors' }],
+  ]
+  for (const [re, result] of patterns) {
+    const m = text.match(re)
+    if (m) return { ...result, remaining: text.replace(m[0], ' ') }
+  }
+  return { pinCount: '', color: '', remaining: text }
 }
 
 function extractCondition(text: string): { condition: Condition; remaining: string } {
@@ -123,24 +143,33 @@ function extractStickers(text: string): { stickers: string; remaining: string } 
 }
 
 function extractFootplate(text: string): { length: number | null; width: number | null; remaining: string } {
+  // "FP" just names the Footplate Size column, so a plain `<size> FP` is
+  // dropped entirely once the size is captured — no need to repeat "FP" in
+  // the notes. A bolt-on footplate is written the same way but with
+  // "bolt-on" inserted before "FP" (e.g. `3.5"x5" bolt-on FP`), which is a
+  // real deviation worth flagging — in that case the whole "bolt-on FP"
+  // phrase (as written) stays in the notes, not just the size.
   const sizeThenFp = text.match(
-    /(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*x\s*(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*FP/i,
+    /(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*x\s*(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*((?:bolt-?on\s*)?FP)\b/i,
   )
   if (sizeThenFp) {
+    const note = sizeThenFp[3]?.trim()
     return {
       length: parseFraction(sizeThenFp[1]),
       width: parseFraction(sizeThenFp[2]),
-      remaining: text.replace(sizeThenFp[0], ' '),
+      remaining: text.replace(sizeThenFp[0], /^fp$/i.test(note) ? ' ' : ` ${note} `),
     }
   }
   const fpThenSize = text.match(
-    /FP\s*(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*x\s*(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?/i,
+    /(FP)\s*(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*x\s*(\d+(?:\.\d+)?(?:[\s-]\d+\/\d+)?)\s*["″""]?\s*(bolt-?on)?/i,
   )
   if (fpThenSize) {
+    const boltOn = fpThenSize[4]?.trim()
+    const note = boltOn ? `${fpThenSize[1]} ${boltOn}` : ''
     return {
-      length: parseFraction(fpThenSize[1]),
-      width: parseFraction(fpThenSize[2]),
-      remaining: text.replace(fpThenSize[0], ' '),
+      length: parseFraction(fpThenSize[2]),
+      width: parseFraction(fpThenSize[3]),
+      remaining: text.replace(fpThenSize[0], note ? ` ${note} ` : ' '),
     }
   }
   return { length: null, width: null, remaining: text }
@@ -228,25 +257,28 @@ function parseUprightSize(sizeRaw: string): UprightDims | null {
 // e.g. `3.75" - 4" x 96" x 1-5/8"` — which lines up exactly with the beam
 // step dropdown's own option text, so it's captured verbatim rather than
 // dropped.
-function parseBeamSize(sizeRaw: string): { width: string; length: number; step: string } | null {
+// A cut beam's width or length is sometimes a range exactly as written on
+// the sheet (e.g. "101.5 - 102") instead of one exact number — parsed as
+// free text either way so the range survives.
+function parseSizeToken(token: string): string | null {
+  const cleaned = stripQuotes(token)
+  const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/)
+  if (rangeMatch) return `${rangeMatch[1]}-${rangeMatch[2]}`
+  const n = parseFraction(cleaned)
+  return n != null ? String(n) : null
+}
+
+function parseBeamSize(sizeRaw: string): { width: string; length: string; step: string } | null {
   const parts = sizeRaw
     .split(/\s+x\s+/i)
     .map((s) => s.trim())
     .filter(Boolean)
   if (parts.length < 2) return null
 
-  const widthToken = stripQuotes(parts[0])
-  let width: string | null
-  const rangeMatch = widthToken.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/)
-  if (rangeMatch) {
-    width = `${rangeMatch[1]}-${rangeMatch[2]}`
-  } else {
-    const n = parseFraction(widthToken)
-    width = n != null ? String(n) : null
-  }
+  const width = parseSizeToken(parts[0])
   if (width == null) return null
 
-  const length = parseFraction(parts[1])
+  const length = parseSizeToken(parts[1])
   if (length == null) return null
 
   const step = parts.length >= 3 ? parts[2] : ''
@@ -277,6 +309,8 @@ function buildUpright(
   const dims = parseUprightSize(sizeRaw)
 
   let text = notesRaw
+  const mixed = extractMixedPinsAndColors(text)
+  text = mixed.remaining
   const condition = extractCondition(text)
   text = condition.remaining
   const style = extractStyle(text, UPRIGHT_STYLE_PATTERNS)
@@ -300,7 +334,7 @@ function buildUpright(
     bundleSize: '',
     zone: '',
     notes,
-    color: color.color,
+    color: mixed.color || color.color,
     style: style.style,
     width: dims?.width ?? 0,
     height: dims?.height ?? '',
@@ -328,6 +362,8 @@ function buildBeam(
   const dims = parseBeamSize(sizeRaw)
 
   let text = notesRaw
+  const mixed = extractMixedPinsAndColors(text)
+  text = mixed.remaining
   const condition = extractCondition(text)
   text = condition.remaining
   const style = extractStyle(text, BEAM_STYLE_PATTERNS)
@@ -349,10 +385,10 @@ function buildBeam(
     bundleSize: '',
     zone: '',
     notes,
-    length: dims?.length ?? 0,
+    length: dims?.length ?? '',
     width: dims?.width ?? '',
-    color: color.color,
-    pinCount: pin.pinCount,
+    color: mixed.color || color.color,
+    pinCount: mixed.pinCount || pin.pinCount,
     stamp: '',
     style: style.style,
     stickers: stickers.stickers,

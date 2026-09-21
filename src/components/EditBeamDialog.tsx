@@ -20,7 +20,7 @@ function draftFromRow(row: BeamRow): BeamDraft {
   const knownCondition = (CONDITIONS as readonly string[]).includes(row.condition)
 
   return {
-    length: String(row.length),
+    length: row.length,
     width: row.width,
     color: knownColor ? row.color : 'Other',
     colorOther: knownColor ? '' : row.color,
@@ -83,7 +83,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           bundleSize: draft.bundleSize,
           zone: draft.zone,
           notes: draft.notes,
-          length: Number(draft.length) || 0,
+          length: draft.length,
           width: draft.width,
           color,
           pinCount,
@@ -104,7 +104,7 @@ export default function EditBeamDialog({ row, siteId, mode, onClose }: EditBeamD
           bundleSize: draft.bundleSize,
           zone: draft.zone,
           notes: draft.notes,
-          length: Number(draft.length) || 0,
+          length: draft.length,
           width: draft.width,
           color,
           pinCount,

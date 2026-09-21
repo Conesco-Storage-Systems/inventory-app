@@ -11,7 +11,7 @@ export interface NewBeamInput {
   bundleSize: string
   zone: string
   notes: string
-  length: number
+  length: string
   width: string
   color: string
   pinCount: string
@@ -90,7 +90,7 @@ export interface BeamEditInput {
   bundleSize: string
   zone: string
   notes: string
-  length: number
+  length: string
   width: string
   color: string
   pinCount: string

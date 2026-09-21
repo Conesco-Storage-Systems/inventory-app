@@ -228,7 +228,7 @@ export default function NewBillOfLading() {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label>
-            Load #
+            Truck #
             <input type="text" value={loadNumber} onChange={(e) => setLoadNumber(e.target.value)} />
           </label>
           <label>

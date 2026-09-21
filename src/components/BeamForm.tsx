@@ -123,8 +123,8 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
         Length
         <div className="input-with-unit">
           <input
-            type="number"
-            inputMode="decimal"
+            type="text"
+            placeholder="e.g. 144 or 101.5-102"
             value={value.length}
             onChange={(e) => onChange({ ...value, length: e.target.value })}
           />

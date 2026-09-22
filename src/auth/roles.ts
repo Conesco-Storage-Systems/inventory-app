@@ -1,10 +1,11 @@
-export type Role = 'admin' | 'inventoryManager' | 'sales' | 'viewer'
+export type Role = 'admin' | 'inventoryManager' | 'sales' | 'viewer' | 'directorOfProcurement'
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',
   inventoryManager: 'Inventory Manager',
   sales: 'Sales',
   viewer: 'Viewer',
+  directorOfProcurement: 'Director of Procurement',
 }
 
 export interface Permissions {
@@ -22,6 +23,7 @@ export interface Permissions {
   generateCustomerSheet: boolean
   manageSalesOrders: boolean
   holdItemsForOrder: boolean
+  viewProcurementDashboard: boolean
 }
 
 const ROLE_PERMISSIONS: Record<Role, Permissions> = {
@@ -37,6 +39,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateCustomerSheet: true,
     manageSalesOrders: true,
     holdItemsForOrder: true,
+    viewProcurementDashboard: true,
   },
   inventoryManager: {
     addItems: true,
@@ -50,6 +53,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateCustomerSheet: true,
     manageSalesOrders: false,
     holdItemsForOrder: false,
+    viewProcurementDashboard: false,
   },
   sales: {
     addItems: false,
@@ -63,6 +67,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateCustomerSheet: true,
     manageSalesOrders: true,
     holdItemsForOrder: true,
+    viewProcurementDashboard: false,
   },
   viewer: {
     addItems: false,
@@ -76,6 +81,24 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateCustomerSheet: false,
     manageSalesOrders: false,
     holdItemsForOrder: false,
+    viewProcurementDashboard: false,
+  },
+  // Everything else stays Viewer-level for now — the procurement page
+  // (SOs/invoices/BOLs) is being built step by step; more permissions
+  // here will get filled in as that work continues.
+  directorOfProcurement: {
+    addItems: false,
+    editItems: false,
+    deleteItems: false,
+    manageLocations: false,
+    deleteLocations: false,
+    restoreLocations: false,
+    manageUsers: false,
+    generateBillOfLading: false,
+    generateCustomerSheet: false,
+    manageSalesOrders: false,
+    holdItemsForOrder: false,
+    viewProcurementDashboard: true,
   },
 }
 

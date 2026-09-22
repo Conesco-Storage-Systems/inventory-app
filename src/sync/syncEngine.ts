@@ -9,6 +9,7 @@ import type {
   Photo,
   Project,
   ProjectPhoto,
+  SalesOrderLineItem,
   Site,
   Upright,
   WireDeck,
@@ -636,6 +637,82 @@ async function pullCustomerSheets(): Promise<void> {
   setCursor('customer_sheets', maxUpdatedAt)
 }
 
+function salesOrderLineItemToRemote(li: SalesOrderLineItem): Record<string, unknown> {
+  return {
+    id: li.id,
+    so_number: li.soNumber,
+    description: li.description,
+    warehouse_code: li.warehouseCode,
+    quantity_ordered: li.quantityOrdered,
+    status: li.status,
+    tied_site_id: li.tiedSiteId,
+    tied_site_name: li.tiedSiteName,
+    tied_item_type: li.tiedItemType,
+    tied_item_ids: li.tiedItemIds,
+    tied_description: li.tiedDescription,
+    tied_at: li.tiedAt,
+    tied_by: li.tiedBy,
+    imported_at: li.importedAt,
+    created_at: li.createdAt,
+    updated_at: li.updatedAt,
+  }
+}
+
+async function pushSalesOrderLineItems(): Promise<void> {
+  const pending = await db.salesOrderLineItems.where('syncStatus').equals('pending').toArray()
+  for (const li of pending) {
+    const { error } = await supabase.from('sales_order_line_items').upsert(salesOrderLineItemToRemote(li))
+    if (!error) {
+      await db.salesOrderLineItems.update(li.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push sales_order_line_items/${li.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullSalesOrderLineItems(): Promise<void> {
+  const cursor = getCursors().sales_order_line_items ?? 0
+  const { data, error } = await supabase.from('sales_order_line_items').select('*').gt('updated_at', cursor)
+  if (error) {
+    console.error('[sync] pull sales_order_line_items failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.updated_at)
+    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+
+    const local = await db.salesOrderLineItems.get(remoteRow.id as string)
+    if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
+      console.warn(`[sync] keeping local salesOrderLineItems/${remoteRow.id} over an older/equal remote change`)
+      continue
+    }
+
+    await db.salesOrderLineItems.put({
+      id: remoteRow.id as string,
+      soNumber: remoteRow.so_number as string,
+      description: remoteRow.description as string,
+      warehouseCode: (remoteRow.warehouse_code as string) ?? '',
+      quantityOrdered: remoteRow.quantity_ordered as number,
+      status: remoteRow.status as SalesOrderLineItem['status'],
+      tiedSiteId: remoteRow.tied_site_id as string,
+      tiedSiteName: remoteRow.tied_site_name as string,
+      tiedItemType: remoteRow.tied_item_type as SalesOrderLineItem['tiedItemType'],
+      tiedItemIds: (remoteRow.tied_item_ids as string[]) ?? [],
+      tiedDescription: remoteRow.tied_description as string,
+      tiedAt: remoteRow.tied_at as number,
+      tiedBy: remoteRow.tied_by as string,
+      importedAt: remoteRow.imported_at as number,
+      createdAt: remoteRow.created_at as number,
+      updatedAt,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('sales_order_line_items', maxUpdatedAt)
+}
+
 // ---------- item photos ----------
 
 async function pushPhotos(): Promise<void> {
@@ -781,6 +858,7 @@ const REMOTE_TABLE_NAMES: Record<string, string> = {
   projectPhotos: 'project_photos',
   billsOfLading: 'bills_of_lading',
   customerSheets: 'customer_sheets',
+  salesOrderLineItems: 'sales_order_line_items',
 }
 
 async function pushPendingDeletes(): Promise<void> {
@@ -824,6 +902,7 @@ export async function runSync(): Promise<void> {
     await pushProjectPhotos()
     await pushBolsOfLading()
     await pushCustomerSheets()
+    await pushSalesOrderLineItems()
 
     await pullProjects()
     for (const config of ITEM_CONFIGS) await pullItemTable(config)
@@ -832,6 +911,7 @@ export async function runSync(): Promise<void> {
     await pullProjectPhotos()
     await pullBolsOfLading()
     await pullCustomerSheets()
+    await pullSalesOrderLineItems()
     console.log('[sync] finished')
   } catch (err) {
     console.error('[sync] sync run failed', err)
@@ -861,6 +941,7 @@ export function startAutoSync(): void {
     'project_photos',
     'bills_of_lading',
     'customer_sheets',
+    'sales_order_line_items',
   ]
   for (const table of remoteTables) {
     supabase

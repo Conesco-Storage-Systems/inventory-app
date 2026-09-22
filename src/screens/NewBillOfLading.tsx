@@ -24,6 +24,13 @@ interface EditableLineItem extends Omit<BolLineItem, 'qtyShipped'> {
   qtyShipped: number | ''
 }
 
+export interface SoLineItemForBol {
+  soNumber: string
+  item: string
+  description: string
+  qty: number
+}
+
 function describeBeam(row: BeamRow): string {
   return [row.style, row.widthByLength, row.color, row.pinCount && `${row.pinCount} pin`, row.step && `${row.step} step`, row.condition]
     .filter(Boolean)
@@ -56,7 +63,9 @@ export default function NewBillOfLading() {
   const navigate = useNavigate()
   const location = useLocation()
   const preselectedKeys = (location.state as { preselected?: string[] } | null)?.preselected
+  const soLineItems = (location.state as { soLineItems?: SoLineItemForBol[] } | null)?.soLineItems
   const appliedPreselectRef = useRef(false)
+  const appliedSoLineItemsRef = useRef(false)
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
   const uprights = useLiveQuery(() => (siteId ? listUprightsBySite(siteId) : []), [siteId]) ?? []
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
@@ -130,6 +139,24 @@ export default function NewBillOfLading() {
     }
     appliedPreselectRef.current = true
   }, [availableRows, preselectedKeys])
+
+  useEffect(() => {
+    if (appliedSoLineItemsRef.current) return
+    appliedSoLineItemsRef.current = true
+    if (!soLineItems || soLineItems.length === 0) return
+    setLineItems((prev) => [
+      ...prev,
+      ...soLineItems.map((li) => ({
+        item: li.item,
+        description: li.description,
+        qtyShipped: li.qty,
+        weight: '',
+        qtyReceived: '',
+      })),
+    ])
+    const distinctSoNumbers = Array.from(new Set(soLineItems.map((li) => li.soNumber)))
+    setReferenceDoc((prev) => prev || distinctSoNumbers.join(', '))
+  }, [soLineItems])
 
   if (site === undefined) {
     return (

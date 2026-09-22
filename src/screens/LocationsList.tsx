@@ -26,6 +26,11 @@ export default function LocationsList() {
 
   return (
     <main className="page page-wide">
+      {permissions.viewProcurementDashboard && (
+        <p>
+          <Link to="/procurement">Procurement</Link>
+        </p>
+      )}
       <div className="locations-projects-grid">
         <section>
           <div className="page-header">

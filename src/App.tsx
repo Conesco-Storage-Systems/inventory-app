@@ -12,11 +12,14 @@ import LocationsList from './screens/LocationsList'
 import NewBillOfLading from './screens/NewBillOfLading'
 import NewCustomerSheet from './screens/NewCustomerSheet'
 import NewItem from './screens/NewItem'
+import Procurement from './screens/Procurement'
 import ProjectDetail from './screens/ProjectDetail'
 import ProjectImages from './screens/ProjectImages'
 import RecentlyDeleted from './screens/RecentlyDeleted'
 import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
+import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
 import ViewBillOfLading from './screens/ViewBillOfLading'
+import ViewSalesOrder from './screens/ViewSalesOrder'
 import ViewCustomerSheet from './screens/ViewCustomerSheet'
 import './App.css'
 
@@ -43,6 +46,7 @@ function App() {
         <Routes>
           <Route path="/" element={<LocationsList />} />
           <Route path="/all-inventory" element={<AllInventory />} />
+          <Route path="/procurement" element={<Procurement />} />
           <Route path="/inactive-locations" element={<InactiveLocations />} />
           <Route path="/recently-deleted" element={<RecentlyDeleted />} />
           <Route path="/inactive-projects" element={<InactiveProjects />} />
@@ -52,11 +56,13 @@ function App() {
           <Route path="/locations/:siteId" element={<LocationDetail />} />
           <Route path="/locations/:siteId/items/new" element={<NewItem />} />
           <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
+          <Route path="/locations/:siteId/bol/from-sales-orders" element={<SelectSoItemsForBol />} />
           <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />
           <Route path="/locations/:siteId/customer-sheet/new" element={<NewCustomerSheet />} />
           <Route path="/locations/:siteId/customer-sheet/:sheetId" element={<ViewCustomerSheet />} />
           <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />
           <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
+          <Route path="/locations/:siteId/sales-orders/:soNumber" element={<ViewSalesOrder />} />
         </Routes>
       </BrowserRouter>
     </LoginGate>

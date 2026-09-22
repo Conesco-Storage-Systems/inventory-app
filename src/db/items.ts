@@ -517,3 +517,41 @@ export async function deleteMiscItemGroup(ids: string[]): Promise<void> {
   await db.miscItems.bulkDelete(ids)
   if (existing) await touchSiteUpdated(existing.siteId)
 }
+
+const ITEM_TABLE_NAMES: Record<ItemType, 'beams' | 'uprights' | 'wireDecks' | 'miscItems'> = {
+  beam: 'beams',
+  upright: 'uprights',
+  wireDeck: 'wireDecks',
+  misc: 'miscItems',
+}
+
+// Used when a Sales Order line item is tied to a grouped inventory row —
+// removes `amount` from across that group's underlying raw records
+// (a grouped row can span several), oldest-first. Throws if the group
+// doesn't actually have enough on hand, so the caller can surface that
+// rather than silently deducting less than expected.
+export async function deductGroupQuantity(itemType: ItemType, ids: string[], amount: number): Promise<void> {
+  const table = db.table(ITEM_TABLE_NAMES[itemType])
+  const records = await table.bulkGet(ids)
+  const now = Date.now()
+  let remaining = amount
+  let siteId = ''
+
+  for (const record of records) {
+    if (!record || remaining <= 0) continue
+    siteId = record.siteId
+    const take = Math.min(record.quantity, remaining)
+    if (take <= 0) continue
+    remaining -= take
+    await table.update(record.id, {
+      quantity: record.quantity - take,
+      updatedAt: now,
+      syncStatus: 'pending',
+    })
+  }
+
+  if (remaining > 0) {
+    throw new Error('Not enough quantity on hand to deduct that amount.')
+  }
+  if (siteId) await touchSiteUpdated(siteId)
+}

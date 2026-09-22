@@ -261,6 +261,40 @@ export interface CustomerSheet {
   syncStatus: SyncStatus
 }
 
+// A line item imported from a Sales Order report (an Excel export from
+// SalesPad, via "Import Reports" — eventually a live API instead). Starts
+// 'pending' — the Procurement role manually ties it to one specific
+// inventory row at one location, which deducts that quantity immediately
+// and moves the line item off the Procurement page onto that location's
+// Sales Order list. One-to-one only: a line item ties to exactly one row,
+// for its full ordered quantity — no splitting across rows/locations.
+export type SalesOrderLineItemStatus = 'pending' | 'tied'
+
+export interface SalesOrderLineItem {
+  id: string
+  soNumber: string
+  description: string
+  // SalesPad's warehouse code (e.g. "MARICOPA") — shown as a hint for
+  // which location this probably belongs to, but matching is still manual;
+  // warehouse codes don't necessarily match a Site's name exactly.
+  warehouseCode: string
+  quantityOrdered: number
+  status: SalesOrderLineItemStatus
+  tiedSiteId: string
+  tiedSiteName: string
+  tiedItemType: ItemType | ''
+  // The underlying raw inventory record ids the deduction was taken from —
+  // a grouped row can span several raw records.
+  tiedItemIds: string[]
+  tiedDescription: string
+  tiedAt: number
+  tiedBy: string
+  importedAt: number
+  createdAt: number
+  updatedAt: number
+  syncStatus: SyncStatus
+}
+
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
@@ -275,6 +309,7 @@ export type SyncTable =
   | 'projectPhotos'
   | 'billsOfLading'
   | 'customerSheets'
+  | 'salesOrderLineItems'
 
 export interface PendingDelete {
   id: string

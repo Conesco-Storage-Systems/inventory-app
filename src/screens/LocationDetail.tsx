@@ -32,6 +32,7 @@ import {
 } from '../db/items'
 import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
+import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
 import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { exportSitePhotosZip } from '../export/exportSitePhotosZip'
@@ -61,6 +62,20 @@ export default function LocationDetail() {
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
   const bols = useLiveQuery(() => (siteId ? listBolsBySite(siteId) : []), [siteId]) ?? []
   const customerSheets = useLiveQuery(() => (siteId ? listCustomerSheetsBySite(siteId) : []), [siteId]) ?? []
+  const salesOrderLineItems = useLiveQuery(() => (siteId ? listTiedSalesOrderLineItemsBySite(siteId) : []), [siteId]) ?? []
+  const salesOrderGroups = (() => {
+    const bySoNumber = new Map<string, { soNumber: string; count: number; latestTiedAt: number }>()
+    for (const li of salesOrderLineItems) {
+      const existing = bySoNumber.get(li.soNumber)
+      if (existing) {
+        existing.count += 1
+        existing.latestTiedAt = Math.max(existing.latestTiedAt, li.tiedAt)
+      } else {
+        bySoNumber.set(li.soNumber, { soNumber: li.soNumber, count: 1, latestTiedAt: li.tiedAt })
+      }
+    }
+    return Array.from(bySoNumber.values()).sort((a, b) => b.latestTiedAt - a.latestTiedAt)
+  })()
 
   const toolbarObserverRef = useRef<IntersectionObserver | null>(null)
   const [toolbarStuck, setToolbarStuck] = useState(false)
@@ -615,32 +630,33 @@ export default function LocationDetail() {
         </div>
       )}
 
-      {bols.length > 0 && (
-        <details className="item-section collapsible-section">
-          <summary className="collapsible-section-summary">Bills of Lading ({bols.length})</summary>
-          <ul className="location-list location-list--compact">
-            {bols.map((bol) => (
-              <li key={bol.id} className="location-list-row bol-list-row">
-                <div className="location-list-info">
-                  <Link to={`/locations/${site.id}/bol/${bol.id}`}>
-                    {bol.referenceDoc || 'No Reference #'} - {bol.date || 'Undated'} -{' '}
-                    {bol.shippedAt ? 'Shipped' : 'Open'}
-                  </Link>
-                </div>
-                {permissions.generateBillOfLading && (
-                  <button
-                    type="button"
-                    className="delete-button"
-                    onClick={() => setDeletingBolId(bol.id)}
-                  >
-                    Delete
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <details className="item-section collapsible-section">
+        <summary className="collapsible-section-summary">Bills of Lading ({bols.length})</summary>
+        <ul className="location-list location-list--compact">
+          {permissions.generateBillOfLading && (
+            <li className="location-list-row">
+              <div className="location-list-info">
+                <Link to={`/locations/${site.id}/bol/from-sales-orders`}>Generate a new BOL</Link>
+              </div>
+            </li>
+          )}
+          {bols.map((bol) => (
+            <li key={bol.id} className="location-list-row bol-list-row">
+              <div className="location-list-info">
+                <Link to={`/locations/${site.id}/bol/${bol.id}`}>
+                  {bol.referenceDoc || 'No Reference #'} - {bol.date || 'Undated'} -{' '}
+                  {bol.shippedAt ? 'Shipped' : 'Open'}
+                </Link>
+              </div>
+              {permissions.generateBillOfLading && (
+                <button type="button" className="delete-button" onClick={() => setDeletingBolId(bol.id)}>
+                  Delete
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </details>
 
       {customerSheets.length > 0 && (
         <details className="item-section collapsible-section">
@@ -664,6 +680,24 @@ export default function LocationDetail() {
                     Delete
                   </button>
                 )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {salesOrderGroups.length > 0 && (
+        <details className="item-section collapsible-section">
+          <summary className="collapsible-section-summary">Sales Orders ({salesOrderGroups.length})</summary>
+          <ul className="location-list location-list--compact">
+            {salesOrderGroups.map((group) => (
+              <li key={group.soNumber} className="location-list-row">
+                <div className="location-list-info">
+                  <Link to={`/locations/${site.id}/sales-orders/${encodeURIComponent(group.soNumber)}`}>
+                    SO #{group.soNumber} — {group.count} item{group.count === 1 ? '' : 's'} — last tied{' '}
+                    {new Date(group.latestTiedAt).toLocaleDateString()}
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>
@@ -697,20 +731,6 @@ export default function LocationDetail() {
               </p>
             )}
             <div className="selection-actions">
-              {permissions.generateBillOfLading && (
-                selectedItems.length > 0 ? (
-                  <Link
-                    to={`/locations/${site.id}/bol/new`}
-                    state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
-                  >
-                    <button type="button">New BOL</button>
-                  </Link>
-                ) : (
-                  <button type="button" disabled>
-                    New BOL
-                  </button>
-                )
-              )}
               {permissions.generateCustomerSheet && (
                 selectedItems.length > 0 ? (
                   <Link

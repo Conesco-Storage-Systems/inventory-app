@@ -181,6 +181,30 @@ create table customer_sheets (
   last_updated_at bigint not null
 );
 
+-- Sales Order line items, tracked on the Director of Procurement's
+-- Procurement page. Imported from a SalesPad Excel export as 'pending',
+-- then tied to exactly one inventory row at one location — that sets
+-- tied_site_id and deducts the quantity, moving the line item onto that
+-- location's own Sales Order list.
+create table sales_order_line_items (
+  id text primary key,
+  so_number text not null default '',
+  description text not null default '',
+  warehouse_code text not null default '',
+  quantity_ordered numeric not null default 0,
+  status text not null default 'pending',
+  tied_site_id text references sites(id) on delete set null,
+  tied_site_name text not null default '',
+  tied_item_type text not null default '',
+  tied_item_ids jsonb not null default '[]',
+  tied_description text not null default '',
+  tied_at bigint not null default 0,
+  tied_by text not null default '',
+  imported_at bigint not null,
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
 -- Row Level Security: must be logged in to read or write anything.
 -- Everyone who's logged in shares full access — this is a shared company
 -- inventory system, not a multi-tenant app with per-user data.
@@ -194,6 +218,7 @@ alter table photos enable row level security;
 alter table project_photos enable row level security;
 alter table bills_of_lading enable row level security;
 alter table customer_sheets enable row level security;
+alter table sales_order_line_items enable row level security;
 
 create policy "Authenticated users can do anything" on projects
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -214,6 +239,8 @@ create policy "Authenticated users can do anything" on project_photos
 create policy "Authenticated users can do anything" on bills_of_lading
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on customer_sheets
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on sales_order_line_items
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- Storage bucket policy: creating the "inventory-photos" bucket in the
@@ -237,7 +264,8 @@ alter table sites add column if not exists deleted_at bigint;
 
 -- Migration: roles & permissions.
 -- One row per authenticated user, holding their role (admin,
--- inventoryManager, sales, or viewer — see src/auth/roles.ts). The existing
+-- inventoryManager, sales, viewer, or directorOfProcurement — see
+-- src/auth/roles.ts). The existing
 -- inventory tables stay open to "any authenticated user" for now — role
 -- enforcement starts at the UI layer; tightening table-level RLS by role is
 -- a later step once the roles below have been tried out for real.
@@ -425,3 +453,32 @@ alter table bills_of_lading add column if not exists carrier_signed_at bigint no
 -- and Carrier have signed, and confirms the shipment as an intentional
 -- final step.
 alter table bills_of_lading add column if not exists shipped_at bigint not null default 0;
+
+-- Migration: Sales Order line items — the Director of Procurement's
+-- tracking page. Imported from a SalesPad Excel export (eventually a live
+-- API) as 'pending', then tied to exactly one inventory row at one
+-- location, which deducts that quantity
+-- and moves the line item onto that location's own Sales Order list.
+create table if not exists sales_order_line_items (
+  id text primary key,
+  so_number text not null default '',
+  description text not null default '',
+  warehouse_code text not null default '',
+  quantity_ordered numeric not null default 0,
+  status text not null default 'pending',
+  tied_site_id text references sites(id) on delete set null,
+  tied_site_name text not null default '',
+  tied_item_type text not null default '',
+  tied_item_ids jsonb not null default '[]',
+  tied_description text not null default '',
+  tied_at bigint not null default 0,
+  tied_by text not null default '',
+  imported_at bigint not null,
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
+alter table sales_order_line_items enable row level security;
+
+create policy "Authenticated users can do anything" on sales_order_line_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);

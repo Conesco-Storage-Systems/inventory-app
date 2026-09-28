@@ -95,22 +95,32 @@ export interface TieSalesOrderLineItemInput {
   tiedDescription: string
 }
 
+// Deducting inventory and marking the line item tied must succeed or fail
+// together — otherwise a failure between the two steps (a closed tab, a
+// browser crash) could leave inventory deducted while the line item still
+// shows 'pending', and retrying would deduct it a second time.
 export async function tieSalesOrderLineItem(input: TieSalesOrderLineItemInput): Promise<void> {
-  const lineItem = await db.salesOrderLineItems.get(input.lineItemId)
-  if (!lineItem || lineItem.status !== 'pending') return
+  await db.transaction(
+    'rw',
+    [db.salesOrderLineItems, db.beams, db.uprights, db.wireDecks, db.miscItems, db.sites],
+    async () => {
+      const lineItem = await db.salesOrderLineItems.get(input.lineItemId)
+      if (!lineItem || lineItem.status !== 'pending') return
 
-  await deductGroupQuantity(input.itemType, input.itemIds, lineItem.quantityOrdered)
+      await deductGroupQuantity(input.itemType, input.itemIds, lineItem.quantityOrdered)
 
-  await db.salesOrderLineItems.update(input.lineItemId, {
-    status: 'tied',
-    tiedSiteId: input.siteId,
-    tiedSiteName: input.siteName,
-    tiedItemType: input.itemType,
-    tiedItemIds: input.itemIds,
-    tiedDescription: input.tiedDescription,
-    tiedAt: Date.now(),
-    tiedBy: getEditorName(),
-    updatedAt: Date.now(),
-    syncStatus: 'pending',
-  })
+      await db.salesOrderLineItems.update(input.lineItemId, {
+        status: 'tied',
+        tiedSiteId: input.siteId,
+        tiedSiteName: input.siteName,
+        tiedItemType: input.itemType,
+        tiedItemIds: input.itemIds,
+        tiedDescription: input.tiedDescription,
+        tiedAt: Date.now(),
+        tiedBy: getEditorName(),
+        updatedAt: Date.now(),
+        syncStatus: 'pending',
+      })
+    },
+  )
 }

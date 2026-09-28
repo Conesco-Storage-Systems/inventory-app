@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
+import { canSeeProject } from '../db/projects'
 import RestoreProjectDialog from '../components/RestoreProjectDialog'
 import { useRole } from '../state/RoleContext'
 
@@ -14,9 +15,11 @@ function daysRemaining(deletedAt: number): number {
 }
 
 export default function RecentlyDeletedProjects() {
-  const { permissions } = useRole()
+  const { permissions, userId } = useRole()
   const projects = useLiveQuery(() => db.projects.orderBy('name').toArray(), []) ?? []
-  const deletedProjects = projects.filter((project) => !!project.deletedAt)
+  const deletedProjects = projects
+    .filter((project) => !!project.deletedAt)
+    .filter((project) => canSeeProject(project, userId))
   const [restoringProject, setRestoringProject] = useState<{ id: string; name: string } | null>(null)
 
   return (

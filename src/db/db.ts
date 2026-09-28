@@ -11,6 +11,8 @@ import type {
   Project,
   ProjectPhoto,
   SalesOrderLineItem,
+  SalesQuote,
+  SalesQuoteLineItem,
   Site,
   Upright,
   WireDeck,
@@ -31,6 +33,8 @@ class InventoryDB extends Dexie {
   billsOfLading!: Table<BillOfLading, string>
   customerSheets!: Table<CustomerSheet, string>
   salesOrderLineItems!: Table<SalesOrderLineItem, string>
+  salesQuotes!: Table<SalesQuote, string>
+  salesQuoteLineItems!: Table<SalesQuoteLineItem, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -306,6 +310,31 @@ class InventoryDB extends Dexie {
       billsOfLading: 'id, siteId, createdAt, syncStatus',
       customerSheets: 'id, siteId, createdAt, syncStatus',
       salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+    })
+    // Adds Sales Quotes — a sales person builds one for a customer, holds
+    // inventory groups against it (never touching the item's own quantity;
+    // "available" is always quantity minus active holds), and can release
+    // a hold later by deleting it, no reconciliation needed.
+    this.version(13).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
     })
   }
 }

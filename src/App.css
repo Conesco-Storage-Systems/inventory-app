@@ -666,6 +666,16 @@ button {
   font-weight: 500;
 }
 
+/* Divider row inside a table body that separates a subgroup (e.g. "On
+   Hold" rows) from the rows above it, without splitting into a second
+   table. */
+.item-table-group-row td {
+  background: var(--code-bg);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .save-item-row {
   margin-top: 24px;
   margin-bottom: 40px;

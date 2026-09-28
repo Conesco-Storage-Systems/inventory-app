@@ -7,6 +7,9 @@ create table projects (
   name text not null,
   active boolean not null default true,
   deleted_at bigint,
+  owner_id uuid references auth.users(id) on delete set null,
+  owner_email text not null default '',
+  shared_with jsonb not null default '[]',
   created_at bigint not null,
   last_updated_by text not null default '',
   last_updated_at bigint not null
@@ -205,6 +208,39 @@ create table sales_order_line_items (
   updated_at bigint not null
 );
 
+-- A Sales Quote a sales person is building for a customer. Holding
+-- inventory against it never touches the item's own quantity — "available"
+-- is always quantity minus active holds — so canceling a quote (or one of
+-- its line items) is just deleting a row, nothing to reconcile.
+create table sales_quotes (
+  id text primary key,
+  quote_number text not null default '',
+  customer_name text not null default '',
+  customer_address text not null default '',
+  notes text not null default '',
+  created_by_id uuid references auth.users(id) on delete set null,
+  created_by_email text not null default '',
+  canceled_at bigint,
+  created_at bigint not null,
+  last_updated_at bigint not null
+);
+
+-- One held inventory group on a quote. A row here only ever exists while
+-- its hold is active — canceling it deletes the row outright.
+create table sales_quote_line_items (
+  id text primary key,
+  quote_id text not null references sales_quotes(id) on delete cascade,
+  quote_number text not null default '',
+  site_id text references sites(id) on delete set null,
+  site_name text not null default '',
+  item_type text not null default '',
+  item_ids jsonb not null default '[]',
+  description text not null default '',
+  quantity_held numeric not null default 0,
+  held_by_email text not null default '',
+  created_at bigint not null
+);
+
 -- Row Level Security: must be logged in to read or write anything.
 -- Everyone who's logged in shares full access — this is a shared company
 -- inventory system, not a multi-tenant app with per-user data.
@@ -219,6 +255,8 @@ alter table project_photos enable row level security;
 alter table bills_of_lading enable row level security;
 alter table customer_sheets enable row level security;
 alter table sales_order_line_items enable row level security;
+alter table sales_quotes enable row level security;
+alter table sales_quote_line_items enable row level security;
 
 create policy "Authenticated users can do anything" on projects
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -241,6 +279,10 @@ create policy "Authenticated users can do anything" on bills_of_lading
 create policy "Authenticated users can do anything" on customer_sheets
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on sales_order_line_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on sales_quotes
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on sales_quote_line_items
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- Storage bucket policy: creating the "inventory-photos" bucket in the
@@ -327,6 +369,13 @@ create table if not exists projects (
 
 alter table projects add column if not exists active boolean not null default true;
 alter table projects add column if not exists deleted_at bigint;
+
+-- Migration: Projects become person-specific — only the owner and whoever
+-- they've shared it with see it. An empty owner_id means "created before
+-- this existed" and stays visible to everyone rather than disappearing.
+alter table projects add column if not exists owner_id uuid references auth.users(id) on delete set null;
+alter table projects add column if not exists owner_email text not null default '';
+alter table projects add column if not exists shared_with jsonb not null default '[]';
 
 alter table projects enable row level security;
 
@@ -481,4 +530,43 @@ create table if not exists sales_order_line_items (
 alter table sales_order_line_items enable row level security;
 
 create policy "Authenticated users can do anything" on sales_order_line_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: Sales Quotes — a sales person builds one for a customer and
+-- holds inventory groups against it. Holding never touches the item's own
+-- quantity ("available" is always quantity minus active holds), so
+-- canceling a quote or one of its line items is just deleting a row.
+create table if not exists sales_quotes (
+  id text primary key,
+  quote_number text not null default '',
+  customer_name text not null default '',
+  customer_address text not null default '',
+  notes text not null default '',
+  created_by_id uuid references auth.users(id) on delete set null,
+  created_by_email text not null default '',
+  canceled_at bigint,
+  created_at bigint not null,
+  last_updated_at bigint not null
+);
+
+create table if not exists sales_quote_line_items (
+  id text primary key,
+  quote_id text not null references sales_quotes(id) on delete cascade,
+  quote_number text not null default '',
+  site_id text references sites(id) on delete set null,
+  site_name text not null default '',
+  item_type text not null default '',
+  item_ids jsonb not null default '[]',
+  description text not null default '',
+  quantity_held numeric not null default 0,
+  held_by_email text not null default '',
+  created_at bigint not null
+);
+
+alter table sales_quotes enable row level security;
+alter table sales_quote_line_items enable row level security;
+
+create policy "Authenticated users can do anything" on sales_quotes
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on sales_quote_line_items
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

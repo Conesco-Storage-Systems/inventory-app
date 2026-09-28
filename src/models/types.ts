@@ -50,6 +50,11 @@ export interface Site {
   syncStatus: SyncStatus
 }
 
+export interface ProjectShare {
+  id: string
+  email: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -60,6 +65,14 @@ export interface Project {
   // Same soft-delete pattern as Site — moves to "Recently Deleted" for 60
   // days before being permanently purged.
   deletedAt?: number
+  // Projects are person-specific — only the owner and whoever they've
+  // shared it with see it (Admin included; ownership isn't role-based).
+  // An empty ownerId means "created before this existed" and stays visible
+  // to everyone rather than suddenly disappearing from anyone's screen.
+  // Only the owner can change who it's shared with.
+  ownerId?: string
+  ownerEmail?: string
+  sharedWith?: ProjectShare[]
   syncStatus: SyncStatus
 }
 
@@ -295,6 +308,49 @@ export interface SalesOrderLineItem {
   syncStatus: SyncStatus
 }
 
+// A Sales Quote a sales person is building for a customer. Holding
+// inventory against it never touches the item's own quantity — "available"
+// is always computed as quantity minus the sum of active holds — so
+// canceling a quote or one of its line items is just deleting a row, with
+// nothing to reconcile.
+export interface SalesQuote {
+  id: string
+  quoteNumber: string
+  customerName: string
+  customerAddress: string
+  notes: string
+  createdById: string
+  createdByEmail: string
+  // Set when the whole quote is canceled — its line items (holds) are
+  // deleted at the same time, so a canceled quote never has any.
+  canceledAt?: number
+  createdAt: number
+  lastUpdatedAt: number
+  syncStatus: SyncStatus
+}
+
+// One held inventory group on a quote. Only ever exists while its hold is
+// active — canceling a line item deletes this row outright rather than
+// marking it canceled, so "every row in this table" is always the current
+// list of active holds.
+export interface SalesQuoteLineItem {
+  id: string
+  quoteId: string
+  quoteNumber: string
+  siteId: string
+  siteName: string
+  itemType: ItemType
+  // The grouped row's raw record ids at the moment it was held — used to
+  // match this hold back to a live inventory row later (by overlap, since
+  // the row could have been edited/re-split since).
+  itemIds: string[]
+  description: string
+  quantityHeld: number
+  heldByEmail: string
+  createdAt: number
+  syncStatus: SyncStatus
+}
+
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
@@ -310,6 +366,8 @@ export type SyncTable =
   | 'billsOfLading'
   | 'customerSheets'
   | 'salesOrderLineItems'
+  | 'salesQuotes'
+  | 'salesQuoteLineItems'
 
 export interface PendingDelete {
   id: string

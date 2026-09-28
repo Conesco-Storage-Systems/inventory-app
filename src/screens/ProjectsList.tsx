@@ -1,33 +1,40 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import { canSeeProject } from '../db/projects'
+import AddProjectDialog from '../components/AddProjectDialog'
 import DeleteProjectDialog from '../components/DeleteProjectDialog'
-import MarkProjectActiveDialog from '../components/MarkProjectActiveDialog'
+import MarkProjectInactiveDialog from '../components/MarkProjectInactiveDialog'
 import { useRole } from '../state/RoleContext'
 
-export default function InactiveProjects() {
+export default function ProjectsList() {
   const { permissions, userId } = useRole()
+  const navigate = useNavigate()
   const projects = useLiveQuery(() => db.projects.orderBy('name').toArray(), []) ?? []
-  const inactiveProjects = projects
-    .filter((project) => project.active === false && !project.deletedAt)
+  const activeProjects = projects
+    .filter((project) => project.active !== false && !project.deletedAt)
     .filter((project) => canSeeProject(project, userId))
   const [deletingProject, setDeletingProject] = useState<{ id: string; name: string } | null>(null)
-  const [markingActiveProjectId, setMarkingActiveProjectId] = useState<string | null>(null)
+  const [markingInactiveProjectId, setMarkingInactiveProjectId] = useState<string | null>(null)
 
   return (
     <main className="page">
       <p>
-        <Link to="/">← Locations</Link>
+        <Link to="/">← Back</Link>
       </p>
-      <h1>Inactive Projects</h1>
+      <div className="page-header">
+        <h1>Projects</h1>
+        {permissions.manageLocations && (
+          <AddProjectDialog onCreated={(projectId) => navigate(`/projects/${projectId}`)} />
+        )}
+      </div>
 
-      {inactiveProjects.length === 0 ? (
-        <p>No inactive projects.</p>
+      {activeProjects.length === 0 ? (
+        <p>No projects yet. Add one to get started.</p>
       ) : (
         <ul className="location-list">
-          {inactiveProjects.map((project) => (
+          {activeProjects.map((project) => (
             <li key={project.id} className="location-list-row">
               <div className="location-list-info">
                 <Link to={`/projects/${project.id}`}>{project.name}</Link>
@@ -35,8 +42,8 @@ export default function InactiveProjects() {
               {(permissions.manageLocations || permissions.deleteLocations) && (
                 <div className="location-list-actions">
                   {permissions.manageLocations && (
-                    <button type="button" onClick={() => setMarkingActiveProjectId(project.id)}>
-                      Mark as Active
+                    <button type="button" onClick={() => setMarkingInactiveProjectId(project.id)}>
+                      Mark as Inactive
                     </button>
                   )}
                   {permissions.deleteLocations && (
@@ -55,6 +62,12 @@ export default function InactiveProjects() {
         </ul>
       )}
 
+      <p className="inactive-offsites-link">
+        <Link to="/inactive-projects">Inactive Projects</Link>
+        {' · '}
+        <Link to="/recently-deleted-projects">Recently Deleted</Link>
+      </p>
+
       {deletingProject && (
         <DeleteProjectDialog
           projectId={deletingProject.id}
@@ -64,11 +77,11 @@ export default function InactiveProjects() {
         />
       )}
 
-      {markingActiveProjectId && (
-        <MarkProjectActiveDialog
-          projectId={markingActiveProjectId}
-          onClose={() => setMarkingActiveProjectId(null)}
-          onDone={() => setMarkingActiveProjectId(null)}
+      {markingInactiveProjectId && (
+        <MarkProjectInactiveDialog
+          projectId={markingInactiveProjectId}
+          onClose={() => setMarkingInactiveProjectId(null)}
+          onDone={() => setMarkingInactiveProjectId(null)}
         />
       )}
     </main>

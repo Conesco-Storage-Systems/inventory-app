@@ -10,6 +10,8 @@ import type {
   Project,
   ProjectPhoto,
   SalesOrderLineItem,
+  SalesQuote,
+  SalesQuoteLineItem,
   Site,
   Upright,
   WireDeck,
@@ -415,6 +417,9 @@ function projectToRemote(project: Project): Record<string, unknown> {
     name: project.name,
     active: project.active ?? true,
     deleted_at: project.deletedAt ?? null,
+    owner_id: project.ownerId ?? null,
+    owner_email: project.ownerEmail ?? '',
+    shared_with: project.sharedWith ?? [],
     created_at: project.createdAt,
     last_updated_by: project.lastUpdatedBy,
     last_updated_at: project.lastUpdatedAt,
@@ -458,6 +463,9 @@ async function pullProjects(): Promise<void> {
       name: remoteRow.name as string,
       active: remoteRow.active as boolean,
       deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
+      ownerId: (remoteRow.owner_id as string | null) ?? '',
+      ownerEmail: (remoteRow.owner_email as string) ?? '',
+      sharedWith: (remoteRow.shared_with as Project['sharedWith']) ?? [],
       createdAt: remoteRow.created_at as number,
       lastUpdatedBy: remoteRow.last_updated_by as string,
       lastUpdatedAt: updatedAt,
@@ -713,6 +721,133 @@ async function pullSalesOrderLineItems(): Promise<void> {
   setCursor('sales_order_line_items', maxUpdatedAt)
 }
 
+// ---------- sales quotes ----------
+
+function salesQuoteToRemote(quote: SalesQuote): Record<string, unknown> {
+  return {
+    id: quote.id,
+    quote_number: quote.quoteNumber,
+    customer_name: quote.customerName,
+    customer_address: quote.customerAddress,
+    notes: quote.notes,
+    created_by_id: quote.createdById,
+    created_by_email: quote.createdByEmail,
+    canceled_at: quote.canceledAt ?? null,
+    created_at: quote.createdAt,
+    last_updated_at: quote.lastUpdatedAt,
+  }
+}
+
+async function pushSalesQuotes(): Promise<void> {
+  const pending = await db.salesQuotes.where('syncStatus').equals('pending').toArray()
+  for (const quote of pending) {
+    const { error } = await supabase.from('sales_quotes').upsert(salesQuoteToRemote(quote))
+    if (!error) {
+      await db.salesQuotes.update(quote.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push sales_quotes/${quote.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullSalesQuotes(): Promise<void> {
+  const cursor = getCursors().sales_quotes ?? 0
+  const { data, error } = await supabase.from('sales_quotes').select('*').gt('last_updated_at', cursor)
+  if (error) {
+    console.error('[sync] pull sales_quotes failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.last_updated_at)
+    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+
+    const local = await db.salesQuotes.get(remoteRow.id as string)
+    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+      console.warn(`[sync] keeping local salesQuotes/${remoteRow.id} over an older/equal remote change`)
+      continue
+    }
+
+    await db.salesQuotes.put({
+      id: remoteRow.id as string,
+      quoteNumber: remoteRow.quote_number as string,
+      customerName: remoteRow.customer_name as string,
+      customerAddress: remoteRow.customer_address as string,
+      notes: remoteRow.notes as string,
+      createdById: remoteRow.created_by_id as string,
+      createdByEmail: remoteRow.created_by_email as string,
+      canceledAt: (remoteRow.canceled_at as number | null) ?? undefined,
+      createdAt: remoteRow.created_at as number,
+      lastUpdatedAt: updatedAt,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('sales_quotes', maxUpdatedAt)
+}
+
+function salesQuoteLineItemToRemote(li: SalesQuoteLineItem): Record<string, unknown> {
+  return {
+    id: li.id,
+    quote_id: li.quoteId,
+    quote_number: li.quoteNumber,
+    site_id: li.siteId,
+    site_name: li.siteName,
+    item_type: li.itemType,
+    item_ids: li.itemIds,
+    description: li.description,
+    quantity_held: li.quantityHeld,
+    held_by_email: li.heldByEmail,
+    created_at: li.createdAt,
+  }
+}
+
+async function pushSalesQuoteLineItems(): Promise<void> {
+  const pending = await db.salesQuoteLineItems.where('syncStatus').equals('pending').toArray()
+  for (const li of pending) {
+    const { error } = await supabase.from('sales_quote_line_items').upsert(salesQuoteLineItemToRemote(li))
+    if (!error) {
+      await db.salesQuoteLineItems.update(li.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push sales_quote_line_items/${li.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullSalesQuoteLineItems(): Promise<void> {
+  const cursor = getCursors().sales_quote_line_items ?? 0
+  const { data, error } = await supabase.from('sales_quote_line_items').select('*').gt('created_at', cursor)
+  if (error) {
+    console.error('[sync] pull sales_quote_line_items failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxCreatedAt = cursor
+  for (const remoteRow of data) {
+    maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
+    const existing = await db.salesQuoteLineItems.get(remoteRow.id as string)
+    if (existing) continue
+
+    await db.salesQuoteLineItems.put({
+      id: remoteRow.id as string,
+      quoteId: remoteRow.quote_id as string,
+      quoteNumber: remoteRow.quote_number as string,
+      siteId: remoteRow.site_id as string,
+      siteName: remoteRow.site_name as string,
+      itemType: remoteRow.item_type as SalesQuoteLineItem['itemType'],
+      itemIds: (remoteRow.item_ids as string[]) ?? [],
+      description: remoteRow.description as string,
+      quantityHeld: remoteRow.quantity_held as number,
+      heldByEmail: remoteRow.held_by_email as string,
+      createdAt: remoteRow.created_at as number,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('sales_quote_line_items', maxCreatedAt)
+}
+
 // ---------- item photos ----------
 
 async function pushPhotos(): Promise<void> {
@@ -859,6 +994,7 @@ const REMOTE_TABLE_NAMES: Record<string, string> = {
   billsOfLading: 'bills_of_lading',
   customerSheets: 'customer_sheets',
   salesOrderLineItems: 'sales_order_line_items',
+  salesQuoteLineItems: 'sales_quote_line_items',
 }
 
 async function pushPendingDeletes(): Promise<void> {
@@ -903,6 +1039,8 @@ export async function runSync(): Promise<void> {
     await pushBolsOfLading()
     await pushCustomerSheets()
     await pushSalesOrderLineItems()
+    await pushSalesQuotes()
+    await pushSalesQuoteLineItems()
 
     await pullProjects()
     for (const config of ITEM_CONFIGS) await pullItemTable(config)
@@ -912,6 +1050,8 @@ export async function runSync(): Promise<void> {
     await pullBolsOfLading()
     await pullCustomerSheets()
     await pullSalesOrderLineItems()
+    await pullSalesQuotes()
+    await pullSalesQuoteLineItems()
     console.log('[sync] finished')
   } catch (err) {
     console.error('[sync] sync run failed', err)
@@ -942,6 +1082,8 @@ export function startAutoSync(): void {
     'bills_of_lading',
     'customer_sheets',
     'sales_order_line_items',
+    'sales_quotes',
+    'sales_quote_line_items',
   ]
   for (const table of remoteTables) {
     supabase

@@ -24,6 +24,7 @@ export interface Permissions {
   manageSalesOrders: boolean
   holdItemsForOrder: boolean
   viewProcurementDashboard: boolean
+  viewSalesDashboard: boolean
 }
 
 const ROLE_PERMISSIONS: Record<Role, Permissions> = {
@@ -40,6 +41,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     manageSalesOrders: true,
     holdItemsForOrder: true,
     viewProcurementDashboard: true,
+    viewSalesDashboard: true,
   },
   inventoryManager: {
     addItems: true,
@@ -54,6 +56,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     manageSalesOrders: false,
     holdItemsForOrder: false,
     viewProcurementDashboard: false,
+    viewSalesDashboard: false,
   },
   sales: {
     addItems: false,
@@ -68,6 +71,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     manageSalesOrders: true,
     holdItemsForOrder: true,
     viewProcurementDashboard: false,
+    viewSalesDashboard: true,
   },
   viewer: {
     addItems: false,
@@ -82,6 +86,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     manageSalesOrders: false,
     holdItemsForOrder: false,
     viewProcurementDashboard: false,
+    viewSalesDashboard: false,
   },
   // Everything else stays Viewer-level for now — the procurement page
   // (SOs/invoices/BOLs) is being built step by step; more permissions
@@ -99,6 +104,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     manageSalesOrders: false,
     holdItemsForOrder: false,
     viewProcurementDashboard: true,
+    viewSalesDashboard: false,
   },
 }
 

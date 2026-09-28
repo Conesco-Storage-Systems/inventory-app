@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   getCachedAuthedEmail,
+  getCachedAuthedUserId,
   getCurrentSession,
   getMyRole,
   isSessionDefinitivelyInvalid,
   onAuthStateChange,
   setCachedAuthedEmail,
+  setCachedAuthedUserId,
   setNewPassword,
   signIn,
   signOut,
@@ -15,6 +17,7 @@ import { getCachedRole, getPermissions, ROLE_LABELS, setCachedRole, type Role } 
 import { setEditorName } from '../state/editor'
 import { RoleProvider } from '../state/RoleContext'
 import { startAutoSync } from '../sync/syncEngine'
+import { formatDisplayName } from '../utils/displayName'
 import { supabaseConfigured } from '../sync/supabaseClient'
 
 export default function LoginGate({ children }: { children: ReactNode }) {
@@ -32,6 +35,7 @@ export default function LoginGate({ children }: { children: ReactNode }) {
   // reload while offline shows the app immediately instead of waiting on a
   // network call that may never come back.
   const [userEmail, setUserEmail] = useState<string | null>(() => getCachedAuthedEmail())
+  const [userId, setUserId] = useState<string | null>(() => getCachedAuthedUserId())
   // Same offline-resilience reasoning as the cached email: start from
   // whatever role this device last confirmed, so a refetch failing while
   // offline doesn't strip an Inventory Manager down to viewer-only.
@@ -54,6 +58,8 @@ export default function LoginGate({ children }: { children: ReactNode }) {
         if (session?.user.email) {
           setUserEmail(session.user.email)
           setCachedAuthedEmail(session.user.email)
+          setUserId(session.user.id)
+          setCachedAuthedUserId(session.user.id)
           return
         }
         // No live session locally. If we have a cached login, only clear it
@@ -63,6 +69,7 @@ export default function LoginGate({ children }: { children: ReactNode }) {
         if (getCachedAuthedEmail() && (await isSessionDefinitivelyInvalid())) {
           await signOut()
           setUserEmail(null)
+          setUserId(null)
         }
       })
       .catch(() => {
@@ -74,6 +81,8 @@ export default function LoginGate({ children }: { children: ReactNode }) {
       if (session?.user.email) {
         setUserEmail(session.user.email)
         setCachedAuthedEmail(session.user.email)
+        setUserId(session.user.id)
+        setCachedAuthedUserId(session.user.id)
         return
       }
       // supabase-js only fires SIGNED_OUT when it has definitively determined
@@ -83,6 +92,8 @@ export default function LoginGate({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         setCachedAuthedEmail(null)
         setUserEmail(null)
+        setCachedAuthedUserId(null)
+        setUserId(null)
       }
     })
   }, [])
@@ -104,6 +115,8 @@ export default function LoginGate({ children }: { children: ReactNode }) {
   async function handleSignOut() {
     await signOut()
     setUserEmail(null)
+    setUserId(null)
+    setCachedAuthedUserId(null)
     setRole(null)
     setCachedRole(null)
   }
@@ -126,6 +139,8 @@ export default function LoginGate({ children }: { children: ReactNode }) {
     if (session?.user.email) {
       setUserEmail(session.user.email)
       setCachedAuthedEmail(session.user.email)
+      setUserId(session.user.id)
+      setCachedAuthedUserId(session.user.id)
     }
     setLinkType(null)
   }
@@ -187,9 +202,9 @@ export default function LoginGate({ children }: { children: ReactNode }) {
 
   if (userEmail) {
     return (
-      <RoleProvider value={{ role, permissions: getPermissions(role) }}>
+      <RoleProvider value={{ role, permissions: getPermissions(role), userId, userEmail }}>
         <button type="button" className="sign-out-button" onClick={handleSignOut}>
-          Sign out ({userEmail}
+          Sign out ({formatDisplayName(userEmail)}
           {role ? ` · ${ROLE_LABELS[role]}` : ''})
         </button>
         {children}

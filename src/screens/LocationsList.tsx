@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
+import { canSeeProject } from '../db/projects'
 import AddLocationDialog from '../components/AddLocationDialog'
 import AddProjectDialog from '../components/AddProjectDialog'
 import DeleteLocationDialog from '../components/DeleteLocationDialog'
@@ -11,14 +12,16 @@ import MarkProjectInactiveDialog from '../components/MarkProjectInactiveDialog'
 import { useRole } from '../state/RoleContext'
 
 export default function LocationsList() {
-  const { permissions } = useRole()
+  const { permissions, userId } = useRole()
   const navigate = useNavigate()
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
   const projects = useLiveQuery(() => db.projects.orderBy('name').toArray(), []) ?? []
   // Project-owned locations live under their project's own page, not here —
   // that material belongs to the customer, not Conesco's sellable stock.
   const activeSites = sites.filter((site) => site.active !== false && !site.deletedAt && !site.projectId)
-  const activeProjects = projects.filter((project) => project.active !== false && !project.deletedAt)
+  const activeProjects = projects
+    .filter((project) => project.active !== false && !project.deletedAt)
+    .filter((project) => canSeeProject(project, userId))
   const [deletingSite, setDeletingSite] = useState<{ id: string; name: string } | null>(null)
   const [markingInactiveSiteId, setMarkingInactiveSiteId] = useState<string | null>(null)
   const [deletingProject, setDeletingProject] = useState<{ id: string; name: string } | null>(null)
@@ -29,6 +32,11 @@ export default function LocationsList() {
       {permissions.viewProcurementDashboard && (
         <p>
           <Link to="/procurement">Procurement</Link>
+        </p>
+      )}
+      {permissions.viewSalesDashboard && (
+        <p>
+          <Link to="/sales-dashboard">Sales Dashboard</Link>
         </p>
       )}
       <div className="locations-projects-grid">

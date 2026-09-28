@@ -4,6 +4,7 @@ import LoginGate from './components/LoginGate'
 import { purgeExpiredDeletedSites } from './db/locations'
 import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
+import GenerateSalesQuote from './screens/GenerateSalesQuote'
 import InactiveLocations from './screens/InactiveLocations'
 import InactiveProjects from './screens/InactiveProjects'
 import ItemPhotos from './screens/ItemPhotos'
@@ -15,11 +16,14 @@ import NewItem from './screens/NewItem'
 import Procurement from './screens/Procurement'
 import ProjectDetail from './screens/ProjectDetail'
 import ProjectImages from './screens/ProjectImages'
+import ProjectsList from './screens/ProjectsList'
 import RecentlyDeleted from './screens/RecentlyDeleted'
 import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
+import SalesDashboard from './screens/SalesDashboard'
 import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
 import ViewBillOfLading from './screens/ViewBillOfLading'
 import ViewSalesOrder from './screens/ViewSalesOrder'
+import ViewSalesQuote from './screens/ViewSalesQuote'
 import ViewCustomerSheet from './screens/ViewCustomerSheet'
 import './App.css'
 
@@ -47,6 +51,10 @@ function App() {
           <Route path="/" element={<LocationsList />} />
           <Route path="/all-inventory" element={<AllInventory />} />
           <Route path="/procurement" element={<Procurement />} />
+          <Route path="/sales-dashboard" element={<SalesDashboard />} />
+          <Route path="/projects" element={<ProjectsList />} />
+          <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />
+          <Route path="/sales-quotes/:quoteId/generate" element={<GenerateSalesQuote />} />
           <Route path="/inactive-locations" element={<InactiveLocations />} />
           <Route path="/recently-deleted" element={<RecentlyDeleted />} />
           <Route path="/inactive-projects" element={<InactiveProjects />} />

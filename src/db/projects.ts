@@ -2,10 +2,21 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
 import { enqueuePendingDelete } from './pendingDeletes'
 import { getEditorName } from '../state/editor'
+import type { Project } from '../models/types'
 
 const RECENTLY_DELETED_RETENTION_MS = 60 * 24 * 60 * 60 * 1000
 
-export async function createProject(name: string): Promise<string> {
+// Projects are person-specific. No owner set yet (created before this
+// existed) means visible to everyone, same as always — nothing vanishes
+// from anyone's screen just because this feature shipped.
+export function canSeeProject(project: Project, userId: string | null): boolean {
+  if (!project.ownerId) return true
+  if (!userId) return false
+  if (project.ownerId === userId) return true
+  return (project.sharedWith ?? []).some((s) => s.id === userId)
+}
+
+export async function createProject(name: string, ownerId: string, ownerEmail: string): Promise<string> {
   const id = uuidv4()
   const now = Date.now()
   await db.projects.add({
@@ -15,9 +26,39 @@ export async function createProject(name: string): Promise<string> {
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: now,
     active: true,
+    ownerId,
+    ownerEmail,
+    sharedWith: [],
     syncStatus: 'pending',
   })
   return id
+}
+
+// Only the owner may call these — enforced by the UI (ProjectDetail only
+// shows the share controls to the owner), same as the rest of this app's
+// permission checks.
+export async function shareProject(projectId: string, userId: string, email: string): Promise<void> {
+  const project = await db.projects.get(projectId)
+  if (!project) return
+  const sharedWith = project.sharedWith ?? []
+  if (sharedWith.some((s) => s.id === userId)) return
+  await db.projects.update(projectId, {
+    sharedWith: [...sharedWith, { id: userId, email }],
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
+export async function unshareProject(projectId: string, userId: string): Promise<void> {
+  const project = await db.projects.get(projectId)
+  if (!project) return
+  await db.projects.update(projectId, {
+    sharedWith: (project.sharedWith ?? []).filter((s) => s.id !== userId),
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
 }
 
 export async function listProjects() {

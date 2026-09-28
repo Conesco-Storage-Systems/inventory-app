@@ -4,6 +4,9 @@ import ColumnPickerDialog from './ColumnPickerDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { MiscItemRow } from '../db/groupMiscItems'
+import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
+import type { SalesQuoteLineItem } from '../models/types'
+import { formatDisplayName } from '../utils/displayName'
 
 type MiscItemColumnKey =
   | 'quantity'
@@ -30,21 +33,31 @@ const DEFAULT_MISC_ITEM_COLUMN_ORDER: MiscItemColumnKey[] = [
   'photos',
 ]
 
+type HeldMiscItemRow = MiscItemRow & { heldByEmail?: string }
+
 interface MiscItemTableProps {
-  rows: MiscItemRow[]
+  rows: HeldMiscItemRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: MiscItemRow) => void
+  holds?: SalesQuoteLineItem[]
 }
 
-export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSelect }: MiscItemTableProps) {
+export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [] }: MiscItemTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } =
     useColumnConfig<MiscItemColumnKey>('miscItemColumns', DEFAULT_MISC_ITEM_COLUMN_ORDER)
   const [draggingKey, setDraggingKey] = useState<MiscItemColumnKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const columns: Record<MiscItemColumnKey, { label: string; render: (row: MiscItemRow) => ReactNode }> = {
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
+  const primaryRows = rows.filter((row) => !row.heldByEmail)
+  const heldRows = rows.filter((row) => row.heldByEmail)
+
+  const columns: Record<MiscItemColumnKey, { label: string; render: (row: HeldMiscItemRow) => ReactNode }> = {
+    quantity: {
+      label: 'Quantity',
+      render: (row) =>
+        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+    },
     description: { label: 'Item', render: (row) => row.description || '—' },
     itemDescription: {
       label: 'Item Description',
@@ -80,6 +93,7 @@ export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSele
           <thead>
             <tr>
               <th className="col-edit"></th>
+              <th></th>
               {visibleOrder.map((key) => (
                 <DraggableColumnHeader
                   key={key}
@@ -99,10 +113,10 @@ export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSele
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={visibleOrder.length + 1}>No items match your search.</td>
+                <td colSpan={visibleOrder.length + 2}>No items match your search.</td>
               </tr>
             )}
-            {rows.map((row) => (
+            {primaryRows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -111,6 +125,25 @@ export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSele
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>
+                <td></td>
+                {visibleOrder.map((key) => (
+                  <td key={key} className={key === 'notes' || key === 'itemDescription' ? 'col-notes' : undefined}>
+                    {columns[key].render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {heldRows.length > 0 && (
+              <tr className="item-table-group-row">
+                <td></td>
+                <td>On Hold</td>
+                <td colSpan={visibleOrder.length}></td>
+              </tr>
+            )}
+            {heldRows.map((row) => (
+              <tr key={row.key}>
+                <td></td>
+                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' || key === 'itemDescription' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

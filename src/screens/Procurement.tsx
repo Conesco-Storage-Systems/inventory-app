@@ -13,6 +13,7 @@ import {
   listPendingSalesOrderLineItems,
   tieSalesOrderLineItem,
 } from '../db/salesOrders'
+import { computeAvailableQuantity } from '../db/salesQuotes'
 import { getSoReportSheetNames, parseSoReportWorkbook, type SoReportParseResult } from '../import/parseSoReport'
 import type { ItemType } from '../models/types'
 import { useRole } from '../state/RoleContext'
@@ -62,6 +63,7 @@ export default function Procurement() {
 
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
   const pendingLineItems = useLiveQuery(() => listPendingSalesOrderLineItems(), []) ?? []
+  const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const [tyingId, setTyingId] = useState<string | null>(null)
   const [tySiteId, setTySiteId] = useState('')
@@ -83,28 +85,28 @@ export default function Procurement() {
           itemType: 'beam' as ItemType,
           itemIds: row.ids,
           description: describeBeam(row),
-          quantity: row.quantity,
+          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
         })),
         ...groupUprights(uprights).map((row) => ({
           key: `upright:${row.key}`,
           itemType: 'upright' as ItemType,
           itemIds: row.ids,
           description: describeUpright(row),
-          quantity: row.quantity,
+          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
         })),
         ...groupWireDecks(wireDecks).map((row) => ({
           key: `wireDeck:${row.key}`,
           itemType: 'wireDeck' as ItemType,
           itemIds: row.ids,
           description: describeWireDeck(row),
-          quantity: row.quantity,
+          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
         })),
         ...groupMiscItems(miscItems).map((row) => ({
           key: `misc:${row.key}`,
           itemType: 'misc' as ItemType,
           itemIds: row.ids,
           description: describeMisc(row),
-          quantity: row.quantity,
+          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
         })),
       ]
     : []

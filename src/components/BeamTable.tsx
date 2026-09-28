@@ -4,6 +4,9 @@ import ColumnPickerDialog from './ColumnPickerDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { BeamRow } from '../db/groupBeams'
+import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
+import type { SalesQuoteLineItem } from '../models/types'
+import { formatDisplayName } from '../utils/displayName'
 
 type BeamColumnKey =
   | 'quantity'
@@ -40,14 +43,17 @@ const DEFAULT_BEAM_COLUMN_ORDER: BeamColumnKey[] = [
   'photos',
 ]
 
+type HeldBeamRow = BeamRow & { heldByEmail?: string }
+
 interface BeamTableProps {
-  rows: BeamRow[]
+  rows: HeldBeamRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: BeamRow) => void
+  holds?: SalesQuoteLineItem[]
 }
 
-export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }: BeamTableProps) {
+export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [] }: BeamTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<BeamColumnKey>(
     'beamColumns',
     DEFAULT_BEAM_COLUMN_ORDER,
@@ -55,8 +61,15 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }
   const [draggingKey, setDraggingKey] = useState<BeamColumnKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const columns: Record<BeamColumnKey, { label: string; render: (row: BeamRow) => ReactNode }> = {
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
+  const primaryRows = rows.filter((row) => !row.heldByEmail)
+  const heldRows = rows.filter((row) => row.heldByEmail)
+
+  const columns: Record<BeamColumnKey, { label: string; render: (row: HeldBeamRow) => ReactNode }> = {
+    quantity: {
+      label: 'Quantity',
+      render: (row) =>
+        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+    },
     style: { label: 'Style', render: (row) => row.style },
     widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
     color: { label: 'Color', render: (row) => row.color },
@@ -94,6 +107,7 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }
           <thead>
             <tr>
               <th className="col-edit"></th>
+              <th></th>
               {visibleOrder.map((key) => (
                 <DraggableColumnHeader
                   key={key}
@@ -113,10 +127,10 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={visibleOrder.length + 1}>No beams match your search.</td>
+                <td colSpan={visibleOrder.length + 2}>No beams match your search.</td>
               </tr>
             )}
-            {rows.map((row) => (
+            {primaryRows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -125,6 +139,25 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect }
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>
+                <td></td>
+                {visibleOrder.map((key) => (
+                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
+                    {columns[key].render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {heldRows.length > 0 && (
+              <tr className="item-table-group-row">
+                <td></td>
+                <td>On Hold</td>
+                <td colSpan={visibleOrder.length}></td>
+              </tr>
+            )}
+            {heldRows.map((row) => (
+              <tr key={row.key}>
+                <td></td>
+                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

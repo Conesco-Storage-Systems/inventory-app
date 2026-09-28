@@ -3,6 +3,7 @@ import type { Role } from './roles'
 import { supabase } from '../sync/supabaseClient'
 
 const CACHED_EMAIL_KEY = 'inventoryApp.lastAuthedEmail'
+const CACHED_USER_ID_KEY = 'inventoryApp.lastAuthedUserId'
 
 // Tracks "this device has successfully signed in before" separately from
 // Supabase's own session object, so a failed background token refresh while
@@ -24,6 +25,31 @@ export function setCachedAuthedEmail(email: string | null): void {
   } catch {
     // ignore write failures (e.g. storage disabled)
   }
+}
+
+export function getCachedAuthedUserId(): string | null {
+  try {
+    return localStorage.getItem(CACHED_USER_ID_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setCachedAuthedUserId(userId: string | null): void {
+  try {
+    if (userId) localStorage.setItem(CACHED_USER_ID_KEY, userId)
+    else localStorage.removeItem(CACHED_USER_ID_KEY)
+  } catch {
+    // ignore write failures (e.g. storage disabled)
+  }
+}
+
+// For the "share this project with" picker — every authenticated user can
+// read every profile row (see the RLS policy on `profiles`).
+export async function listAllProfiles(): Promise<{ id: string; email: string }[]> {
+  const { data, error } = await supabase.from('profiles').select('id, email')
+  if (error || !data) return []
+  return data as { id: string; email: string }[]
 }
 
 export async function signIn(email: string, password: string): Promise<string | null> {

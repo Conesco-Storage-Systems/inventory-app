@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { createProject } from '../db/projects'
+import { useRole } from '../state/RoleContext'
 
 interface AddProjectDialogProps {
   onCreated?: (projectId: string) => void
 }
 
 export default function AddProjectDialog({ onCreated }: AddProjectDialogProps) {
+  const { userId, userEmail } = useRole()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -24,7 +26,7 @@ export default function AddProjectDialog({ onCreated }: AddProjectDialogProps) {
     if (!name.trim()) return
     setSaving(true)
     try {
-      const projectId = await createProject(name)
+      const projectId = await createProject(name, userId ?? '', userEmail ?? '')
       close()
       onCreated?.(projectId)
     } finally {

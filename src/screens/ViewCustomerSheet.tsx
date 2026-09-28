@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getCustomerSheet } from '../db/customerSheets'
 import { bolElementToPdfBlob } from '../export/exportBolToPdf'
 import { saveBlobAs } from '../export/saveBlob'
+import { formatDisplayName } from '../utils/displayName'
 
 function sheetPdfFileName(customerName: string, date: string): string {
   const parts = ['Customer-Sheet', customerName || 'customer', date || 'undated']
@@ -99,7 +100,7 @@ export default function ViewCustomerSheet() {
             <strong>Phone:</strong> {sheet.customerPhone}
           </p>
           <p>
-            <strong>Prepared By:</strong> {sheet.preparedBy}
+            <strong>Prepared By:</strong> {formatDisplayName(sheet.preparedBy)}
           </p>
         </div>
 

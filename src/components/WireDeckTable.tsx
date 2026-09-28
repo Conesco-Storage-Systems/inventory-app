@@ -6,6 +6,9 @@ import FilterOptionList from './FilterOptionList'
 import FilterSection from './FilterSection'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { WireDeckRow } from '../db/groupWireDecks'
+import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
+import type { SalesQuoteLineItem } from '../models/types'
+import { formatDisplayName } from '../utils/displayName'
 
 type WireDeckColumnKey =
   | 'quantity'
@@ -34,15 +37,25 @@ const DEFAULT_WIRE_DECK_COLUMN_ORDER: WireDeckColumnKey[] = [
   'photos',
 ]
 
+type HeldWireDeckRow = WireDeckRow & { heldByEmail?: string }
+
 interface WireDeckTableProps {
-  rows: WireDeckRow[]
+  rows: HeldWireDeckRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: WireDeckRow) => void
   searchActive: boolean
+  holds?: SalesQuoteLineItem[]
 }
 
-export default function WireDeckTable({ rows, siteId, selectedKeys, onToggleSelect, searchActive }: WireDeckTableProps) {
+export default function WireDeckTable({
+  rows,
+  siteId,
+  selectedKeys,
+  onToggleSelect,
+  searchActive,
+  holds = [],
+}: WireDeckTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<WireDeckColumnKey>(
     'wireDeckColumns',
     DEFAULT_WIRE_DECK_COLUMN_ORDER,
@@ -88,14 +101,21 @@ export default function WireDeckTable({ rows, siteId, selectedKeys, onToggleSele
     )
   }
 
+  const primaryRows = displayedRows.filter((row) => !row.heldByEmail)
+  const heldRows = displayedRows.filter((row) => row.heldByEmail)
+
   function clearFilters() {
     setStyleFilter(new Set())
     setChannelFilter(new Set())
     setWidthLengthFilter(new Set())
   }
 
-  const columns: Record<WireDeckColumnKey, { label: string; render: (row: WireDeckRow) => ReactNode }> = {
-    quantity: { label: 'Quantity', render: (row) => row.quantity },
+  const columns: Record<WireDeckColumnKey, { label: string; render: (row: HeldWireDeckRow) => ReactNode }> = {
+    quantity: {
+      label: 'Quantity',
+      render: (row) =>
+        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+    },
     style: { label: 'Style', render: (row) => row.style.join(', ') || '—' },
     widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
     channelCount: { label: 'Number of Channels', render: (row) => row.channelCount },
@@ -201,6 +221,7 @@ export default function WireDeckTable({ rows, siteId, selectedKeys, onToggleSele
           <thead>
             <tr>
               <th className="col-edit"></th>
+              <th></th>
               {visibleOrder.map((key) => (
                 <DraggableColumnHeader
                   key={key}
@@ -220,12 +241,12 @@ export default function WireDeckTable({ rows, siteId, selectedKeys, onToggleSele
           <tbody>
             {displayedRows.length === 0 && (
               <tr>
-                <td colSpan={visibleOrder.length + 1}>
+                <td colSpan={visibleOrder.length + 2}>
                   No wire decks match the current filters{searchActive ? ' or search' : ''}.
                 </td>
               </tr>
             )}
-            {displayedRows.map((row) => (
+            {primaryRows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -234,6 +255,25 @@ export default function WireDeckTable({ rows, siteId, selectedKeys, onToggleSele
                     onChange={() => onToggleSelect(row)}
                   />
                 </td>
+                <td></td>
+                {visibleOrder.map((key) => (
+                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
+                    {columns[key].render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {heldRows.length > 0 && (
+              <tr className="item-table-group-row">
+                <td></td>
+                <td>On Hold</td>
+                <td colSpan={visibleOrder.length}></td>
+              </tr>
+            )}
+            {heldRows.map((row) => (
+              <tr key={row.key}>
+                <td></td>
+                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

@@ -22,6 +22,7 @@ import ProjectsList from './screens/ProjectsList'
 import RecentlyDeleted from './screens/RecentlyDeleted'
 import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
 import SalesDashboard from './screens/SalesDashboard'
+import SalesOrdersList from './screens/SalesOrdersList'
 import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
 import ViewBillOfLading from './screens/ViewBillOfLading'
 import ViewSalesOrder from './screens/ViewSalesOrder'
@@ -54,6 +55,7 @@ function App() {
           <Route path="/all-inventory" element={<AllInventory />} />
           <Route path="/all-inventory/customer-sheet" element={<GenerateInventoryCustomerSheet />} />
           <Route path="/procurement" element={<Procurement />} />
+          <Route path="/sales-orders" element={<SalesOrdersList />} />
           <Route path="/sales-dashboard" element={<SalesDashboard />} />
           <Route path="/projects" element={<ProjectsList />} />
           <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />

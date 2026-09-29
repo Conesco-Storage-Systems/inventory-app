@@ -28,6 +28,11 @@ export default function LocationsList() {
               Procurement
             </Link>
           )}
+          {permissions.viewProcurementDashboard && (
+            <Link className="tab-nav-link" to="/sales-orders">
+              Sales Orders
+            </Link>
+          )}
           {permissions.viewSalesDashboard && (
             <Link className="tab-nav-link" to="/sales-dashboard">
               Sales Dashboard

@@ -6,6 +6,49 @@ import { getEditorName } from '../state/editor'
 import type { ParsedSoLineItem } from '../import/parseSoReport'
 import type { ItemType, SalesOrderLineItem } from '../models/types'
 
+export async function listAllSalesOrderSchedules() {
+  return db.salesOrderSchedules.toArray()
+}
+
+export async function getSalesOrderSchedule(soNumber: string, siteId: string) {
+  return db.salesOrderSchedules.where('[soNumber+siteId]').equals([soNumber, siteId]).first()
+}
+
+// Setting a schedule for a (soNumber, siteId) pair that already has one
+// updates that row instead of creating a duplicate — there's only ever one
+// planned ship date per pair.
+export async function setSalesOrderSchedule(
+  soNumber: string,
+  siteId: string,
+  siteName: string,
+  scheduledShipDate: string,
+): Promise<void> {
+  const now = Date.now()
+  const editorName = getEditorName()
+  const existing = await getSalesOrderSchedule(soNumber, siteId)
+  if (existing) {
+    await db.salesOrderSchedules.update(existing.id, {
+      scheduledShipDate,
+      lastUpdatedBy: editorName,
+      lastUpdatedAt: now,
+      syncStatus: 'pending',
+    })
+    return
+  }
+  await db.salesOrderSchedules.add({
+    id: uuidv4(),
+    soNumber,
+    siteId,
+    siteName,
+    scheduledShipDate,
+    createdBy: editorName,
+    createdAt: now,
+    lastUpdatedBy: editorName,
+    lastUpdatedAt: now,
+    syncStatus: 'pending',
+  })
+}
+
 // Rows already imported (pending OR tied) are matched on these four
 // fields so re-importing an overlapping weekly report (an open SO can
 // show up again in the next week's export) doesn't create duplicates.

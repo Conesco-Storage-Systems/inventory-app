@@ -161,6 +161,7 @@ create table bills_of_lading (
   carrier_signed_at bigint not null default 0,
   shipped_at bigint not null default 0,
   line_items jsonb not null default '[]',
+  source_so_numbers jsonb not null default '[]',
   created_at bigint not null,
   last_updated_by text not null default '',
   last_updated_at bigint not null
@@ -206,6 +207,23 @@ create table sales_order_line_items (
   imported_at bigint not null,
   created_at bigint not null,
   updated_at bigint not null
+);
+
+-- One (Sales Order #, location) pair's planned ship date, set from the
+-- "Schedule Shipment" button on that Sales Order's page — independent of
+-- any Bill of Lading. Unique per (so_number, site_id): scheduling again
+-- for the same pair updates this row instead of creating another one.
+create table sales_order_schedules (
+  id text primary key,
+  so_number text not null default '',
+  site_id text references sites(id) on delete set null,
+  site_name text not null default '',
+  scheduled_ship_date text not null default '',
+  created_by text not null default '',
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null,
+  unique (so_number, site_id)
 );
 
 -- A Sales Quote a sales person is building for a customer. Holding
@@ -255,6 +273,7 @@ alter table project_photos enable row level security;
 alter table bills_of_lading enable row level security;
 alter table customer_sheets enable row level security;
 alter table sales_order_line_items enable row level security;
+alter table sales_order_schedules enable row level security;
 alter table sales_quotes enable row level security;
 alter table sales_quote_line_items enable row level security;
 
@@ -279,6 +298,8 @@ create policy "Authenticated users can do anything" on bills_of_lading
 create policy "Authenticated users can do anything" on customer_sheets
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on sales_order_line_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on sales_order_schedules
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on sales_quotes
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -569,4 +590,31 @@ alter table sales_quote_line_items enable row level security;
 create policy "Authenticated users can do anything" on sales_quotes
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on sales_quote_line_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: Bills of Lading gets a real link back to the Sales Order
+-- number(s) it was generated from, so the Sales Orders page can reliably
+-- tell whether a given order has shipped — unlike reference_doc, which is
+-- just free text a user can edit.
+alter table bills_of_lading add column if not exists source_so_numbers jsonb not null default '[]';
+
+-- Migration: Sales Order shipment scheduling — a planned ship date for
+-- one (Sales Order #, location) pair, set from the "Schedule Shipment"
+-- button on that Sales Order's page, independent of any Bill of Lading.
+create table if not exists sales_order_schedules (
+  id text primary key,
+  so_number text not null default '',
+  site_id text references sites(id) on delete set null,
+  site_name text not null default '',
+  scheduled_ship_date text not null default '',
+  created_by text not null default '',
+  created_at bigint not null,
+  last_updated_by text not null default '',
+  last_updated_at bigint not null,
+  unique (so_number, site_id)
+);
+
+alter table sales_order_schedules enable row level security;
+
+create policy "Authenticated users can do anything" on sales_order_schedules
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

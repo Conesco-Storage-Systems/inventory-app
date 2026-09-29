@@ -11,6 +11,7 @@ import type {
   Project,
   ProjectPhoto,
   SalesOrderLineItem,
+  SalesOrderSchedule,
   SalesQuote,
   SalesQuoteLineItem,
   Site,
@@ -33,6 +34,7 @@ class InventoryDB extends Dexie {
   billsOfLading!: Table<BillOfLading, string>
   customerSheets!: Table<CustomerSheet, string>
   salesOrderLineItems!: Table<SalesOrderLineItem, string>
+  salesOrderSchedules!: Table<SalesOrderSchedule, string>
   salesQuotes!: Table<SalesQuote, string>
   salesQuoteLineItems!: Table<SalesQuoteLineItem, string>
 
@@ -335,6 +337,40 @@ class InventoryDB extends Dexie {
       salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
       salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
       salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    })
+    // Adds Sales Order shipment scheduling — a planned ship date for one
+    // (Sales Order #, location) pair, set independently of any Bill of
+    // Lading, plus a real link (sourceSoNumbers) from a BOL back to the
+    // Sales Orders it was generated from — the Sales Orders page uses both
+    // to sort every order into Shipped / Scheduled / Not yet Scheduled.
+    this.version(14).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    }).upgrade(async (tx) => {
+      await tx
+        .table('billsOfLading')
+        .toCollection()
+        .modify((bol) => {
+          if (!bol.sourceSoNumbers) bol.sourceSoNumbers = []
+        })
     })
   }
 }

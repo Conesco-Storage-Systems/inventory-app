@@ -233,6 +233,12 @@ export interface BillOfLading {
   // set only when "Mark as Shipped" is clicked.
   shippedAt: number
   lineItems: BolLineItem[]
+  // The distinct Sales Order numbers this BOL's line items came from, set
+  // once at creation — a real link (unlike referenceDoc, which is just
+  // free text a user can edit) that the Sales Orders page uses to tell
+  // whether a given Sales Order has shipped. Empty for a BOL not built
+  // from any Sales Order.
+  sourceSoNumbers: string[]
   createdAt: number
   lastUpdatedBy: string
   lastUpdatedAt: number
@@ -351,6 +357,24 @@ export interface SalesQuoteLineItem {
   syncStatus: SyncStatus
 }
 
+// One (Sales Order #, location) pair's planned ship date, set from the
+// "Schedule Shipment" button on that Sales Order's page — independent of
+// any Bill of Lading, since a shipment can be scheduled before a BOL even
+// exists. Unique per (soNumber, siteId): scheduling again for the same
+// pair updates this row rather than creating another one.
+export interface SalesOrderSchedule {
+  id: string
+  soNumber: string
+  siteId: string
+  siteName: string
+  scheduledShipDate: string
+  createdBy: string
+  createdAt: number
+  lastUpdatedBy: string
+  lastUpdatedAt: number
+  syncStatus: SyncStatus
+}
+
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
@@ -366,6 +390,7 @@ export type SyncTable =
   | 'billsOfLading'
   | 'customerSheets'
   | 'salesOrderLineItems'
+  | 'salesOrderSchedules'
   | 'salesQuotes'
   | 'salesQuoteLineItems'
 

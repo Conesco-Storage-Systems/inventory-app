@@ -10,6 +10,7 @@ import type {
   Project,
   ProjectPhoto,
   SalesOrderLineItem,
+  SalesOrderSchedule,
   SalesQuote,
   SalesQuoteLineItem,
   Site,
@@ -504,6 +505,7 @@ function bolToRemote(bol: BillOfLading): Record<string, unknown> {
     carrier_signed_at: bol.carrierSignedAt,
     shipped_at: bol.shippedAt,
     line_items: bol.lineItems,
+    source_so_numbers: bol.sourceSoNumbers,
     created_at: bol.createdAt,
     last_updated_by: bol.lastUpdatedBy,
     last_updated_at: bol.lastUpdatedAt,
@@ -568,6 +570,7 @@ async function pullBolsOfLading(): Promise<void> {
       carrierSignedAt: (remoteRow.carrier_signed_at as number) ?? 0,
       shippedAt: (remoteRow.shipped_at as number) ?? 0,
       lineItems: (remoteRow.line_items as BillOfLading['lineItems']) ?? [],
+      sourceSoNumbers: (remoteRow.source_so_numbers as string[]) ?? [],
       createdAt: remoteRow.created_at as number,
       lastUpdatedBy: remoteRow.last_updated_by as string,
       lastUpdatedAt: updatedAt,
@@ -719,6 +722,70 @@ async function pullSalesOrderLineItems(): Promise<void> {
     })
   }
   setCursor('sales_order_line_items', maxUpdatedAt)
+}
+
+// ---------- sales order schedules ----------
+
+function salesOrderScheduleToRemote(schedule: SalesOrderSchedule): Record<string, unknown> {
+  return {
+    id: schedule.id,
+    so_number: schedule.soNumber,
+    site_id: schedule.siteId,
+    site_name: schedule.siteName,
+    scheduled_ship_date: schedule.scheduledShipDate,
+    created_by: schedule.createdBy,
+    created_at: schedule.createdAt,
+    last_updated_by: schedule.lastUpdatedBy,
+    last_updated_at: schedule.lastUpdatedAt,
+  }
+}
+
+async function pushSalesOrderSchedules(): Promise<void> {
+  const pending = await db.salesOrderSchedules.where('syncStatus').equals('pending').toArray()
+  for (const schedule of pending) {
+    const { error } = await supabase.from('sales_order_schedules').upsert(salesOrderScheduleToRemote(schedule))
+    if (!error) {
+      await db.salesOrderSchedules.update(schedule.id, { syncStatus: 'synced' })
+    } else {
+      console.error(`[sync] push sales_order_schedules/${schedule.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullSalesOrderSchedules(): Promise<void> {
+  const cursor = getCursors().sales_order_schedules ?? 0
+  const { data, error } = await supabase.from('sales_order_schedules').select('*').gt('last_updated_at', cursor)
+  if (error) {
+    console.error('[sync] pull sales_order_schedules failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.last_updated_at)
+    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+
+    const local = await db.salesOrderSchedules.get(remoteRow.id as string)
+    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+      console.warn(`[sync] keeping local salesOrderSchedules/${remoteRow.id} over an older/equal remote change`)
+      continue
+    }
+
+    await db.salesOrderSchedules.put({
+      id: remoteRow.id as string,
+      soNumber: remoteRow.so_number as string,
+      siteId: remoteRow.site_id as string,
+      siteName: remoteRow.site_name as string,
+      scheduledShipDate: remoteRow.scheduled_ship_date as string,
+      createdBy: remoteRow.created_by as string,
+      createdAt: remoteRow.created_at as number,
+      lastUpdatedBy: remoteRow.last_updated_by as string,
+      lastUpdatedAt: updatedAt,
+      syncStatus: 'synced',
+    })
+  }
+  setCursor('sales_order_schedules', maxUpdatedAt)
 }
 
 // ---------- sales quotes ----------
@@ -994,6 +1061,7 @@ const REMOTE_TABLE_NAMES: Record<string, string> = {
   billsOfLading: 'bills_of_lading',
   customerSheets: 'customer_sheets',
   salesOrderLineItems: 'sales_order_line_items',
+  salesOrderSchedules: 'sales_order_schedules',
   salesQuoteLineItems: 'sales_quote_line_items',
 }
 
@@ -1039,6 +1107,7 @@ export async function runSync(): Promise<void> {
     await pushBolsOfLading()
     await pushCustomerSheets()
     await pushSalesOrderLineItems()
+    await pushSalesOrderSchedules()
     await pushSalesQuotes()
     await pushSalesQuoteLineItems()
 
@@ -1050,6 +1119,7 @@ export async function runSync(): Promise<void> {
     await pullBolsOfLading()
     await pullCustomerSheets()
     await pullSalesOrderLineItems()
+    await pullSalesOrderSchedules()
     await pullSalesQuotes()
     await pullSalesQuoteLineItems()
     console.log('[sync] finished')
@@ -1082,6 +1152,7 @@ export function startAutoSync(): void {
     'bills_of_lading',
     'customer_sheets',
     'sales_order_line_items',
+    'sales_order_schedules',
     'sales_quotes',
     'sales_quote_line_items',
   ]

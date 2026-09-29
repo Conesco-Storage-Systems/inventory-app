@@ -150,6 +150,38 @@ button {
   padding: 8px 0;
 }
 
+.sales-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* SO # and date size to their own content; location takes whatever room
+   is left in the middle. */
+.sales-order-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sales-order-row a {
+  white-space: nowrap;
+}
+
+.sales-order-row-location {
+  text-align: left;
+  /* On top of the row's own 16px gap, so SO # and Location end up twice as
+     far apart as Location and the date. */
+  margin-left: 16px;
+}
+
+.sales-order-row-date {
+  text-align: right;
+}
+
 .collapsible-section-summary {
   font-size: 19px;
   font-weight: 500;

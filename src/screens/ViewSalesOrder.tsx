@@ -1,25 +1,75 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import ScheduleShipmentDialog from '../components/ScheduleShipmentDialog'
 import { db } from '../db/db'
-import { listTiedLineItemsBySoNumberAndSite } from '../db/salesOrders'
+import { getSalesOrderSchedule, listTiedLineItemsBySoNumberAndSite } from '../db/salesOrders'
+import type { SoLineItemForBol } from './NewBillOfLading'
+import { ITEM_TYPE_LABELS } from '../models/types'
+import { useRole } from '../state/RoleContext'
 
 export default function ViewSalesOrder() {
+  const { permissions } = useRole()
   const { siteId, soNumber } = useParams<{ siteId: string; soNumber: string }>()
+  const routerLocation = useLocation()
+  const navigate = useNavigate()
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
   const lineItems =
     useLiveQuery(
       () => (siteId && soNumber ? listTiedLineItemsBySoNumberAndSite(soNumber, siteId) : []),
       [siteId, soNumber],
     ) ?? []
+  const schedule = useLiveQuery(
+    () => (siteId && soNumber ? getSalesOrderSchedule(soNumber, siteId) : undefined),
+    [siteId, soNumber],
+  )
+
+  // Reached either from a location's own Sales Orders list (back goes to
+  // that location) or from the app-wide Sales Orders page (back goes
+  // there instead) — the caller says which via navigation state.
+  const backState = routerLocation.state as { backTo?: string; backLabel?: string } | null
+  const backTo = backState?.backTo ?? `/locations/${siteId}`
+  const backLabel = backState?.backLabel ?? (site?.name ?? 'location')
+
+  function handleGenerateBol() {
+    if (!siteId || !soNumber) return
+    const soLineItems: SoLineItemForBol[] = lineItems.map((li) => ({
+      soNumber: li.soNumber,
+      item: li.tiedItemType ? ITEM_TYPE_LABELS[li.tiedItemType] : '',
+      description: li.tiedDescription,
+      qty: li.quantityOrdered,
+    }))
+    navigate(`/locations/${siteId}/bol/new`, { state: { soLineItems } })
+  }
 
   return (
     <main className="page page-wide">
       <p>
-        <Link to={`/locations/${siteId}`}>← Back to {site?.name ?? 'location'}</Link>
+        <Link to={backTo}>← Back to {backLabel}</Link>
       </p>
-      <h1>
-        Sales Order {soNumber} — {site?.name}
-      </h1>
+      <div className="page-header">
+        <h1>Sales Order {soNumber}</h1>
+        {siteId && (
+          <div className="dialog-actions">
+            <ScheduleShipmentDialog
+              soNumber={soNumber ?? ''}
+              siteId={siteId}
+              siteName={site?.name ?? ''}
+              currentDate={schedule?.scheduledShipDate ?? ''}
+            />
+            {permissions.generateBillOfLading && (
+              <button type="button" onClick={handleGenerateBol} disabled={lineItems.length === 0}>
+                Generate BOL
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {schedule?.scheduledShipDate && (
+        <p className="placeholder-note">
+          Scheduled to ship {new Date(`${schedule.scheduledShipDate}T00:00:00`).toLocaleDateString()}
+        </p>
+      )}
 
       {lineItems.length === 0 ? (
         <p className="placeholder-note">No line items from this Sales Order are tied to this location.</p>

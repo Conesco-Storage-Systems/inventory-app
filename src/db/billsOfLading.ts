@@ -24,6 +24,10 @@ export interface NewBolInput {
   trailerLoadedBy?: TrailerLoadedBy
   freightCountedBy?: FreightCountedBy
   lineItems: BolLineItem[]
+  // The distinct Sales Order numbers these line items came from, if any —
+  // a real link the Sales Orders page uses to detect a shipped order,
+  // unlike referenceDoc which is just free text.
+  sourceSoNumbers?: string[]
 }
 
 export async function createBillOfLading(input: NewBolInput): Promise<string> {
@@ -34,6 +38,7 @@ export async function createBillOfLading(input: NewBolInput): Promise<string> {
     id,
     trailerLoadedBy: input.trailerLoadedBy ?? '',
     freightCountedBy: input.freightCountedBy ?? '',
+    sourceSoNumbers: input.sourceSoNumbers ?? [],
     shipperSignatureImage: '',
     shipperSignedAt: 0,
     carrierSignatureImage: '',

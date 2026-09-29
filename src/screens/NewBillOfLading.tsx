@@ -65,6 +65,7 @@ export default function NewBillOfLading() {
   const location = useLocation()
   const preselectedKeys = (location.state as { preselected?: string[] } | null)?.preselected
   const soLineItems = (location.state as { soLineItems?: SoLineItemForBol[] } | null)?.soLineItems
+  const sourceSoNumbers = soLineItems ? Array.from(new Set(soLineItems.map((li) => li.soNumber))) : []
   const appliedPreselectRef = useRef(false)
   const appliedSoLineItemsRef = useRef(false)
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
@@ -156,8 +157,8 @@ export default function NewBillOfLading() {
         qtyReceived: '',
       })),
     ])
-    const distinctSoNumbers = Array.from(new Set(soLineItems.map((li) => li.soNumber)))
-    setReferenceDoc((prev) => prev || distinctSoNumbers.join(', '))
+    setReferenceDoc((prev) => prev || sourceSoNumbers.join(', '))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soLineItems])
 
   if (site === undefined) {
@@ -228,6 +229,7 @@ export default function NewBillOfLading() {
         driverPhone,
         brokerInfo,
         lineItems: lineItems.map((li) => ({ ...li, qtyShipped: li.qtyShipped === '' ? 0 : li.qtyShipped })),
+        sourceSoNumbers,
       })
       navigate(`/locations/${siteId}/bol/${bolId}`)
     } finally {

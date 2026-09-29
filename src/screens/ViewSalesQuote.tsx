@@ -46,11 +46,22 @@ export default function ViewSalesQuote() {
       </p>
       <div className="page-header">
         <h1>Quote #{quote.quoteNumber}</h1>
-        {!quote.canceledAt && (
-          <button type="button" className="delete-button" onClick={() => setConfirmingCancel(true)}>
-            Cancel Quote
-          </button>
-        )}
+        <div className="dialog-actions">
+          {lineItems.length > 0 && (
+            <>
+              <Link to={`/sales-quotes/${quote.id}/customer-sheet`}>
+                <button type="button">Generate PDF</button>
+              </Link>
+              {/* Placeholder — SalesPad import isn't built yet, but the button needs to be visible now. */}
+              <button type="button">Import to Salespad</button>
+            </>
+          )}
+          {!quote.canceledAt && (
+            <button type="button" className="delete-button" onClick={() => setConfirmingCancel(true)}>
+              Cancel Quote
+            </button>
+          )}
+        </div>
       </div>
 
       {quote.canceledAt && <p className="placeholder-note">This quote was canceled — all its holds have been released.</p>}

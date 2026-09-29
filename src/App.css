@@ -1679,6 +1679,48 @@ button.bol-signature-signed {
   }
 }
 
+/* Bulk "apply to every item of this type" row (GenerateQuoteCustomerSheet.tsx) */
+
+.quote-bulk-select-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .quote-bulk-select-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.quote-bulk-select-column {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.quote-bulk-select-column h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.quote-bulk-select-column .checkbox-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quote-bulk-select-details {
+  margin-bottom: 32px;
+}
+
+.quote-bulk-select-all {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 /* Customer Sheet — item picker (NewCustomerSheet.tsx) */
 
 .customer-sheet-item-list {

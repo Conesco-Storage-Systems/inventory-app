@@ -4,6 +4,7 @@ import LoginGate from './components/LoginGate'
 import { purgeExpiredDeletedSites } from './db/locations'
 import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
+import GenerateInventoryCustomerSheet from './screens/GenerateInventoryCustomerSheet'
 import GenerateQuoteCustomerSheet from './screens/GenerateQuoteCustomerSheet'
 import GenerateSalesQuote from './screens/GenerateSalesQuote'
 import InactiveLocations from './screens/InactiveLocations'
@@ -51,6 +52,7 @@ function App() {
         <Routes>
           <Route path="/" element={<LocationsList />} />
           <Route path="/all-inventory" element={<AllInventory />} />
+          <Route path="/all-inventory/customer-sheet" element={<GenerateInventoryCustomerSheet />} />
           <Route path="/procurement" element={<Procurement />} />
           <Route path="/sales-dashboard" element={<SalesDashboard />} />
           <Route path="/projects" element={<ProjectsList />} />

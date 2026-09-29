@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import BlobImage from '../components/BlobImage'
+import BulkSelectFieldsPanel from '../components/BulkSelectFieldsPanel'
 import { createCustomerSheet } from '../db/customerSheets'
 import { db } from '../db/db'
 import { groupBeams } from '../db/groupBeams'
@@ -10,7 +11,6 @@ import { groupUprights } from '../db/groupUprights'
 import { groupWireDecks } from '../db/groupWireDecks'
 import { getItemFields, getItemLabel, type SelectableItemType, type SelectableRow } from '../db/itemFields'
 import { getPhotosForItem, listBeamsBySite, listMiscItemsBySite, listUprightsBySite, listWireDecksBySite } from '../db/items'
-import { computeAvailableQuantity } from '../db/salesQuotes'
 import { compressImageToDataUrl } from '../export/compressImage'
 import type { CustomerSheetLineItem } from '../models/types'
 import { useRole } from '../state/RoleContext'
@@ -99,7 +99,6 @@ export default function NewCustomerSheet() {
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
-  const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const availableItems: AvailableItem[] = [
     ...groupBeams(beams).map((row) => ({ key: `beam:${row.key}`, itemType: 'beam' as const, row })),
@@ -111,7 +110,6 @@ export default function NewCustomerSheet() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [fieldSelections, setFieldSelections] = useState<Record<string, Set<string>>>({})
   const [photoSelections, setPhotoSelections] = useState<Record<string, boolean>>({})
-  const [selectedRowKey, setSelectedRowKey] = useState('')
 
   const [date, setDate] = useState(todayIso())
   const [customerName, setCustomerName] = useState('')
@@ -124,11 +122,11 @@ export default function NewCustomerSheet() {
     const item = availableItems.find((i) => i.key === key)
     if (!item) return
     setSelectedKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
-    setFieldSelections((prev) => ({
-      ...prev,
-      [key]: new Set(getItemFields(item.itemType, item.row).map((f) => f.key)),
-    }))
-    setPhotoSelections((prev) => ({ ...prev, [key]: true }))
+    // Every field/photo starts unchecked — the salesperson builds the sheet
+    // up by adding what they want the customer to see, rather than having
+    // to strip out what they don't.
+    setFieldSelections((prev) => ({ ...prev, [key]: new Set<string>() }))
+    setPhotoSelections((prev) => ({ ...prev, [key]: false }))
   }
 
   function removeItem(key: string) {
@@ -243,38 +241,21 @@ export default function NewCustomerSheet() {
       </p>
       <h1>New Customer Sheet</h1>
       <p className="placeholder-note">
-        Confirm which items, fields, and photos to include below — everything is checked by default, so
-        uncheck anything you don't want the customer to see.
+        Every item you selected is listed below — check the fields and photos you want the customer to
+        see, or remove an item entirely.
       </p>
 
-      <h2>Selected Items</h2>
-      <div className="field-row">
-        <label>
-          Add item from inventory
-          <select value={selectedRowKey} onChange={(e) => setSelectedRowKey(e.target.value)}>
-            <option value="">Select an item…</option>
-            {availableItems
-              .filter((i) => !selectedKeys.includes(i.key))
-              .map((item) => (
-                <option key={item.key} value={item.key}>
-                  {getItemLabel(item.itemType, item.row)} —{' '}
-                  {computeAvailableQuantity(item.row.quantity, item.row.ids, holds)} available
-                </option>
-              ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => {
-            if (selectedRowKey) addItem(selectedRowKey)
-            setSelectedRowKey('')
-          }}
-          disabled={!selectedRowKey}
-        >
-          + Add Item
-        </button>
-      </div>
+      <BulkSelectFieldsPanel
+        items={selectedItems.map((item) => ({
+          key: item.key,
+          itemType: item.itemType,
+          fieldKeys: getItemFields(item.itemType, item.row).map((f) => f.key),
+        }))}
+        setFieldSelections={setFieldSelections}
+        setPhotoSelections={setPhotoSelections}
+      />
 
+      <h2>Selected Items</h2>
       {selectedItems.length === 0 ? (
         <p className="placeholder-note">No items selected yet.</p>
       ) : (

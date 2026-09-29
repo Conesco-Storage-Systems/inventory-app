@@ -35,11 +35,14 @@ interface ReadOnlyItemTableProps<TKey extends string, TRow extends { key: string
   // divider row bearing this label — a subgroup, not a separate table.
   secondaryGroupLabel?: string
   isSecondaryRow?: (row: TRow) => boolean
-  // A column pinned to the far left, outside the reorderable/hideable
-  // column set — so it can't end up buried by a viewer's saved column
-  // order (the way a brand-new column otherwise would, since unknown
-  // saved orders append new keys at the end).
-  leadingColumn?: { label: string; render: (row: TRow) => ReactNode }
+  // Columns pinned to the far left, in order, outside the
+  // reorderable/hideable column set — so none of them can end up buried by
+  // a viewer's saved column order (the way a brand-new column otherwise
+  // would, since unknown saved orders append new keys at the end). Each
+  // one shows on primary rows by default; set showOnSecondary to flip that
+  // (e.g. a "Held By" column that only has something to show once a
+  // secondary/held row exists).
+  leadingColumns?: { label: string; render: (row: TRow) => ReactNode; showOnSecondary?: boolean }[]
 }
 
 function compareValues(a: number | string, b: number | string): number {
@@ -60,7 +63,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   wrapColumnKeys = [],
   secondaryGroupLabel,
   isSecondaryRow,
-  leadingColumn,
+  leadingColumns = [],
 }: ReadOnlyItemTableProps<TKey, TRow>) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<TKey>(
     storageKey,
@@ -112,16 +115,18 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   const primaryRows = isSecondaryRow ? displayedRows.filter((row) => !isSecondaryRow(row)) : displayedRows
   const secondaryRows = isSecondaryRow ? displayedRows.filter((row) => isSecondaryRow(row)) : []
 
-  const columnCount = visibleOrder.length + (leadingColumn ? 1 : 0)
+  const columnCount = visibleOrder.length + leadingColumns.length
 
-  // The leading column (e.g. "Held By") only ever has something to show on
-  // a secondary-group row, so its value — and even its header label — stay
-  // out of sight everywhere else, appearing for the first time on the
-  // divider row right where that subgroup starts.
+  // Each leading column only renders on the row group it's meant for
+  // (primary by default, secondary-only when flagged) — e.g. a "Held By"
+  // column has nothing to show until a secondary/held row exists, so it
+  // stays blank (even its header label) everywhere else.
   function renderRow(row: TRow, isSecondary: boolean) {
     return (
       <tr key={row.key}>
-        {leadingColumn && <td>{isSecondary ? leadingColumn.render(row) : null}</td>}
+        {leadingColumns.map((col, i) => (
+          <td key={i}>{(col.showOnSecondary ?? false) === isSecondary ? col.render(row) : null}</td>
+        ))}
         {visibleOrder.map((key) => (
           <td key={key} className={wrapColumnKeys.includes(key) ? 'col-notes' : undefined}>
             {columns[key].render(row)}
@@ -150,7 +155,9 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
         <table className="item-table">
           <thead>
             <tr>
-              {leadingColumn && <th></th>}
+              {leadingColumns.map((_, i) => (
+                <th key={i}></th>
+              ))}
               {visibleOrder.map((key) => {
                 const filterActive = (filters[key]?.size ?? 0) > 0
                 const filterable = columns[key].filterable !== false
@@ -203,9 +210,11 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
             {primaryRows.map((row) => renderRow(row, false))}
             {secondaryRows.length > 0 && (
               <tr className="item-table-group-row">
-                {leadingColumn ? (
+                {leadingColumns.length > 0 ? (
                   <>
-                    <td>{secondaryGroupLabel}</td>
+                    {leadingColumns.map((col, i) => (
+                      <td key={i}>{col.showOnSecondary ? secondaryGroupLabel : ''}</td>
+                    ))}
                     <td colSpan={visibleOrder.length}></td>
                   </>
                 ) : (

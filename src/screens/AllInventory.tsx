@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import type { CustomerSheetSeed } from '../components/GenerateCustomerSheetFlow'
 import ReadOnlyItemTable, { type ColumnDef } from '../components/ReadOnlyItemTable'
 import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
@@ -110,6 +111,71 @@ export default function AllInventory() {
 
   function handleGenerateQuote() {
     navigate(`/sales-quotes/${quoteId}/generate`, { state: { selections: Array.from(selections.values()) } })
+  }
+
+  // Independent of the quote-building selection above — this is for
+  // generating a one-off Customer Sheet PDF straight from whatever's
+  // checked here, regardless of whether a Sales Quote is being built at
+  // the same time.
+  const [pdfSelections, setPdfSelections] = useState<Set<string>>(new Set())
+
+  function togglePdfSelection(key: string) {
+    setPdfSelections((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function handleGeneratePdf() {
+    const seeds: CustomerSheetSeed[] = [
+      ...uprightRows
+        .filter((row) => pdfSelections.has(`upright:${row.key}`))
+        .map((row) => ({
+          key: `upright:${row.key}`,
+          itemType: 'upright' as const,
+          siteId: row.siteId,
+          siteName: row.siteName,
+          itemIds: row.ids,
+          quantity: row.quantity,
+          description: describeUprightRow(row),
+        })),
+      ...beamRows
+        .filter((row) => pdfSelections.has(`beam:${row.key}`))
+        .map((row) => ({
+          key: `beam:${row.key}`,
+          itemType: 'beam' as const,
+          siteId: row.siteId,
+          siteName: row.siteName,
+          itemIds: row.ids,
+          quantity: row.quantity,
+          description: describeBeamRow(row),
+        })),
+      ...wireDeckRows
+        .filter((row) => pdfSelections.has(`wireDeck:${row.key}`))
+        .map((row) => ({
+          key: `wireDeck:${row.key}`,
+          itemType: 'wireDeck' as const,
+          siteId: row.siteId,
+          siteName: row.siteName,
+          itemIds: row.ids,
+          quantity: row.quantity,
+          description: describeWireDeckRow(row),
+        })),
+      ...miscRows
+        .filter((row) => pdfSelections.has(`misc:${row.key}`))
+        .map((row) => ({
+          key: `misc:${row.key}`,
+          itemType: 'misc' as const,
+          siteId: row.siteId,
+          siteName: row.siteName,
+          itemIds: row.ids,
+          quantity: row.quantity,
+          description: describeMiscRow(row),
+        })),
+    ]
+    navigate('/all-inventory/customer-sheet', { state: { seeds, backTo: location.pathname } })
   }
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -784,6 +850,24 @@ export default function AllInventory() {
   const heldByLeadingColumn = {
     label: 'Held By',
     render: (row: { heldByEmail?: string }) => (row.heldByEmail ? formatDisplayName(row.heldByEmail) : '—'),
+    showOnSecondary: true,
+  }
+
+  // A fixed leading checkbox for each item type — kept out of the
+  // reorderable column set (like Held By above) so it can't end up buried
+  // by a viewer's saved column order the way a brand-new column otherwise
+  // would.
+  function pdfSelectLeadingColumn<TRow extends { key: string }>(itemType: ItemType) {
+    return {
+      label: '',
+      render: (row: TRow) => (
+        <input
+          type="checkbox"
+          checked={pdfSelections.has(`${itemType}:${row.key}`)}
+          onChange={() => togglePdfSelection(`${itemType}:${row.key}`)}
+        />
+      ),
+    }
   }
 
   const uprightFilterOptions = computeFilterOptions(uprightMergedRows, uprightMergedColumns)
@@ -840,6 +924,9 @@ export default function AllInventory() {
             <button type="button" onClick={handleExport} className="export-button">
               Export to Excel
             </button>
+            <button type="button" onClick={handleGeneratePdf} disabled={pdfSelections.size === 0}>
+              Generate PDF{pdfSelections.size > 0 ? ` (${pdfSelections.size})` : ''}
+            </button>
           </p>
         </>
       )}
@@ -862,7 +949,7 @@ export default function AllInventory() {
             wrapColumnKeys={['notes']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumn={heldByLeadingColumn}
+            leadingColumns={[pdfSelectLeadingColumn('upright'), heldByLeadingColumn]}
           />
         </section>
       )}
@@ -883,7 +970,7 @@ export default function AllInventory() {
             wrapColumnKeys={['notes']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumn={heldByLeadingColumn}
+            leadingColumns={[pdfSelectLeadingColumn('beam'), heldByLeadingColumn]}
           />
         </section>
       )}
@@ -904,7 +991,7 @@ export default function AllInventory() {
             wrapColumnKeys={['notes']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumn={heldByLeadingColumn}
+            leadingColumns={[pdfSelectLeadingColumn('wireDeck'), heldByLeadingColumn]}
           />
         </section>
       )}
@@ -925,7 +1012,7 @@ export default function AllInventory() {
             wrapColumnKeys={['notes', 'itemDescription']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumn={heldByLeadingColumn}
+            leadingColumns={[pdfSelectLeadingColumn('misc'), heldByLeadingColumn]}
           />
         </section>
       )}

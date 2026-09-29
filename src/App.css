@@ -1679,7 +1679,7 @@ button.bol-signature-signed {
   }
 }
 
-/* Bulk "apply to every item of this type" row (GenerateQuoteCustomerSheet.tsx) */
+/* Bulk "apply to every item of this type" row (GenerateCustomerSheetFlow.tsx) */
 
 .quote-bulk-select-grid {
   display: grid;

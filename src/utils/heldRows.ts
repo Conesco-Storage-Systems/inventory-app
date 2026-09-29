@@ -24,20 +24,24 @@ export function mergeRowsWithHolds<T extends { key: string; ids: string[]; quant
   return merged
 }
 
-// Same columns as the main table, but the "quantity" and "select" columns
-// (when present) get hold-aware overrides: a held row shows just its held
-// amount and can't be selected again. The "Held By" name itself is shown
-// via a separate fixed leading column (see ReadOnlyItemTable's
-// `leadingColumn` prop) rather than one of these reorderable columns, so
-// it always stays pinned to the left regardless of a viewer's saved
-// column order.
+// Same columns as the main table, but the "quantity" and any checkbox
+// column (when present) get hold-aware overrides: a held row shows just
+// its held amount and can't be selected again — there's nothing gained by
+// separately picking the held sub-row, since it carries the same
+// characteristics as the primary row it's already selectable from. The
+// "Held By" name itself is shown via a separate fixed leading column (see
+// ReadOnlyItemTable's `leadingColumn` prop) rather than one of these
+// reorderable columns, so it always stays pinned to the left regardless of
+// a viewer's saved column order.
+const CHECKBOX_COLUMN_KEYS = new Set(['select', 'pdfSelect'])
+
 export function withHoldAwareColumns<TRow extends { key: string; quantity: number }>(
   baseColumns: Record<string, ColumnDef<TRow>>,
 ): Record<string, ColumnDef<TRow & { heldByEmail?: string }>> {
   const columns: Record<string, ColumnDef<TRow & { heldByEmail?: string }>> = {}
   for (const [key, column] of Object.entries(baseColumns) as [string, ColumnDef<TRow>][]) {
-    if (key === 'select') {
-      columns.select = { ...column, render: (row) => (row.heldByEmail ? null : column.render(row)) }
+    if (CHECKBOX_COLUMN_KEYS.has(key)) {
+      columns[key] = { ...column, render: (row) => (row.heldByEmail ? null : column.render(row)) }
     } else if (key === 'quantity') {
       columns.quantity = { ...column, render: (row) => (row.heldByEmail ? row.quantity : column.render(row)) }
     } else {

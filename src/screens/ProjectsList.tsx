@@ -17,12 +17,28 @@ export default function ProjectsList() {
     .filter((project) => canSeeProject(project, userId))
   const [deletingProject, setDeletingProject] = useState<{ id: string; name: string } | null>(null)
   const [markingInactiveProjectId, setMarkingInactiveProjectId] = useState<string | null>(null)
+  const [editingProjects, setEditingProjects] = useState(false)
+  const canEditProjects = permissions.manageLocations || permissions.deleteLocations
 
   return (
     <main className="page">
       <p>
         <Link to="/">← Back</Link>
       </p>
+
+      {canEditProjects && (
+        <nav className="tab-nav">
+          <div className="tab-nav-tabs"></div>
+          <button
+            type="button"
+            className={`tab-nav-link${editingProjects ? ' tab-nav-link--active' : ''}`}
+            onClick={() => setEditingProjects((prev) => !prev)}
+          >
+            Edit Projects
+          </button>
+        </nav>
+      )}
+
       <div className="page-header">
         <h1>Projects</h1>
         {permissions.manageLocations && (
@@ -39,7 +55,7 @@ export default function ProjectsList() {
               <div className="location-list-info">
                 <Link to={`/projects/${project.id}`}>{project.name}</Link>
               </div>
-              {(permissions.manageLocations || permissions.deleteLocations) && (
+              {editingProjects && canEditProjects && (
                 <div className="location-list-actions">
                   {permissions.manageLocations && (
                     <button type="button" onClick={() => setMarkingInactiveProjectId(project.id)}>

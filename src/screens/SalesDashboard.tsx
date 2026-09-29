@@ -24,17 +24,18 @@ export default function SalesDashboard() {
       <p>
         <Link to="/">← Back</Link>
       </p>
-      <div className="page-header">
-        <h1>Sales Dashboard</h1>
-        <div className="dialog-actions">
-          <Link to="/all-inventory">
-            <button type="button">View Inventory</button>
+      <h1>Sales Dashboard</h1>
+
+      <nav className="tab-nav">
+        <div className="tab-nav-tabs">
+          <Link className="tab-nav-link" to="/all-inventory">
+            Inventory
           </Link>
-          <Link to="/projects">
-            <button type="button">Projects</button>
+          <Link className="tab-nav-link" to="/projects">
+            Projects
           </Link>
         </div>
-      </div>
+      </nav>
 
       {permissions.holdItemsForOrder && (
         <p>

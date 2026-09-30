@@ -901,6 +901,9 @@ button {
 
 .field-row {
   margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .field-row.draggable {
@@ -1039,6 +1042,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  width: 100%;
 }
 
 .checkbox-fieldset legend {
@@ -1053,14 +1058,21 @@ button {
   flex-direction: row;
   flex-wrap: wrap;
   gap: 16px;
+  min-width: 0;
 }
 
-.checkbox-option {
+/* Overrides ".field-row label" (which stacks label text under its
+   control for the plain text/number fields) — a checkbox option needs its
+   text beside the box, not under it, and this selector's extra class
+   outweighs that rule's specificity. */
+.field-row .checkbox-option {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
   font-size: 16px;
   white-space: nowrap;
+  max-width: none;
 }
 
 .checkbox-option input {
@@ -1234,42 +1246,7 @@ button {
   box-sizing: border-box;
 }
 
-.option-box-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.option-box-label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.option-box-group {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.option-box {
-  font-size: 16px;
-  padding: 14px 20px;
-  border-radius: 8px;
-  border: 2px solid var(--border);
-  background: var(--bg);
-  color: inherit;
-  font-family: inherit;
-  cursor: pointer;
-  min-width: 100px;
-}
-
-.option-box--selected {
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
-  color: var(--accent);
-}
-
-.option-box-field .other-input {
+.checkbox-fieldset .other-input {
   font-size: 16px;
   padding: 8px;
   border-radius: 6px;
@@ -1723,6 +1700,10 @@ button.bol-signature-signed {
 @media (max-width: 900px) {
   .quote-bulk-select-grid {
     grid-template-columns: 1fr;
+  }
+
+  .checkbox-fieldset .checkbox-options {
+    flex-direction: column;
   }
 }
 

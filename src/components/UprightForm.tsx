@@ -3,6 +3,7 @@ import { BEAM_COLOR_OPTIONS } from './BeamForm'
 import DraggableField from './DraggableField'
 import InchInput from './InchInput'
 import PhotoCapture from './PhotoCapture'
+import SingleSelectCheckboxGroup from './SingleSelectCheckboxGroup'
 import { useFieldOrder } from '../hooks/useFieldOrder'
 import { useSiteFieldOptions } from '../hooks/useSiteFieldOptions'
 import { CONDITIONS } from '../models/types'
@@ -140,19 +141,12 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
     ),
     color: (
       <>
-        <label>
-          Color
-          <select value={value.color} onChange={(e) => onChange({ ...value, color: e.target.value })}>
-            <option value="" disabled>
-              Select a color…
-            </option>
-            {colorOptions.map((color) => (
-              <option key={color} value={color}>
-                {color}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Color"
+          options={colorOptions}
+          value={value.color}
+          onChange={(color) => onChange({ ...value, color })}
+        />
         {value.color === 'Other' && (
           <input
             type="text"
@@ -165,19 +159,12 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
     ),
     style: (
       <>
-        <label>
-          Style
-          <select value={value.style} onChange={(e) => onChange({ ...value, style: e.target.value })}>
-            <option value="" disabled>
-              Select a style…
-            </option>
-            {styleOptions.map((style) => (
-              <option key={style} value={style}>
-                {style}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Style"
+          options={styleOptions}
+          value={value.style}
+          onChange={(style) => onChange({ ...value, style })}
+        />
         {value.style === 'Other' && (
           <input
             type="text"
@@ -267,19 +254,12 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
     ),
     gauge: (
       <>
-        <label>
-          Gauge
-          <select value={value.gauge} onChange={(e) => onChange({ ...value, gauge: e.target.value })}>
-            <option value="" disabled>
-              Select gauge…
-            </option>
-            {gaugeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Gauge"
+          options={gaugeOptions}
+          value={value.gauge}
+          onChange={(gauge) => onChange({ ...value, gauge })}
+        />
         {value.gauge === 'Other' && (
           <input
             type="text"
@@ -292,22 +272,12 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
     ),
     condition: (
       <>
-        <label>
-          Condition
-          <select
-            value={value.condition}
-            onChange={(e) => onChange({ ...value, condition: e.target.value })}
-          >
-            <option value="" disabled>
-              Select condition…
-            </option>
-            {CONDITIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Condition"
+          options={CONDITIONS}
+          value={value.condition}
+          onChange={(condition) => onChange({ ...value, condition })}
+        />
         {value.condition === 'Other' && (
           <input
             type="text"

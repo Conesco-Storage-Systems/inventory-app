@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import DraggableField from './DraggableField'
 import PhotoCapture from './PhotoCapture'
+import SingleSelectCheckboxGroup from './SingleSelectCheckboxGroup'
 import { useFieldOrder } from '../hooks/useFieldOrder'
 import { useSiteFieldOptions } from '../hooks/useSiteFieldOptions'
 import { CONDITIONS } from '../models/types'
@@ -89,22 +90,12 @@ export default function MiscItemForm({ value, onChange, siteId }: MiscItemFormPr
   const fields: Record<MiscItemFieldKey, React.ReactNode> = {
     description: (
       <>
-        <label>
-          Item
-          <select
-            value={value.description}
-            onChange={(e) => onChange({ ...value, description: e.target.value })}
-          >
-            <option value="" disabled>
-              Select an item…
-            </option>
-            {descriptionOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Item"
+          options={descriptionOptions}
+          value={value.description}
+          onChange={(description) => onChange({ ...value, description })}
+        />
         {value.description === 'Other' && (
           <input
             type="text"
@@ -128,22 +119,12 @@ export default function MiscItemForm({ value, onChange, siteId }: MiscItemFormPr
     ),
     condition: (
       <>
-        <label>
-          Condition
-          <select
-            value={value.condition}
-            onChange={(e) => onChange({ ...value, condition: e.target.value })}
-          >
-            <option value="" disabled>
-              Select condition…
-            </option>
-            {CONDITIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Condition"
+          options={CONDITIONS}
+          value={value.condition}
+          onChange={(condition) => onChange({ ...value, condition })}
+        />
         {value.condition === 'Other' && (
           <input
             type="text"

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import DraggableField from './DraggableField'
 import PhotoCapture from './PhotoCapture'
+import SingleSelectCheckboxGroup from './SingleSelectCheckboxGroup'
 import { useFieldOrder } from '../hooks/useFieldOrder'
 import { useSiteFieldOptions } from '../hooks/useSiteFieldOptions'
 import { CONDITIONS } from '../models/types'
@@ -136,22 +137,12 @@ export default function WireDeckForm({ value, onChange, siteId }: WireDeckFormPr
     ),
     channelCount: (
       <>
-        <label>
-          Number of Channels
-          <select
-            value={value.channelCount}
-            onChange={(e) => onChange({ ...value, channelCount: e.target.value })}
-          >
-            <option value="" disabled>
-              Select…
-            </option>
-            {channelCountOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Number of Channels"
+          options={channelCountOptions}
+          value={value.channelCount}
+          onChange={(channelCount) => onChange({ ...value, channelCount })}
+        />
         {value.channelCount === 'Other' && (
           <input
             type="text"
@@ -189,22 +180,12 @@ export default function WireDeckForm({ value, onChange, siteId }: WireDeckFormPr
     ),
     condition: (
       <>
-        <label>
-          Condition
-          <select
-            value={value.condition}
-            onChange={(e) => onChange({ ...value, condition: e.target.value })}
-          >
-            <option value="" disabled>
-              Select condition…
-            </option>
-            {CONDITIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Condition"
+          options={CONDITIONS}
+          value={value.condition}
+          onChange={(condition) => onChange({ ...value, condition })}
+        />
         {value.condition === 'Other' && (
           <input
             type="text"

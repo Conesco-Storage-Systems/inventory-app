@@ -293,10 +293,16 @@ export default function Procurement() {
           Nothing to show yet — this will surface recent Sales Order, Invoice, and Bill of Lading activity in one
           feed.
         </p>
+        <p className="placeholder-note">Pull from salespad based on Date Modified</p>
       </section>
 
       <details className="item-section collapsible-section" open>
         <summary className="collapsible-section-summary">Recent SO's ({pendingLineItems.length})</summary>
+        <p className="placeholder-note">
+          This will show any new line items for any new Sales Orders, if they do not already match up to a quote.
+          Inventory that is exported from our quote system will automatically be tied to items, if they are not
+          tied to a quote, they will show up here to be reconciled.
+        </p>
 
         {pendingLineItems.length === 0 ? (
           <p className="placeholder-note">No pending Sales Order line items — import a report to bring some in.</p>
@@ -389,11 +395,6 @@ export default function Procurement() {
       <details className="item-section collapsible-section" open>
         <summary className="collapsible-section-summary">Invoices</summary>
         <p className="placeholder-note">Invoice tracking hasn't been built yet.</p>
-      </details>
-
-      <details className="item-section collapsible-section" open>
-        <summary className="collapsible-section-summary">Bills of Lading</summary>
-        <p className="placeholder-note">Company-wide Bill of Lading tracking hasn't been built yet.</p>
       </details>
     </main>
   )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import DraggableField from './DraggableField'
 import PhotoCapture from './PhotoCapture'
+import SingleSelectCheckboxGroup from './SingleSelectCheckboxGroup'
 import { useFieldOrder } from '../hooks/useFieldOrder'
 import { useSiteFieldOptions } from '../hooks/useSiteFieldOptions'
 import { CONDITIONS } from '../models/types'
@@ -148,19 +149,12 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
     ),
     color: (
       <>
-        <label>
-          Color
-          <select value={value.color} onChange={(e) => onChange({ ...value, color: e.target.value })}>
-            <option value="" disabled>
-              Select a color…
-            </option>
-            {colorOptions.map((color) => (
-              <option key={color} value={color}>
-                {color}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Color"
+          options={colorOptions}
+          value={value.color}
+          onChange={(color) => onChange({ ...value, color })}
+        />
         {value.color === 'Other' && (
           <input
             type="text"
@@ -173,22 +167,12 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
     ),
     pinCount: (
       <>
-        <label>
-          Pin Count
-          <select
-            value={value.pinCount}
-            onChange={(e) => onChange({ ...value, pinCount: e.target.value })}
-          >
-            <option value="" disabled>
-              Select pin count…
-            </option>
-            {BEAM_PIN_COUNT_OPTIONS.map((pinCount) => (
-              <option key={pinCount} value={pinCount}>
-                {pinCount}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Pin Count"
+          options={BEAM_PIN_COUNT_OPTIONS}
+          value={value.pinCount}
+          onChange={(pinCount) => onChange({ ...value, pinCount })}
+        />
         {value.pinCount === 'Other' && (
           <input
             type="text"
@@ -212,19 +196,12 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
     ),
     style: (
       <>
-        <label>
-          Style
-          <select value={value.style} onChange={(e) => onChange({ ...value, style: e.target.value })}>
-            <option value="" disabled>
-              Select a style…
-            </option>
-            {styleOptions.map((style) => (
-              <option key={style} value={style}>
-                {style}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Style"
+          options={styleOptions}
+          value={value.style}
+          onChange={(style) => onChange({ ...value, style })}
+        />
         {value.style === 'Other' && (
           <input
             type="text"
@@ -236,20 +213,13 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
       </>
     ),
     step: (
-      <div className="option-box-field">
-        <span className="option-box-label">Step</span>
-        <div className="option-box-group">
-          {BEAM_STEP_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`option-box${value.step === option ? ' option-box--selected' : ''}`}
-              onClick={() => onChange({ ...value, step: option })}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
+      <>
+        <SingleSelectCheckboxGroup
+          legend="Step"
+          options={BEAM_STEP_OPTIONS}
+          value={value.step}
+          onChange={(step) => onChange({ ...value, step })}
+        />
         {value.step === 'Other' && (
           <input
             type="text"
@@ -259,44 +229,24 @@ export default function BeamForm({ value, onChange, siteId }: BeamFormProps) {
             className="other-input"
           />
         )}
-      </div>
+      </>
     ),
     stickers: (
-      <label>
-        Stickers
-        <select
-          value={value.stickers}
-          onChange={(e) => onChange({ ...value, stickers: e.target.value })}
-        >
-          <option value="" disabled>
-            Select…
-          </option>
-          {STICKERS_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </label>
+      <SingleSelectCheckboxGroup
+        legend="Stickers"
+        options={STICKERS_OPTIONS}
+        value={value.stickers}
+        onChange={(stickers) => onChange({ ...value, stickers })}
+      />
     ),
     condition: (
       <>
-        <label>
-          Condition
-          <select
-            value={value.condition}
-            onChange={(e) => onChange({ ...value, condition: e.target.value })}
-          >
-            <option value="" disabled>
-              Select condition…
-            </option>
-            {CONDITIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SingleSelectCheckboxGroup
+          legend="Condition"
+          options={CONDITIONS}
+          value={value.condition}
+          onChange={(condition) => onChange({ ...value, condition })}
+        />
         {value.condition === 'Other' && (
           <input
             type="text"

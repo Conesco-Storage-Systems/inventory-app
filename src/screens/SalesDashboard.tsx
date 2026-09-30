@@ -32,7 +32,7 @@ export default function SalesDashboard() {
             Inventory
           </Link>
           <Link className="tab-nav-link" to="/projects">
-            Projects
+            Project Management
           </Link>
         </div>
       </nav>

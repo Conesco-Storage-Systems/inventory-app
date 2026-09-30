@@ -39,7 +39,7 @@ export default function LocationsList() {
             </Link>
           )}
           <Link className="tab-nav-link" to="/projects">
-            Projects
+            Project Management
           </Link>
         </div>
         {canEditLocations && (

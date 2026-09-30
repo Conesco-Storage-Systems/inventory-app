@@ -232,78 +232,72 @@ export default function Procurement() {
       </p>
       <h1>Procurement</h1>
 
-      <p>
-        <button type="button" onClick={() => importFileInputRef.current?.click()} disabled={importParsing}>
-          {importParsing ? 'Reading…' : 'Import Reports'}
-        </button>
-        <input
-          ref={importFileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          className="photo-file-input"
-          onChange={handleImportFileSelected}
-        />
-      </p>
-      {importParseError && <p className="field-error">{importParseError}</p>}
-      {importResultMessage && <p className="placeholder-note">{importResultMessage}</p>}
-
-      {importSheetNames.length > 0 && !importPreview && (
-        <div className="field-row">
-          <label>
-            <strong>{importFileName}</strong> has multiple sheets. Pick the one with the SO data.
-            <select defaultValue="" onChange={(e) => handleSelectImportSheet(e.target.value)}>
-              <option value="" disabled>
-                Select a sheet…
-              </option>
-              {importSheetNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" onClick={cancelImportPreview}>
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {importPreview && (
-        <div className="item-section">
-          <p>
-            Ready to import from <strong>{importFileName}</strong>: {importPreview.lineItems.length} Sales Order
-            line item{importPreview.lineItems.length === 1 ? '' : 's'}
-            {importPreview.skippedRows > 0
-              ? ` (${importPreview.skippedRows} row${importPreview.skippedRows === 1 ? '' : 's'} skipped — no quantity).`
-              : '.'}
-          </p>
-          <div className="dialog-actions">
-            <button type="button" onClick={cancelImportPreview} disabled={importCommitting}>
-              Cancel
-            </button>
-            <button type="button" onClick={confirmImport} disabled={importCommitting}>
-              {importCommitting ? 'Importing…' : 'Confirm Import'}
-            </button>
-          </div>
-        </div>
-      )}
-
       <section className="item-section">
         <h2>Recent Changes</h2>
         <p className="placeholder-note">
-          Nothing to show yet — this will surface recent Sales Order, Invoice, and Bill of Lading activity in one
-          feed.
+          This will surface recent sales order changes in one feed in order to show discrepancies needing attention
+          in inventory
         </p>
-        <p className="placeholder-note">Pull from salespad based on Date Modified</p>
       </section>
 
       <details className="item-section collapsible-section" open>
         <summary className="collapsible-section-summary">Recent SO's ({pendingLineItems.length})</summary>
-        <p className="placeholder-note">
-          This will show any new line items for any new Sales Orders, if they do not already match up to a quote.
-          Inventory that is exported from our quote system will automatically be tied to items, if they are not
-          tied to a quote, they will show up here to be reconciled.
+
+        <p>
+          <button type="button" onClick={() => importFileInputRef.current?.click()} disabled={importParsing}>
+            {importParsing ? 'Reading…' : 'Import Sales Orders'}
+          </button>
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="photo-file-input"
+            onChange={handleImportFileSelected}
+          />
         </p>
+        {importParseError && <p className="field-error">{importParseError}</p>}
+        {importResultMessage && <p className="placeholder-note">{importResultMessage}</p>}
+
+        {importSheetNames.length > 0 && !importPreview && (
+          <div className="field-row">
+            <label>
+              <strong>{importFileName}</strong> has multiple sheets. Pick the one with the SO data.
+              <select defaultValue="" onChange={(e) => handleSelectImportSheet(e.target.value)}>
+                <option value="" disabled>
+                  Select a sheet…
+                </option>
+                {importSheetNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={cancelImportPreview}>
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {importPreview && (
+          <div className="item-section">
+            <p>
+              Ready to import from <strong>{importFileName}</strong>: {importPreview.lineItems.length} Sales Order
+              line item{importPreview.lineItems.length === 1 ? '' : 's'}
+              {importPreview.skippedRows > 0
+                ? ` (${importPreview.skippedRows} row${importPreview.skippedRows === 1 ? '' : 's'} skipped — no quantity).`
+                : '.'}
+            </p>
+            <div className="dialog-actions">
+              <button type="button" onClick={cancelImportPreview} disabled={importCommitting}>
+                Cancel
+              </button>
+              <button type="button" onClick={confirmImport} disabled={importCommitting}>
+                {importCommitting ? 'Importing…' : 'Confirm Import'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {pendingLineItems.length === 0 ? (
           <p className="placeholder-note">No pending Sales Order line items — import a report to bring some in.</p>
@@ -391,11 +385,6 @@ export default function Procurement() {
             </table>
           </div>
         )}
-      </details>
-
-      <details className="item-section collapsible-section" open>
-        <summary className="collapsible-section-summary">Invoices</summary>
-        <p className="placeholder-note">Invoice tracking hasn't been built yet.</p>
       </details>
     </main>
   )

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
-import { deductGroupQuantity } from './items'
+import { deductGroupQuantity, restoreGroupQuantity } from './items'
 import { enqueuePendingDelete } from './pendingDeletes'
 import { getEditorName } from '../state/editor'
 import type { ParsedSoLineItem } from '../import/parseSoReport'
@@ -164,6 +164,54 @@ export async function tieSalesOrderLineItem(input: TieSalesOrderLineItemInput): 
         updatedAt: Date.now(),
         syncStatus: 'pending',
       })
+    },
+  )
+}
+
+// "Delete SO" on a location's Sales Order page — reverses the tie: restores
+// the quantity that was deducted from inventory and sends the line item(s)
+// back to 'pending' so they reappear in Procurement to be reconciled again,
+// rather than erasing the SalesPad-sourced record entirely. Also clears any
+// ship-date schedule for this pair, so a future re-tie at this site doesn't
+// inherit a stale date.
+export async function deleteTiedSalesOrder(soNumber: string, siteId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    [
+      db.salesOrderLineItems,
+      db.salesOrderSchedules,
+      db.beams,
+      db.uprights,
+      db.wireDecks,
+      db.miscItems,
+      db.sites,
+      db.pendingDeletes,
+    ],
+    async () => {
+      const items = await listTiedLineItemsBySoNumberAndSite(soNumber, siteId)
+      for (const item of items) {
+        if (item.tiedItemType) {
+          await restoreGroupQuantity(item.tiedItemType, item.tiedItemIds, item.quantityOrdered)
+        }
+        await db.salesOrderLineItems.update(item.id, {
+          status: 'pending',
+          tiedSiteId: '',
+          tiedSiteName: '',
+          tiedItemType: '',
+          tiedItemIds: [],
+          tiedDescription: '',
+          tiedAt: 0,
+          tiedBy: '',
+          updatedAt: Date.now(),
+          syncStatus: 'pending',
+        })
+      }
+
+      const schedule = await getSalesOrderSchedule(soNumber, siteId)
+      if (schedule) {
+        await enqueuePendingDelete('salesOrderSchedules', schedule.id)
+        await db.salesOrderSchedules.delete(schedule.id)
+      }
     },
   )
 }

@@ -2,12 +2,13 @@ interface DeleteConfirmProps {
   onConfirm: () => void
   onCancel: () => void
   deleting: boolean
+  message?: string
 }
 
-export default function DeleteConfirm({ onConfirm, onCancel, deleting }: DeleteConfirmProps) {
+export default function DeleteConfirm({ onConfirm, onCancel, deleting, message }: DeleteConfirmProps) {
   return (
     <div className="delete-confirm">
-      <p>Are you sure you want to delete the line item?</p>
+      <p>{message ?? 'Are you sure you want to delete the line item?'}</p>
       <div className="dialog-actions">
         <button type="button" onClick={onCancel} disabled={deleting}>
           Go Back

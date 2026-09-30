@@ -1,8 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import ScheduleShipmentDialog from '../components/ScheduleShipmentDialog'
 import { db } from '../db/db'
-import { getSalesOrderSchedule, listTiedLineItemsBySoNumberAndSite } from '../db/salesOrders'
+import { deleteTiedSalesOrder, getSalesOrderSchedule, listTiedLineItemsBySoNumberAndSite } from '../db/salesOrders'
 import type { SoLineItemForBol } from './NewBillOfLading'
 import { ITEM_TYPE_LABELS } from '../models/types'
 import { useRole } from '../state/RoleContext'
@@ -23,6 +25,12 @@ export default function ViewSalesOrder() {
     () => (siteId && soNumber ? getSalesOrderSchedule(soNumber, siteId) : undefined),
     [siteId, soNumber],
   )
+  const siteBols = useLiveQuery(() => (siteId ? db.billsOfLading.where('siteId').equals(siteId).toArray() : []), [siteId]) ?? []
+  // Already shipped means the deducted inventory is actually gone, not just
+  // reserved — deleting at that point would incorrectly hand it back, so
+  // the delete option is withheld once a signed, shipped BOL covers this SO.
+  const isShipped = !!(soNumber && siteBols.some((b) => b.sourceSoNumbers.includes(soNumber) && b.shippedAt > 0))
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   // Reached either from a location's own Sales Orders list (back goes to
   // that location) or from the app-wide Sales Orders page (back goes
@@ -30,6 +38,12 @@ export default function ViewSalesOrder() {
   const backState = routerLocation.state as { backTo?: string; backLabel?: string } | null
   const backTo = backState?.backTo ?? `/locations/${siteId}`
   const backLabel = backState?.backLabel ?? (site?.name ?? 'location')
+
+  async function handleDeleteSo() {
+    if (!siteId || !soNumber) return
+    await deleteTiedSalesOrder(soNumber, siteId)
+    navigate(backTo)
+  }
 
   function handleGenerateBol() {
     if (!siteId || !soNumber) return
@@ -62,9 +76,30 @@ export default function ViewSalesOrder() {
                 Generate BOL
               </button>
             )}
+            {permissions.manageSalesOrders && (
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={lineItems.length === 0 || isShipped}
+              >
+                Delete SO
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {isShipped && (
+        <p className="placeholder-note">This Sales Order has already shipped, so it can't be deleted.</p>
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDeleteDialog
+          onConfirm={handleDeleteSo}
+          onClose={() => setConfirmingDelete(false)}
+          message="Delete this Sales Order from this location? Its line items will go back to Procurement as pending, and the inventory quantity that was deducted for them will be restored."
+        />
+      )}
 
       {schedule?.scheduledShipDate && (
         <p className="placeholder-note">

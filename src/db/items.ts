@@ -555,3 +555,25 @@ export async function deductGroupQuantity(itemType: ItemType, ids: string[], amo
   }
   if (siteId) await touchSiteUpdated(siteId)
 }
+
+// Reverses a deductGroupQuantity call (e.g. un-tying a Sales Order line
+// item) — there's no record of exactly how a deduction was originally
+// split across the group's raw records, so the full amount goes back onto
+// whichever one of them still exists, which keeps the group's total
+// correct even if the per-record split isn't identical to before. If none
+// of the group's records exist anymore, there's nowhere left to restore
+// it to, so this silently does nothing rather than failing the caller.
+export async function restoreGroupQuantity(itemType: ItemType, ids: string[], amount: number): Promise<void> {
+  const table = db.table(ITEM_TABLE_NAMES[itemType])
+  for (const id of ids) {
+    const record = await table.get(id)
+    if (!record) continue
+    await table.update(id, {
+      quantity: record.quantity + amount,
+      updatedAt: Date.now(),
+      syncStatus: 'pending',
+    })
+    await touchSiteUpdated(record.siteId)
+    return
+  }
+}

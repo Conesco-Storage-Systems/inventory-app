@@ -128,6 +128,14 @@ export default function AllInventory() {
     })
   }
 
+  // While building a Sales Quote, one checkbox does double duty — it adds
+  // the item to the quote and marks it for the PDF generator, instead of
+  // showing two separate checkboxes for the same row.
+  function toggleSelectionAndPdf(sel: QuoteSelection) {
+    toggleSelection(sel)
+    togglePdfSelection(sel.key)
+  }
+
   function handleGeneratePdf() {
     const seeds: CustomerSheetSeed[] = [
       ...uprightRows
@@ -322,7 +330,7 @@ export default function AllInventory() {
                   disabled={available <= 0}
                   checked={selections.has(key)}
                   onChange={() =>
-                    toggleSelection({
+                    toggleSelectionAndPdf({
                       key,
                       itemType: 'upright',
                       siteId: row.siteId,
@@ -471,7 +479,7 @@ export default function AllInventory() {
                   disabled={available <= 0}
                   checked={selections.has(key)}
                   onChange={() =>
-                    toggleSelection({
+                    toggleSelectionAndPdf({
                       key,
                       itemType: 'beam',
                       siteId: row.siteId,
@@ -611,7 +619,7 @@ export default function AllInventory() {
                   disabled={available <= 0}
                   checked={selections.has(key)}
                   onChange={() =>
-                    toggleSelection({
+                    toggleSelectionAndPdf({
                       key,
                       itemType: 'wireDeck',
                       siteId: row.siteId,
@@ -733,7 +741,7 @@ export default function AllInventory() {
                   disabled={available <= 0}
                   checked={selections.has(key)}
                   onChange={() =>
-                    toggleSelection({
+                    toggleSelectionAndPdf({
                       key,
                       itemType: 'misc',
                       siteId: row.siteId,
@@ -898,17 +906,6 @@ export default function AllInventory() {
       </p>
       <h1>{pageTitle}</h1>
 
-      {quoteId && (
-        <div className="dialog-actions">
-          <p className="placeholder-note">
-            Building a Sales Quote — check the items to include, then Generate Quote.
-          </p>
-          <button type="button" onClick={handleGenerateQuote} disabled={selections.size === 0}>
-            Generate Quote ({selections.size})
-          </button>
-        </div>
-      )}
-
       {hasItems && (
         <>
           <div className="item-search-row">
@@ -927,6 +924,11 @@ export default function AllInventory() {
             <button type="button" onClick={handleGeneratePdf} disabled={pdfSelections.size === 0}>
               Generate PDF{pdfSelections.size > 0 ? ` (${pdfSelections.size})` : ''}
             </button>
+            {quoteId && (
+              <button type="button" onClick={handleGenerateQuote} disabled={selections.size === 0}>
+                Generate Quote ({selections.size})
+              </button>
+            )}
           </p>
         </>
       )}
@@ -947,9 +949,10 @@ export default function AllInventory() {
             onFilterChange={(key, values) => setUprightFilters((prev) => ({ ...prev, [key]: values }))}
             emptyMessage="No uprights match your search or filters."
             wrapColumnKeys={['notes']}
+            leftAlignColumnKeys={['location']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={[pdfSelectLeadingColumn('upright'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('upright'), heldByLeadingColumn]}
           />
         </section>
       )}
@@ -968,9 +971,10 @@ export default function AllInventory() {
             onFilterChange={(key, values) => setBeamFilters((prev) => ({ ...prev, [key]: values }))}
             emptyMessage="No beams match your search or filters."
             wrapColumnKeys={['notes']}
+            leftAlignColumnKeys={['location']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={[pdfSelectLeadingColumn('beam'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('beam'), heldByLeadingColumn]}
           />
         </section>
       )}
@@ -989,9 +993,10 @@ export default function AllInventory() {
             onFilterChange={(key, values) => setWireDeckFilters((prev) => ({ ...prev, [key]: values }))}
             emptyMessage="No wire decks match your search or filters."
             wrapColumnKeys={['notes']}
+            leftAlignColumnKeys={['location']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={[pdfSelectLeadingColumn('wireDeck'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('wireDeck'), heldByLeadingColumn]}
           />
         </section>
       )}
@@ -1010,9 +1015,10 @@ export default function AllInventory() {
             onFilterChange={(key, values) => setMiscFilters((prev) => ({ ...prev, [key]: values }))}
             emptyMessage="No items match your search or filters."
             wrapColumnKeys={['notes', 'itemDescription']}
+            leftAlignColumnKeys={['location']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={[pdfSelectLeadingColumn('misc'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('misc'), heldByLeadingColumn]}
           />
         </section>
       )}

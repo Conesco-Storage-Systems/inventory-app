@@ -1,5 +1,5 @@
 .app-logo {
-  position: fixed;
+  position: absolute;
   top: 12px;
   right: 16px;
   height: 42px;
@@ -8,7 +8,7 @@
 }
 
 .sign-out-button {
-  position: fixed;
+  position: absolute;
   top: 12px;
   left: 16px;
   z-index: 500;
@@ -726,13 +726,16 @@ button:disabled {
   white-space: normal;
   overflow-wrap: normal;
   word-break: normal;
+  text-align: left;
 }
 
-/* Centers the notes block as a whole within the column, while the text
-   inside it stays left-aligned line to line (ragged right, not centered). */
 .notes-text {
   display: inline-block;
   max-width: 100%;
+  text-align: left;
+}
+
+.item-table .col-left {
   text-align: left;
 }
 

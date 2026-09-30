@@ -30,6 +30,7 @@ interface ReadOnlyItemTableProps<TKey extends string, TRow extends { key: string
   onFilterChange: (key: TKey, values: Set<string>) => void
   emptyMessage: string
   wrapColumnKeys?: TKey[]
+  leftAlignColumnKeys?: TKey[]
   // When set, rows this predicate matches are pulled out of the normal
   // flow and rendered together at the bottom of the same table, under a
   // divider row bearing this label — a subgroup, not a separate table.
@@ -61,6 +62,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   onFilterChange,
   emptyMessage,
   wrapColumnKeys = [],
+  leftAlignColumnKeys = [],
   secondaryGroupLabel,
   isSecondaryRow,
   leadingColumns = [],
@@ -128,7 +130,10 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
           <td key={i}>{(col.showOnSecondary ?? false) === isSecondary ? col.render(row) : null}</td>
         ))}
         {visibleOrder.map((key) => (
-          <td key={key} className={wrapColumnKeys.includes(key) ? 'col-notes' : undefined}>
+          <td
+            key={key}
+            className={wrapColumnKeys.includes(key) ? 'col-notes' : leftAlignColumnKeys.includes(key) ? 'col-left' : undefined}
+          >
             {columns[key].render(row)}
           </td>
         ))}

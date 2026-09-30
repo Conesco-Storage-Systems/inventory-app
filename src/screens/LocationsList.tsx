@@ -30,7 +30,7 @@ export default function LocationsList() {
           )}
           {permissions.viewProcurementDashboard && (
             <Link className="tab-nav-link" to="/sales-orders">
-              Sales Orders
+              Inventory Management
             </Link>
           )}
           {permissions.viewSalesDashboard && (

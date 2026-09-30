@@ -46,6 +46,7 @@ import { useRole } from '../state/RoleContext'
 import { formatDisplayName } from '../utils/displayName'
 import { mergeRowsWithHolds } from '../utils/heldRows'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
+import { formatSoNumber } from '../utils/soNumber'
 
 type ItemKind = 'upright' | 'beam' | 'wireDeck' | 'misc'
 
@@ -707,7 +708,7 @@ export default function LocationDetail() {
               <li key={group.soNumber} className="location-list-row">
                 <div className="location-list-info">
                   <Link to={`/locations/${site.id}/sales-orders/${encodeURIComponent(group.soNumber)}`}>
-                    SO #{group.soNumber} — {group.count} item{group.count === 1 ? '' : 's'} — last tied{' '}
+                    {formatSoNumber(group.soNumber)} — {group.count} item{group.count === 1 ? '' : 's'} — last tied{' '}
                     {new Date(group.latestTiedAt).toLocaleDateString()}
                   </Link>
                 </div>

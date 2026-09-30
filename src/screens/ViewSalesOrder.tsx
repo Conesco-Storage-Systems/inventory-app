@@ -6,6 +6,7 @@ import { getSalesOrderSchedule, listTiedLineItemsBySoNumberAndSite } from '../db
 import type { SoLineItemForBol } from './NewBillOfLading'
 import { ITEM_TYPE_LABELS } from '../models/types'
 import { useRole } from '../state/RoleContext'
+import { formatSoNumber } from '../utils/soNumber'
 
 export default function ViewSalesOrder() {
   const { permissions } = useRole()
@@ -47,7 +48,7 @@ export default function ViewSalesOrder() {
         <Link to={backTo}>← Back to {backLabel}</Link>
       </p>
       <div className="page-header">
-        <h1>Sales Order {soNumber}</h1>
+        <h1>Sales Order {soNumber ? formatSoNumber(soNumber) : ''}</h1>
         {siteId && (
           <div className="dialog-actions">
             <ScheduleShipmentDialog

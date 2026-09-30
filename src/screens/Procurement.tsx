@@ -17,6 +17,7 @@ import { computeAvailableQuantity } from '../db/salesQuotes'
 import { getSoReportSheetNames, parseSoReportWorkbook, type SoReportParseResult } from '../import/parseSoReport'
 import type { ItemType } from '../models/types'
 import { useRole } from '../state/RoleContext'
+import { formatSoNumber } from '../utils/soNumber'
 
 interface AvailableRow {
   key: string
@@ -323,7 +324,7 @@ export default function Procurement() {
                 {pendingLineItems.map((li) => (
                   <Fragment key={li.id}>
                     <tr>
-                      <td>{li.soNumber}</td>
+                      <td>{formatSoNumber(li.soNumber)}</td>
                       <td>{li.warehouseCode}</td>
                       <td>{li.description}</td>
                       <td>{li.quantityOrdered}</td>

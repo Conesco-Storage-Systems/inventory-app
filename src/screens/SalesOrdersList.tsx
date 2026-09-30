@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { db } from '../db/db'
 import type { BillOfLading, SalesOrderSchedule } from '../models/types'
 import { useRole } from '../state/RoleContext'
+import { formatSoNumber } from '../utils/soNumber'
 
 interface SalesOrderGroup {
   soNumber: string
@@ -91,7 +92,7 @@ function SalesOrderSection({ title, groups }: { title: string; groups: Classifie
                 to={`/locations/${group.siteId}/sales-orders/${encodeURIComponent(group.soNumber)}`}
                 state={{ backTo: '/sales-orders', backLabel: 'Sales Orders' }}
               >
-                SO #{group.soNumber}
+                {formatSoNumber(group.soNumber)}
               </Link>
               <span className="sales-order-row-location">{group.siteName}</span>
               <span className="sales-order-row-date">
@@ -139,9 +140,9 @@ export default function SalesOrdersList() {
         <p className="placeholder-note">No Sales Orders have been tied to inventory yet.</p>
       ) : (
         <>
-          <SalesOrderSection title="Shipped" groups={shipped} />
-          <SalesOrderSection title="Scheduled" groups={scheduled} />
           <SalesOrderSection title="Not yet Scheduled" groups={notScheduled} />
+          <SalesOrderSection title="Scheduled" groups={scheduled} />
+          <SalesOrderSection title="Shipped" groups={shipped} />
         </>
       )}
     </main>

@@ -6,6 +6,7 @@ import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
 import { ITEM_TYPE_LABELS } from '../models/types'
 import type { SoLineItemForBol } from './NewBillOfLading'
 import { useRole } from '../state/RoleContext'
+import { formatSoNumber } from '../utils/soNumber'
 
 export default function SelectSoItemsForBol() {
   const { permissions } = useRole()
@@ -88,7 +89,7 @@ export default function SelectSoItemsForBol() {
                   <td>
                     <input type="checkbox" checked={selectedIds.includes(li.id)} onChange={() => toggle(li.id)} />
                   </td>
-                  <td>{li.soNumber}</td>
+                  <td>{formatSoNumber(li.soNumber)}</td>
                   <td>{li.tiedDescription}</td>
                   <td>{li.quantityOrdered}</td>
                 </tr>

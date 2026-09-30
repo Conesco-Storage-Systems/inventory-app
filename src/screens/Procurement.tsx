@@ -337,7 +337,7 @@ export default function Procurement() {
                     </tr>
                     {tyingId === li.id && (
                       <tr>
-                        <td colSpan={6}>
+                        <td colSpan={6} className="col-left">
                           <div className="field-row">
                             <label>
                               Location
@@ -350,32 +350,36 @@ export default function Procurement() {
                                 ))}
                               </select>
                             </label>
-                            {tySiteId && (
-                              <label>
-                                Inventory Item
-                                <select value={tyRowKey} onChange={(e) => setTyRowKey(e.target.value)}>
-                                  <option value="">Select an item…</option>
-                                  {eligibleRows.map((row) => (
-                                    <option key={row.key} value={row.key}>
-                                      {row.description} ({row.quantity} available)
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            )}
                           </div>
-                          {tySiteId && eligibleRows.length === 0 && (
-                            <p className="placeholder-note">
-                              No item at this location has {li.quantityOrdered} or more available — a line item
-                              can only be tied to one row for its full quantity.
-                            </p>
+                          {tySiteId && (
+                            <>
+                              <div className="field-row">
+                                <label>
+                                  Inventory Item
+                                  <select value={tyRowKey} onChange={(e) => setTyRowKey(e.target.value)}>
+                                    <option value="">Select an item…</option>
+                                    {eligibleRows.map((row) => (
+                                      <option key={row.key} value={row.key}>
+                                        {row.description} ({row.quantity} available)
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+                              {eligibleRows.length === 0 && (
+                                <p className="placeholder-note">
+                                  No item at this location has {li.quantityOrdered} or more available — a line item
+                                  can only be tied to one row for its full quantity.
+                                </p>
+                              )}
+                              {tieError && <p className="field-error">{tieError}</p>}
+                              <p>
+                                <button type="button" onClick={handleConfirmTie} disabled={tying || !tyRowKey}>
+                                  {tying ? 'Tying…' : 'Confirm Tie'}
+                                </button>
+                              </p>
+                            </>
                           )}
-                          {tieError && <p className="field-error">{tieError}</p>}
-                          <div className="dialog-actions">
-                            <button type="button" onClick={handleConfirmTie} disabled={tying || !tyRowKey}>
-                              {tying ? 'Tying…' : 'Confirm Tie'}
-                            </button>
-                          </div>
                         </td>
                       </tr>
                     )}

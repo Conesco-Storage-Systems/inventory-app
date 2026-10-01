@@ -91,13 +91,21 @@ export async function deleteSalesOrderSchedule(soNumber: string, siteId: string)
 // Rows already imported (pending OR tied) are matched on these four
 // fields so re-importing an overlapping weekly report (an open SO can
 // show up again in the next week's export) doesn't create duplicates.
-function importKey(li: Pick<SalesOrderLineItem, 'soNumber' | 'description' | 'warehouseCode' | 'quantityOrdered'>) {
+// Uses importSourceKey when a row has one (set once at import, preserved
+// across a partial-tie split) rather than its live quantityOrdered, which
+// can shrink after a split and would otherwise look like a "new" row on
+// the next re-import of the same original report line.
+function importKey(li: { soNumber: string; description: string; warehouseCode: string; quantityOrdered: number }) {
   return [li.soNumber, li.description, li.warehouseCode, li.quantityOrdered].join('|')
+}
+
+function effectiveImportSourceKey(li: SalesOrderLineItem): string {
+  return li.importSourceKey ?? importKey(li)
 }
 
 export async function importSalesOrderLineItems(items: ParsedSoLineItem[]): Promise<{ imported: number; skippedDuplicates: number }> {
   const existing = await db.salesOrderLineItems.toArray()
-  const existingKeys = new Set(existing.map(importKey))
+  const existingKeys = new Set(existing.map(effectiveImportSourceKey))
 
   const now = Date.now()
   let imported = 0
@@ -123,6 +131,7 @@ export async function importSalesOrderLineItems(items: ParsedSoLineItem[]): Prom
       description: parsed.description,
       warehouseCode: parsed.warehouseCode,
       quantityOrdered: parsed.quantity,
+      importSourceKey: key,
       status: 'pending',
       tiedSiteId: '',
       tiedSiteName: '',
@@ -175,6 +184,13 @@ export interface TieSalesOrderLineItemInput {
   itemType: ItemType
   itemIds: string[]
   tiedDescription: string
+  // How much the chosen inventory row actually has on hand. When it's
+  // less than the line item's own quantityOrdered, the tie only takes
+  // what's there instead of failing outright — the line item splits into
+  // the piece just tied (for availableQty) and a remainder that stays
+  // 'pending' for the rest to be tied elsewhere (another row, another
+  // location, or later once more stock comes in).
+  availableQty: number
 }
 
 // Deducting inventory and marking the line item tied must succeed or fail
@@ -189,18 +205,52 @@ export async function tieSalesOrderLineItem(input: TieSalesOrderLineItemInput): 
       const lineItem = await db.salesOrderLineItems.get(input.lineItemId)
       if (!lineItem || lineItem.status !== 'pending') return
 
-      await deductGroupQuantity(input.itemType, input.itemIds, lineItem.quantityOrdered)
+      const tieQty = Math.max(0, Math.min(input.availableQty, lineItem.quantityOrdered))
+      if (tieQty <= 0) return
+      await deductGroupQuantity(input.itemType, input.itemIds, tieQty)
 
-      await db.salesOrderLineItems.update(input.lineItemId, {
-        status: 'tied',
+      const now = Date.now()
+      const editorName = getEditorName()
+      const tiedFields = {
         tiedSiteId: input.siteId,
         tiedSiteName: input.siteName,
         tiedItemType: input.itemType,
         tiedItemIds: input.itemIds,
         tiedDescription: input.tiedDescription,
-        tiedAt: Date.now(),
-        tiedBy: getEditorName(),
-        updatedAt: Date.now(),
+        tiedAt: now,
+        tiedBy: editorName,
+      }
+
+      if (tieQty >= lineItem.quantityOrdered) {
+        // Covers the whole line item — same as before, no split needed.
+        await db.salesOrderLineItems.update(input.lineItemId, {
+          status: 'tied',
+          ...tiedFields,
+          updatedAt: now,
+          syncStatus: 'pending',
+        })
+        return
+      }
+
+      // Partial — split off a new tied row for exactly what was tied, and
+      // shrink the original (still pending) by that same amount so it
+      // keeps representing only what's left to tie.
+      const sourceKey = effectiveImportSourceKey(lineItem)
+      await db.salesOrderLineItems.add({
+        ...lineItem,
+        id: uuidv4(),
+        quantityOrdered: tieQty,
+        importSourceKey: sourceKey,
+        status: 'tied',
+        ...tiedFields,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'pending',
+      })
+      await db.salesOrderLineItems.update(input.lineItemId, {
+        quantityOrdered: lineItem.quantityOrdered - tieQty,
+        importSourceKey: sourceKey,
+        updatedAt: now,
         syncStatus: 'pending',
       })
     },

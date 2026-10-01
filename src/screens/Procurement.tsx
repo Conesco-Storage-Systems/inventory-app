@@ -113,7 +113,11 @@ export default function Procurement() {
     : []
 
   const tyingLineItem = pendingLineItems.find((li) => li.id === tyingId)
-  const eligibleRows = tyingLineItem ? availableRows.filter((row) => row.quantity >= tyingLineItem.quantityOrdered) : []
+  // Every row with something on hand, regardless of whether it covers the
+  // whole line item — tying to one with less just takes what's there and
+  // leaves the rest pending, instead of hiding anything short of the full
+  // amount.
+  const eligibleRows = tyingLineItem ? availableRows.filter((row) => row.quantity > 0) : []
 
   async function handleImportFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -205,6 +209,7 @@ export default function Procurement() {
         itemType: row.itemType,
         itemIds: row.itemIds,
         tiedDescription: row.description,
+        availableQty: row.quantity,
       })
       cancelTying()
     } catch (err) {
@@ -320,7 +325,7 @@ export default function Procurement() {
                     <tr>
                       <td>{formatSoNumber(li.soNumber)}</td>
                       <td>{li.warehouseCode}</td>
-                      <td>{li.description}</td>
+                      <td className="col-left">{li.description}</td>
                       <td>{li.quantityOrdered}</td>
                       <td>
                         <input
@@ -367,11 +372,19 @@ export default function Procurement() {
                                 </label>
                               </div>
                               {eligibleRows.length === 0 && (
-                                <p className="placeholder-note">
-                                  No item at this location has {li.quantityOrdered} or more available — a line item
-                                  can only be tied to one row for its full quantity.
-                                </p>
+                                <p className="placeholder-note">No inventory is available at this location yet.</p>
                               )}
+                              {(() => {
+                                const selectedRow = eligibleRows.find((r) => r.key === tyRowKey)
+                                if (!selectedRow || selectedRow.quantity >= li.quantityOrdered) return null
+                                return (
+                                  <p className="placeholder-note">
+                                    Only {selectedRow.quantity} of the {li.quantityOrdered} needed is available here —
+                                    tying will use all {selectedRow.quantity} and leave{' '}
+                                    {li.quantityOrdered - selectedRow.quantity} still pending to tie elsewhere.
+                                  </p>
+                                )
+                              })()}
                               {tieError && <p className="field-error">{tieError}</p>}
                               <p>
                                 <button type="button" onClick={handleConfirmTie} disabled={tying || !tyRowKey}>

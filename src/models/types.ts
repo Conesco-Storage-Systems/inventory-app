@@ -305,6 +305,16 @@ export interface SalesOrderLineItem {
   // warehouse codes don't necessarily match a Site's name exactly.
   warehouseCode: string
   quantityOrdered: number
+  // The (soNumber, description, warehouseCode, quantity) signature of the
+  // original row this came from on import — set once and never touched
+  // again, even when a partial tie splits this line into two rows (one
+  // tied for what was available, one still pending for the rest). Import
+  // de-dup checks this instead of the live quantityOrdered above, which
+  // can shrink after a split and would otherwise look like a "new" row on
+  // the next re-import of the same report. Absent on rows imported before
+  // this field existed — de-dup falls back to computing it from their own
+  // (never-split) current fields.
+  importSourceKey?: string
   status: SalesOrderLineItemStatus
   tiedSiteId: string
   tiedSiteName: string

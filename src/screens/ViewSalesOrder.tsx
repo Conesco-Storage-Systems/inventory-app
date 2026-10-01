@@ -44,6 +44,14 @@ export default function ViewSalesOrder() {
   const isShipped = lineItems.some((li) => (shippedByLineItem.get(li.id) ?? 0) > 0)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
+  // Every shipped BOL generated from this Sales Order at this location, so
+  // any of them can be opened again later — not just the most recent one,
+  // since a partially shipped order can end up with more than one. A BOL
+  // still in draft (not yet signed/marked shipped) doesn't show here.
+  const relatedBols = (soNumber ? siteBols.filter((b) => b.sourceSoNumbers.includes(soNumber) && b.shippedAt > 0) : [])
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+
   // Reached either from a location's own Sales Orders list (back goes to
   // that location) or from the app-wide Sales Orders page (back goes
   // there instead) — the caller says which via navigation state.
@@ -158,6 +166,27 @@ export default function ViewSalesOrder() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {relatedBols.length > 0 && (
+        <section className="item-section">
+          <h2>Bills of Lading</h2>
+          <ul className="location-list location-list--compact">
+            {relatedBols.map((bol) => (
+              <li key={bol.id} className="location-list-row">
+                <div className="location-list-info">
+                  <Link
+                    to={`/locations/${siteId}/bol/${bol.id}`}
+                    state={{ backTo: routerLocation.pathname, backLabel: `Sales Order ${formatSoNumber(soNumber ?? '')}` }}
+                  >
+                    {bol.loadNumber ? `Load ${bol.loadNumber}` : 'View BOL'} — {bol.date || 'no date'} — Shipped{' '}
+                    {new Date(bol.shippedAt).toLocaleDateString()}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </main>
   )

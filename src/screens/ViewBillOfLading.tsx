@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { getBillOfLading, markBillOfLadingShipped, signBillOfLading, updateBillOfLading } from '../db/billsOfLading'
 import SignaturePad from '../components/SignaturePad'
 import { bolElementToPdfBlob, bolPdfFileName } from '../export/exportBolToPdf'
@@ -60,7 +60,14 @@ function draftFromBol(bol: BillOfLading): BolDraft {
 export default function ViewBillOfLading() {
   const { permissions } = useRole()
   const { siteId, bolId } = useParams<{ siteId: string; bolId: string }>()
+  const routerLocation = useLocation()
   const bol = useLiveQuery(() => (bolId ? getBillOfLading(bolId) : undefined), [bolId])
+  // Reached either from a location's own BOL list (back goes there) or
+  // from a specific Sales Order's page (back goes there instead) — the
+  // caller says which via navigation state.
+  const backState = routerLocation.state as { backTo?: string; backLabel?: string } | null
+  const backTo = backState?.backTo ?? `/locations/${siteId}`
+  const backLabel = backState?.backLabel ?? 'location'
   const frameRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
@@ -193,7 +200,7 @@ export default function ViewBillOfLading() {
     return (
       <main className="page">
         <p>Bill of Lading not found.</p>
-        <Link to={`/locations/${siteId}`}>Back to location</Link>
+        <Link to={backTo}>Back to {backLabel}</Link>
       </main>
     )
   }
@@ -203,7 +210,7 @@ export default function ViewBillOfLading() {
   return (
     <main className="page page-wide bol-document">
       <p className="no-print">
-        <Link to={`/locations/${siteId}`}>← Back</Link>
+        <Link to={backTo}>← Back to {backLabel}</Link>
       </p>
       <div className="dialog-actions no-print">
         <button type="button" onClick={() => window.print()} disabled={isEditing}>

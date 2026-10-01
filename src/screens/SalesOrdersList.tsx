@@ -113,8 +113,14 @@ function SalesOrderSection({ title, groups }: { title: string; groups: Classifie
 
 export default function SalesOrdersList() {
   const { permissions } = useRole()
+  const sites = useLiveQuery(() => db.sites.toArray(), []) ?? []
+  const activeSiteIds = new Set(
+    sites.filter((site) => site.active !== false && !site.deletedAt).map((site) => site.id),
+  )
   const tiedLineItems =
-    useLiveQuery(() => db.salesOrderLineItems.where('status').equals('tied').toArray(), []) ?? []
+    (useLiveQuery(() => db.salesOrderLineItems.where('status').equals('tied').toArray(), []) ?? []).filter((li) =>
+      activeSiteIds.has(li.tiedSiteId),
+    )
   const bols = useLiveQuery(() => db.billsOfLading.toArray(), []) ?? []
   const schedules = useLiveQuery(() => db.salesOrderSchedules.toArray(), []) ?? []
 

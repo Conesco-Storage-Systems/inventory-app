@@ -924,6 +924,35 @@ button:disabled {
   border-radius: 8px;
 }
 
+/* Tying a Sales Order line item to inventory (Procurement.tsx) — every
+   column (the first one, and any added for another location) uses the
+   exact same field-row boxes as the rest of the app for Location and
+   Inventory Item, so they're identically sized and spaced. Only the
+   Quantity box differs: on an added column it pairs with a Remove
+   button in a single narrow box instead of a full-width one. Columns
+   sit left-aligned, side by side, wrapping onto new lines on narrow
+   screens instead of overflowing. */
+.tie-allocation-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.tie-allocation-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.tie-allocation-qty-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: fit-content;
+}
+
 .field-row.draggable {
   display: flex;
   align-items: flex-start;

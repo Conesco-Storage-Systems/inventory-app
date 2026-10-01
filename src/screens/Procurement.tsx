@@ -1,53 +1,18 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import TieAllocationColumn, { EMPTY_TIE_ALLOCATION, type TieAllocationValue } from '../components/TieAllocationColumn'
 import { db } from '../db/db'
-import { groupBeams, type BeamRow } from '../db/groupBeams'
-import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
-import { groupUprights, type UprightRow } from '../db/groupUprights'
-import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
-import { listBeamsBySite, listMiscItemsBySite, listUprightsBySite, listWireDecksBySite } from '../db/items'
 import {
   deletePendingSalesOrderLineItem,
   importSalesOrderLineItems,
   listPendingSalesOrderLineItems,
   tieSalesOrderLineItem,
+  type TieAllocation,
 } from '../db/salesOrders'
-import { computeAvailableQuantity } from '../db/salesQuotes'
 import { getSoReportSheetNames, parseSoReportWorkbook, type SoReportParseResult } from '../import/parseSoReport'
-import type { ItemType } from '../models/types'
 import { useRole } from '../state/RoleContext'
 import { formatSoNumber } from '../utils/soNumber'
-
-interface AvailableRow {
-  key: string
-  itemType: ItemType
-  itemIds: string[]
-  description: string
-  quantity: number
-}
-
-function describeBeam(row: BeamRow): string {
-  return [row.style, row.widthByLength, row.color, row.pinCount && `${row.pinCount} pin`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeUpright(row: UprightRow): string {
-  return [row.style, row.widthByHeight, row.color, row.gauge && `${row.gauge} ga`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeWireDeck(row: WireDeckRow): string {
-  return [row.style.join('/'), row.widthByLength, row.channelCount && `${row.channelCount} channel`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeMisc(row: MiscItemRow): string {
-  return [row.description, row.itemDescription, row.condition].filter(Boolean).join(', ')
-}
 
 export default function Procurement() {
   const { permissions } = useRole()
@@ -67,57 +32,29 @@ export default function Procurement() {
   const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const [tyingId, setTyingId] = useState<string | null>(null)
-  const [tySiteId, setTySiteId] = useState('')
-  const [tyRowKey, setTyRowKey] = useState('')
+  const [tyRows, setTyRows] = useState<TieAllocationValue[]>([EMPTY_TIE_ALLOCATION])
   const [tying, setTying] = useState(false)
   const [tieError, setTieError] = useState<string | null>(null)
 
   const activeSites = sites.filter((site) => site.active !== false && !site.deletedAt)
 
-  const beams = useLiveQuery(() => (tySiteId ? listBeamsBySite(tySiteId) : []), [tySiteId]) ?? []
-  const uprights = useLiveQuery(() => (tySiteId ? listUprightsBySite(tySiteId) : []), [tySiteId]) ?? []
-  const wireDecks = useLiveQuery(() => (tySiteId ? listWireDecksBySite(tySiteId) : []), [tySiteId]) ?? []
-  const miscItems = useLiveQuery(() => (tySiteId ? listMiscItemsBySite(tySiteId) : []), [tySiteId]) ?? []
-
-  const availableRows: AvailableRow[] = tySiteId
-    ? [
-        ...groupBeams(beams).map((row) => ({
-          key: `beam:${row.key}`,
-          itemType: 'beam' as ItemType,
-          itemIds: row.ids,
-          description: describeBeam(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
-        })),
-        ...groupUprights(uprights).map((row) => ({
-          key: `upright:${row.key}`,
-          itemType: 'upright' as ItemType,
-          itemIds: row.ids,
-          description: describeUpright(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
-        })),
-        ...groupWireDecks(wireDecks).map((row) => ({
-          key: `wireDeck:${row.key}`,
-          itemType: 'wireDeck' as ItemType,
-          itemIds: row.ids,
-          description: describeWireDeck(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
-        })),
-        ...groupMiscItems(miscItems).map((row) => ({
-          key: `misc:${row.key}`,
-          itemType: 'misc' as ItemType,
-          itemIds: row.ids,
-          description: describeMisc(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
-        })),
-      ]
-    : []
-
   const tyingLineItem = pendingLineItems.find((li) => li.id === tyingId)
-  // Every row with something on hand, regardless of whether it covers the
-  // whole line item — tying to one with less just takes what's there and
-  // leaves the rest pending, instead of hiding anything short of the full
-  // amount.
-  const eligibleRows = tyingLineItem ? availableRows.filter((row) => row.quantity > 0) : []
+
+  const tyRowsTotal = tyRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+
+  // Once the last column has a complete selection but the columns still
+  // don't add up to the full line item, add another empty column — this
+  // is what makes new columns "pop up" as you go instead of needing a
+  // manual add button.
+  useEffect(() => {
+    if (!tyingLineItem) return
+    const lastRow = tyRows[tyRows.length - 1]
+    const lastRowComplete = !!(lastRow && lastRow.siteId && lastRow.rowKey && Number(lastRow.quantity) > 0)
+    if (lastRowComplete && tyRowsTotal < tyingLineItem.quantityOrdered) {
+      setTyRows((prev) => [...prev, EMPTY_TIE_ALLOCATION])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tyRows, tyingLineItem?.quantityOrdered])
 
   async function handleImportFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -182,35 +119,42 @@ export default function Procurement() {
 
   function startTying(lineItemId: string) {
     setTyingId(lineItemId)
-    setTySiteId('')
-    setTyRowKey('')
+    setTyRows([EMPTY_TIE_ALLOCATION])
     setTieError(null)
   }
 
   function cancelTying() {
     setTyingId(null)
-    setTySiteId('')
-    setTyRowKey('')
+    setTyRows([EMPTY_TIE_ALLOCATION])
     setTieError(null)
+  }
+
+  function updateTyRow(index: number, next: TieAllocationValue) {
+    setTyRows((prev) => prev.map((row, i) => (i === index ? next : row)))
+  }
+
+  function removeTyRow(index: number) {
+    setTyRows((prev) => prev.filter((_, i) => i !== index))
   }
 
   async function handleConfirmTie() {
     const lineItem = tyingLineItem
-    const row = eligibleRows.find((r) => r.key === tyRowKey)
-    const site = activeSites.find((s) => s.id === tySiteId)
-    if (!lineItem || !row || !site) return
+    if (!lineItem) return
+    const allocations: TieAllocation[] = tyRows
+      .filter((row) => row.siteId && row.rowKey && Number(row.quantity) > 0)
+      .map((row) => ({
+        siteId: row.siteId,
+        siteName: row.siteName,
+        itemType: row.itemType as Exclude<TieAllocationValue['itemType'], ''>,
+        itemIds: row.itemIds,
+        tiedDescription: row.description,
+        quantity: Number(row.quantity),
+      }))
+    if (allocations.length === 0) return
     setTying(true)
     setTieError(null)
     try {
-      await tieSalesOrderLineItem({
-        lineItemId: lineItem.id,
-        siteId: site.id,
-        siteName: site.name,
-        itemType: row.itemType,
-        itemIds: row.itemIds,
-        tiedDescription: row.description,
-        availableQty: row.quantity,
-      })
+      await tieSalesOrderLineItem(lineItem.id, allocations)
       cancelTying()
     } catch (err) {
       setTieError(err instanceof Error ? err.message : 'Could not tie this line item. Please try again.')
@@ -343,56 +287,37 @@ export default function Procurement() {
                     {tyingId === li.id && (
                       <tr>
                         <td colSpan={6} className="col-left">
-                          <div className="field-row">
-                            <label>
-                              Location
-                              <select value={tySiteId} onChange={(e) => { setTySiteId(e.target.value); setTyRowKey('') }}>
-                                <option value="">Select a location…</option>
-                                {activeSites.map((site) => (
-                                  <option key={site.id} value={site.id}>
-                                    {site.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                          <div className="tie-allocation-row">
+                            {tyRows.map((row, index) => {
+                              const othersTotal = tyRowsTotal - (Number(row.quantity) || 0)
+                              const maxQuantity = Math.max(0, li.quantityOrdered - othersTotal)
+                              return (
+                                <TieAllocationColumn
+                                  key={index}
+                                  activeSites={activeSites}
+                                  holds={holds}
+                                  value={row}
+                                  maxQuantity={maxQuantity}
+                                  onChange={(next) => updateTyRow(index, next)}
+                                  onRemove={index > 0 ? () => removeTyRow(index) : undefined}
+                                  isFirst={index === 0}
+                                />
+                              )
+                            })}
                           </div>
-                          {tySiteId && (
-                            <>
-                              <div className="field-row">
-                                <label>
-                                  Inventory Item
-                                  <select value={tyRowKey} onChange={(e) => setTyRowKey(e.target.value)}>
-                                    <option value="">Select an item…</option>
-                                    {eligibleRows.map((row) => (
-                                      <option key={row.key} value={row.key}>
-                                        {row.description} ({row.quantity} available)
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              </div>
-                              {eligibleRows.length === 0 && (
-                                <p className="placeholder-note">No inventory is available at this location yet.</p>
-                              )}
-                              {(() => {
-                                const selectedRow = eligibleRows.find((r) => r.key === tyRowKey)
-                                if (!selectedRow || selectedRow.quantity >= li.quantityOrdered) return null
-                                return (
-                                  <p className="placeholder-note">
-                                    Only {selectedRow.quantity} of the {li.quantityOrdered} needed is available here —
-                                    tying will use all {selectedRow.quantity} and leave{' '}
-                                    {li.quantityOrdered - selectedRow.quantity} still pending to tie elsewhere.
-                                  </p>
-                                )
-                              })()}
-                              {tieError && <p className="field-error">{tieError}</p>}
-                              <p>
-                                <button type="button" onClick={handleConfirmTie} disabled={tying || !tyRowKey}>
-                                  {tying ? 'Tying…' : 'Confirm Tie'}
-                                </button>
-                              </p>
-                            </>
+                          {tyRowsTotal > 0 && tyRowsTotal < li.quantityOrdered && (
+                            <p className="placeholder-note">
+                              {tyRowsTotal} of {li.quantityOrdered} accounted for so far — add another location to
+                              cover the rest, or confirm now and leave {li.quantityOrdered - tyRowsTotal} pending to
+                              tie later.
+                            </p>
                           )}
+                          {tieError && <p className="field-error">{tieError}</p>}
+                          <p>
+                            <button type="button" onClick={handleConfirmTie} disabled={tying || tyRowsTotal === 0}>
+                              {tying ? 'Tying…' : 'Confirm Tie'}
+                            </button>
+                          </p>
                         </td>
                       </tr>
                     )}

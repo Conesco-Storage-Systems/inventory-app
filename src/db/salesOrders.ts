@@ -177,82 +177,79 @@ export async function deletePendingSalesOrderLineItem(id: string): Promise<void>
   await db.salesOrderLineItems.delete(id)
 }
 
-export interface TieSalesOrderLineItemInput {
-  lineItemId: string
+export interface TieAllocation {
   siteId: string
   siteName: string
   itemType: ItemType
   itemIds: string[]
   tiedDescription: string
-  // How much the chosen inventory row actually has on hand. When it's
-  // less than the line item's own quantityOrdered, the tie only takes
-  // what's there instead of failing outright — the line item splits into
-  // the piece just tied (for availableQty) and a remainder that stays
-  // 'pending' for the rest to be tied elsewhere (another row, another
-  // location, or later once more stock comes in).
-  availableQty: number
+  // Exactly how much to pull from this row — capped to what's left on the
+  // line item (and expected to already be capped to what the row actually
+  // has, by the caller).
+  quantity: number
 }
 
-// Deducting inventory and marking the line item tied must succeed or fail
-// together — otherwise a failure between the two steps (a closed tab, a
-// browser crash) could leave inventory deducted while the line item still
-// shows 'pending', and retrying would deduct it a second time.
-export async function tieSalesOrderLineItem(input: TieSalesOrderLineItemInput): Promise<void> {
+// Ties a pending line item across one or more inventory rows/locations in
+// a single pass — e.g. a 300-unit order split 150 at Pineville, 150 at
+// Maricopa. Each allocation becomes its own tied line item (so each has
+// its own single, unambiguous tied-to location, same as before); whatever
+// isn't covered by the allocations stays on the original row as a smaller
+// pending remainder, ready to be tied again later. Deducting inventory and
+// marking things tied must succeed or fail together — otherwise a failure
+// partway through (a closed tab, a browser crash) could leave inventory
+// deducted while the line item still shows the old full amount pending.
+export async function tieSalesOrderLineItem(lineItemId: string, allocations: TieAllocation[]): Promise<void> {
   await db.transaction(
     'rw',
-    [db.salesOrderLineItems, db.beams, db.uprights, db.wireDecks, db.miscItems, db.sites],
+    [db.salesOrderLineItems, db.beams, db.uprights, db.wireDecks, db.miscItems, db.sites, db.pendingDeletes],
     async () => {
-      const lineItem = await db.salesOrderLineItems.get(input.lineItemId)
+      const lineItem = await db.salesOrderLineItems.get(lineItemId)
       if (!lineItem || lineItem.status !== 'pending') return
 
-      const tieQty = Math.max(0, Math.min(input.availableQty, lineItem.quantityOrdered))
-      if (tieQty <= 0) return
-      await deductGroupQuantity(input.itemType, input.itemIds, tieQty)
-
+      const sourceKey = effectiveImportSourceKey(lineItem)
       const now = Date.now()
       const editorName = getEditorName()
-      const tiedFields = {
-        tiedSiteId: input.siteId,
-        tiedSiteName: input.siteName,
-        tiedItemType: input.itemType,
-        tiedItemIds: input.itemIds,
-        tiedDescription: input.tiedDescription,
-        tiedAt: now,
-        tiedBy: editorName,
-      }
+      let remaining = lineItem.quantityOrdered
 
-      if (tieQty >= lineItem.quantityOrdered) {
-        // Covers the whole line item — same as before, no split needed.
-        await db.salesOrderLineItems.update(input.lineItemId, {
+      for (const alloc of allocations) {
+        if (remaining <= 0) break
+        const qty = Math.max(0, Math.min(alloc.quantity, remaining))
+        if (qty <= 0) continue
+
+        await deductGroupQuantity(alloc.itemType, alloc.itemIds, qty)
+        await db.salesOrderLineItems.add({
+          ...lineItem,
+          id: uuidv4(),
+          quantityOrdered: qty,
+          importSourceKey: sourceKey,
           status: 'tied',
-          ...tiedFields,
+          tiedSiteId: alloc.siteId,
+          tiedSiteName: alloc.siteName,
+          tiedItemType: alloc.itemType,
+          tiedItemIds: alloc.itemIds,
+          tiedDescription: alloc.tiedDescription,
+          tiedAt: now,
+          tiedBy: editorName,
+          createdAt: now,
           updatedAt: now,
           syncStatus: 'pending',
         })
-        return
+        remaining -= qty
       }
 
-      // Partial — split off a new tied row for exactly what was tied, and
-      // shrink the original (still pending) by that same amount so it
-      // keeps representing only what's left to tie.
-      const sourceKey = effectiveImportSourceKey(lineItem)
-      await db.salesOrderLineItems.add({
-        ...lineItem,
-        id: uuidv4(),
-        quantityOrdered: tieQty,
-        importSourceKey: sourceKey,
-        status: 'tied',
-        ...tiedFields,
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: 'pending',
-      })
-      await db.salesOrderLineItems.update(input.lineItemId, {
-        quantityOrdered: lineItem.quantityOrdered - tieQty,
-        importSourceKey: sourceKey,
-        updatedAt: now,
-        syncStatus: 'pending',
-      })
+      if (remaining <= 0) {
+        // Fully accounted for across the allocation(s) above — nothing
+        // left for the original row to represent.
+        await enqueuePendingDelete('salesOrderLineItems', lineItem.id)
+        await db.salesOrderLineItems.delete(lineItem.id)
+      } else if (remaining !== lineItem.quantityOrdered) {
+        await db.salesOrderLineItems.update(lineItem.id, {
+          quantityOrdered: remaining,
+          importSourceKey: sourceKey,
+          updatedAt: now,
+          syncStatus: 'pending',
+        })
+      }
     },
   )
 }

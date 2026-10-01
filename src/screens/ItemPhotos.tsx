@@ -1,11 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import BlobImage from '../components/BlobImage'
 import { getPhotosForItem } from '../db/items'
 
 export default function ItemPhotos() {
-  const { siteId } = useParams<{ siteId: string }>()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const idsParam = searchParams.get('ids') ?? ''
   const ids = idsParam.split(',').filter(Boolean)
@@ -17,7 +17,9 @@ export default function ItemPhotos() {
   return (
     <main className="page">
       <p>
-        <Link to={`/locations/${siteId}`}>← Back</Link>
+        <button type="button" className="link-button" onClick={() => navigate(-1)}>
+          ← Back
+        </button>
       </p>
       <h1>Photos</h1>
 

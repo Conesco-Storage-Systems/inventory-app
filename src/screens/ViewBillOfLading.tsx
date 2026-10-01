@@ -91,6 +91,8 @@ export default function ViewBillOfLading() {
   const [markingShipped, setMarkingShipped] = useState(false)
   const [confirmingUnship, setConfirmingUnship] = useState(false)
   const bolPhotos = useLiveQuery(() => (bolId ? listBolPhotos(bolId) : []), [bolId]) ?? []
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null)
+  const selectedPhoto = bolPhotos.find((photo) => photo.id === selectedPhotoId) ?? null
   const [showCamera, setShowCamera] = useState(false)
   const bolPhotoInputRef = useRef<HTMLInputElement>(null)
 
@@ -800,13 +802,20 @@ export default function ViewBillOfLading() {
           <h2>Shipment Photos</h2>
           <div className="photo-thumbnails">
             {bolPhotos.map((photo) => (
-              <div className="photo-thumb" key={photo.id}>
+              <div
+                className="photo-thumb photo-thumb-button"
+                key={photo.id}
+                onClick={() => setSelectedPhotoId(photo.id)}
+              >
                 <BlobImage blob={photo.blob} />
                 {!bol.shippedAt && (
                   <button
                     type="button"
                     className="photo-remove"
-                    onClick={() => deleteBolPhoto(photo.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteBolPhoto(photo.id)
+                    }}
                     aria-label="Remove photo"
                   >
                     ×
@@ -814,6 +823,22 @@ export default function ViewBillOfLading() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {selectedPhoto && (
+        <div className="photo-viewer-overlay" onClick={() => setSelectedPhotoId(null)}>
+          <button
+            type="button"
+            className="photo-viewer-close"
+            onClick={() => setSelectedPhotoId(null)}
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <div className="photo-viewer-image" onClick={(e) => e.stopPropagation()}>
+            <BlobImage blob={selectedPhoto.blob} />
           </div>
         </div>
       )}

@@ -49,6 +49,17 @@ export async function setSalesOrderSchedule(
   })
 }
 
+// "Remove Schedule Date" — drops the planned ship date for this (soNumber,
+// siteId) pair, which sends it back to the "Not yet Scheduled" bucket on
+// the Sales Orders page (unless a BOL already in progress or shipped for
+// it says otherwise).
+export async function deleteSalesOrderSchedule(soNumber: string, siteId: string): Promise<void> {
+  const existing = await getSalesOrderSchedule(soNumber, siteId)
+  if (!existing) return
+  await enqueuePendingDelete('salesOrderSchedules', existing.id)
+  await db.salesOrderSchedules.delete(existing.id)
+}
+
 // Rows already imported (pending OR tied) are matched on these four
 // fields so re-importing an overlapping weekly report (an open SO can
 // show up again in the next week's export) doesn't create duplicates.
@@ -207,11 +218,7 @@ export async function deleteTiedSalesOrder(soNumber: string, siteId: string): Pr
         })
       }
 
-      const schedule = await getSalesOrderSchedule(soNumber, siteId)
-      if (schedule) {
-        await enqueuePendingDelete('salesOrderSchedules', schedule.id)
-        await db.salesOrderSchedules.delete(schedule.id)
-      }
+      await deleteSalesOrderSchedule(soNumber, siteId)
     },
   )
 }

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { setSalesOrderSchedule } from '../db/salesOrders'
+import { deleteSalesOrderSchedule, setSalesOrderSchedule } from '../db/salesOrders'
 
 interface ScheduleShipmentDialogProps {
   soNumber: string
@@ -12,6 +12,7 @@ export default function ScheduleShipmentDialog({ soNumber, siteId, siteName, cur
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [date, setDate] = useState(currentDate)
   const [saving, setSaving] = useState(false)
+  const [removing, setRemoving] = useState(false)
 
   function open() {
     setDate(currentDate)
@@ -34,11 +35,25 @@ export default function ScheduleShipmentDialog({ soNumber, siteId, siteName, cur
     }
   }
 
+  async function handleRemove() {
+    setRemoving(true)
+    try {
+      await deleteSalesOrderSchedule(soNumber, siteId)
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   return (
     <>
       <button type="button" onClick={open}>
-        {currentDate ? 'Reschedule Shipment' : 'Schedule Shipment'}
+        {currentDate ? 'Reschedule' : 'Schedule Shipment'}
       </button>
+      {currentDate && (
+        <button type="button" onClick={handleRemove} disabled={removing}>
+          {removing ? 'Removing…' : 'Remove Schedule Date'}
+        </button>
+      )}
       <dialog ref={dialogRef} className="location-dialog">
         <form onSubmit={handleSubmit}>
           <h2>Schedule Shipment</h2>

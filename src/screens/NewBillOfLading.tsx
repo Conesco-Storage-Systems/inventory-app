@@ -67,6 +67,13 @@ export default function NewBillOfLading() {
   const preselectedKeys = (location.state as { preselected?: string[] } | null)?.preselected
   const soLineItems = (location.state as { soLineItems?: SoLineItemForBol[] } | null)?.soLineItems
   const sourceSoNumbers = soLineItems ? Array.from(new Set(soLineItems.map((li) => li.soNumber))) : []
+  // Reached either from a location's own page (back goes there) or from a
+  // specific Sales Order's "Generate BOL" button (back goes there
+  // instead) — the caller says which via navigation state, and the same
+  // state carries forward so the BOL this creates also returns there.
+  const backState = location.state as { backTo?: string; backLabel?: string } | null
+  const backTo = backState?.backTo ?? `/locations/${siteId}`
+  const backLabel = backState?.backLabel ?? 'location'
   const appliedPreselectRef = useRef(false)
   const appliedSoLineItemsRef = useRef(false)
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
@@ -184,7 +191,7 @@ export default function NewBillOfLading() {
     return (
       <main className="page">
         <p>
-          <Link to={`/locations/${siteId}`}>← Back</Link>
+          <Link to={backTo}>← Back to {backLabel}</Link>
         </p>
         <p>Your role doesn't have permission to generate a Bill of Lading.</p>
       </main>
@@ -233,7 +240,7 @@ export default function NewBillOfLading() {
         lineItems: lineItems.map((li) => ({ ...li, qtyShipped: li.qtyShipped === '' ? 0 : li.qtyShipped })),
         sourceSoNumbers,
       })
-      navigate(`/locations/${siteId}/bol/${bolId}`)
+      navigate(`/locations/${siteId}/bol/${bolId}`, { state: { backTo, backLabel } })
     } finally {
       setSaving(false)
     }
@@ -242,7 +249,7 @@ export default function NewBillOfLading() {
   return (
     <main className="page page-wide">
       <p>
-        <Link to={`/locations/${siteId}`}>← Back</Link>
+        <Link to={backTo}>← Back to {backLabel}</Link>
       </p>
       <h1>New Bill of Lading</h1>
 

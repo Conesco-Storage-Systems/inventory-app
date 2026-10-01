@@ -184,6 +184,18 @@ export interface ProjectPhoto {
   remoteUrl?: string
 }
 
+// A real-time photo of the actual shipment, taken on the BOL screen once
+// it's ready to go (or already shipped) — so there's a record of what was
+// physically on the truck, not just what the line items say.
+export interface BolPhoto {
+  id: string
+  bolId: string
+  blob: Blob
+  createdAt: number
+  uploadStatus: 'pending' | 'uploading' | 'synced' | 'failed'
+  remoteUrl?: string
+}
+
 // 'outbound' = material leaving this location (it fills in Ship From).
 // 'inbound' = material coming into this location (it fills in Ship To).
 export type BolDirection = 'outbound' | 'inbound'
@@ -404,6 +416,7 @@ export type SyncTable =
   | 'miscItems'
   | 'photos'
   | 'projectPhotos'
+  | 'bolPhotos'
   | 'billsOfLading'
   | 'customerSheets'
   | 'salesOrderLineItems'

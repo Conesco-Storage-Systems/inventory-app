@@ -1707,6 +1707,10 @@ button.bol-signature-signed {
   max-width: 900px;
   margin-top: 16px;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
 }
 
 .bol-shipped-confirmation {

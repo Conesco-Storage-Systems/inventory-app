@@ -52,12 +52,12 @@ export default function ViewSalesOrder() {
     .slice()
     .sort((a, b) => b.createdAt - a.createdAt)
 
-  // Reached either from a location's own Sales Orders list (back goes to
-  // that location) or from the app-wide Sales Orders page (back goes
-  // there instead) — the caller says which via navigation state.
-  const backState = routerLocation.state as { backTo?: string; backLabel?: string } | null
-  const backTo = backState?.backTo ?? `/locations/${siteId}`
-  const backLabel = backState?.backLabel ?? (site?.name ?? 'location')
+  // An individual Sales Order always backs out to the Sales Orders
+  // dashboard, regardless of how it was reached (the app-wide list, or a
+  // location's own Sales Orders section) — it's never "owned" by one
+  // location's page.
+  const backTo = '/sales-orders'
+  const backLabel = 'Sales Orders'
 
   async function handleDeleteSo() {
     if (!siteId || !soNumber) return
@@ -76,7 +76,9 @@ export default function ViewSalesOrder() {
         qty: li.quantityOrdered - (shippedByLineItem.get(li.id) ?? 0),
       }))
       .filter((li) => li.qty > 0)
-    navigate(`/locations/${siteId}/bol/new`, { state: { soLineItems } })
+    navigate(`/locations/${siteId}/bol/new`, {
+      state: { soLineItems, backTo: routerLocation.pathname, backLabel: `Sales Order ${formatSoNumber(soNumber)}` },
+    })
   }
 
   return (

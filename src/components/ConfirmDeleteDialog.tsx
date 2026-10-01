@@ -5,9 +5,17 @@ interface ConfirmDeleteDialogProps {
   onConfirm: () => Promise<void>
   onClose: () => void
   message?: string
+  confirmLabel?: string
+  confirmingLabel?: string
 }
 
-export default function ConfirmDeleteDialog({ onConfirm, onClose, message }: ConfirmDeleteDialogProps) {
+export default function ConfirmDeleteDialog({
+  onConfirm,
+  onClose,
+  message,
+  confirmLabel,
+  confirmingLabel,
+}: ConfirmDeleteDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -27,7 +35,14 @@ export default function ConfirmDeleteDialog({ onConfirm, onClose, message }: Con
 
   return (
     <dialog ref={dialogRef} className="location-dialog" onClose={onClose}>
-      <DeleteConfirm deleting={deleting} onConfirm={handleConfirm} onCancel={onClose} message={message} />
+      <DeleteConfirm
+        deleting={deleting}
+        onConfirm={handleConfirm}
+        onCancel={onClose}
+        message={message}
+        confirmLabel={confirmLabel}
+        confirmingLabel={confirmingLabel}
+      />
     </dialog>
   )
 }

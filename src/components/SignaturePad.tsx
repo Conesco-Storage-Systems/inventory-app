@@ -20,6 +20,12 @@ export default function SignaturePad({ title, existingImage, onSave, onCancel, s
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawingRef = useRef(false)
   const [hasDrawn, setHasDrawn] = useState(!!existingImage)
+  // Set only when Clear is used to wipe an existing signature — lets Save
+  // commit that removal (a blank signature) instead of being stuck
+  // disabled until something new is drawn, which was the only way out
+  // before. Starting fresh (no existingImage) and clearing an empty
+  // canvas has nothing to actually remove, so it doesn't enable Save.
+  const [cleared, setCleared] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -77,13 +83,18 @@ export default function SignaturePad({ title, existingImage, onSave, onCancel, s
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
     fillWhite(ctx)
+    if (hasDrawn && existingImage) setCleared(true)
     setHasDrawn(false)
   }
 
   function handleSave() {
     const canvas = canvasRef.current
-    if (!canvas || !hasDrawn) return
-    onSave(canvas.toDataURL('image/png'))
+    if (!canvas) return
+    if (hasDrawn) {
+      onSave(canvas.toDataURL('image/png'))
+    } else if (cleared) {
+      onSave('')
+    }
   }
 
   return (
@@ -108,8 +119,8 @@ export default function SignaturePad({ title, existingImage, onSave, onCancel, s
           <button type="button" onClick={onCancel} disabled={saving}>
             Cancel
           </button>
-          <button type="button" onClick={handleSave} disabled={saving || !hasDrawn}>
-            {saving ? 'Saving…' : 'Save Signature'}
+          <button type="button" onClick={handleSave} disabled={saving || (!hasDrawn && !cleared)}>
+            {saving ? 'Saving…' : hasDrawn ? 'Save Signature' : 'Save Blank'}
           </button>
         </div>
       </div>

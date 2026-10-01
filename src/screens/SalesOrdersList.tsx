@@ -93,10 +93,7 @@ function SalesOrderSection({ title, groups }: { title: string; groups: Classifie
         <ul className="sales-order-list">
           {groups.map((group) => (
             <li key={`${group.soNumber}|${group.siteId}`} className="sales-order-row">
-              <Link
-                to={`/locations/${group.siteId}/sales-orders/${encodeURIComponent(group.soNumber)}`}
-                state={{ backTo: '/sales-orders', backLabel: 'Sales Orders' }}
-              >
+              <Link to={`/locations/${group.siteId}/sales-orders/${encodeURIComponent(group.soNumber)}`}>
                 {formatSoNumber(group.soNumber)}
               </Link>
               <span className="sales-order-row-location">{group.siteName}</span>

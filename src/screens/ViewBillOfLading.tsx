@@ -1,13 +1,24 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { getBillOfLading, markBillOfLadingShipped, signBillOfLading, updateBillOfLading } from '../db/billsOfLading'
+import BlobImage from '../components/BlobImage'
+import CameraCapture from '../components/CameraCapture'
 import SignaturePad from '../components/SignaturePad'
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
+import { addBolPhoto, deleteBolPhoto, listBolPhotos } from '../db/bolPhotos'
+import {
+  getBillOfLading,
+  markBillOfLadingShipped,
+  signBillOfLading,
+  unmarkBillOfLadingShipped,
+  updateBillOfLading,
+} from '../db/billsOfLading'
 import { bolElementToPdfBlob, bolPdfFileName } from '../export/exportBolToPdf'
 import { shrinkBolToOnePage } from '../export/fitBolToPage'
 import { saveBlobAs } from '../export/saveBlob'
 import type { BillOfLading, BolLineItem, FreightCountedBy, PaymentTerm, TrailerLoadedBy } from '../models/types'
 import { useRole } from '../state/RoleContext'
+import { isMobileDevice } from '../utils/isMobileDevice'
 
 const PAYMENT_TERMS: PaymentTerm[] = ['PrePaid', 'Collect', '3rd Party']
 const TRAILER_LOADED_OPTIONS: TrailerLoadedBy[] = ['By Shipper', 'By Driver']
@@ -78,6 +89,29 @@ export default function ViewBillOfLading() {
   const [signingRole, setSigningRole] = useState<'shipper' | 'carrier' | null>(null)
   const [signing, setSigning] = useState(false)
   const [markingShipped, setMarkingShipped] = useState(false)
+  const [confirmingUnship, setConfirmingUnship] = useState(false)
+  const bolPhotos = useLiveQuery(() => (bolId ? listBolPhotos(bolId) : []), [bolId]) ?? []
+  const [showCamera, setShowCamera] = useState(false)
+  const bolPhotoInputRef = useRef<HTMLInputElement>(null)
+
+  function handleTakePhotoClick() {
+    if (isMobileDevice) {
+      bolPhotoInputRef.current?.click()
+    } else {
+      setShowCamera(true)
+    }
+  }
+
+  async function handleBolPhotoCaptured(file: File) {
+    if (!bolId) return
+    await addBolPhoto(bolId, file)
+  }
+
+  async function handleBolPhotoFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    for (const file of files) await handleBolPhotoCaptured(file)
+  }
 
   useEffect(() => {
     function handleBeforePrint() {
@@ -188,6 +222,11 @@ export default function ViewBillOfLading() {
     }
   }
 
+  async function handleUnmarkShipped() {
+    if (!bol) return
+    await unmarkBillOfLadingShipped(bol.id)
+  }
+
   if (bol === undefined) {
     return (
       <main className="page">
@@ -206,6 +245,12 @@ export default function ViewBillOfLading() {
   }
 
   const canEditSignatures = permissions.generateBillOfLading && !bol.shippedAt
+  // Line item quantities now feed directly into a Sales Order's shipped
+  // vs. remaining totals, so once a BOL is actually shipped they're
+  // locked — changing them after the fact would silently throw off
+  // numbers that are already accounted for elsewhere. Same reasoning as
+  // locking the signatures once shipped, just extended to line items.
+  const lineItemsLocked = bol.shippedAt > 0
 
   return (
     <main className="page page-wide bol-document">
@@ -461,11 +506,11 @@ export default function ViewBillOfLading() {
                 <th>Weight (lbs)</th>
                 <th>QTY Received</th>
                 <th>Item Description</th>
-                {isEditing && <th className="no-print"></th>}
+                {isEditing && !lineItemsLocked && <th className="no-print"></th>}
               </tr>
             </thead>
             <tbody>
-              {isEditing && draft
+              {isEditing && draft && !lineItemsLocked
                 ? draft.lineItems.map((li, index) => (
                     <tr key={index}>
                       <td>
@@ -528,7 +573,7 @@ export default function ViewBillOfLading() {
                       <td>{[li.item, li.description].filter(Boolean).join(' — ')}</td>
                     </tr>
                   ))}
-              {!isEditing &&
+              {(!isEditing || lineItemsLocked) &&
                 Array.from({ length: Math.max(0, 5 - bol.lineItems.length) }).map((_, i) => (
                   <tr key={`blank-${i}`}>
                     <td>&nbsp;</td>
@@ -542,17 +587,22 @@ export default function ViewBillOfLading() {
                 <td>lbs.</td>
                 <td></td>
                 <td className="bol-totals-label">← TOTALS</td>
-                {isEditing && <td className="no-print"></td>}
+                {isEditing && !lineItemsLocked && <td className="no-print"></td>}
               </tr>
             </tbody>
           </table>
 
-          {isEditing && (
+          {isEditing && !lineItemsLocked && (
             <div className="no-print">
               <button type="button" onClick={addDraftLineItem}>
                 + Add Line
               </button>
             </div>
+          )}
+          {isEditing && lineItemsLocked && (
+            <p className="placeholder-note no-print">
+              Line items can't be changed once this BOL has been marked shipped.
+            </p>
           )}
 
           <div className="bol-signatures">
@@ -708,7 +758,22 @@ export default function ViewBillOfLading() {
           <p className="bol-shipped-confirmation">
             ✔ Marked as Shipped — {new Date(bol.shippedAt).toLocaleString()}
           </p>
+          {permissions.generateBillOfLading && (
+            <button type="button" className="no-print" onClick={() => setConfirmingUnship(true)}>
+              Undo Mark as Shipped
+            </button>
+          )}
         </div>
+      )}
+
+      {confirmingUnship && (
+        <ConfirmDeleteDialog
+          onConfirm={handleUnmarkShipped}
+          onClose={() => setConfirmingUnship(false)}
+          message="Undo Mark as Shipped on this BOL? Line items and shipment photos become editable again, and any Sales Order this covers will no longer count it as shipped."
+          confirmLabel="Undo"
+          confirmingLabel="Undoing…"
+        />
       )}
 
       {!bol.shippedAt && bol.shipperSignatureImage && bol.carrierSignatureImage && permissions.generateBillOfLading && (
@@ -716,7 +781,45 @@ export default function ViewBillOfLading() {
           <button type="button" onClick={handleMarkShipped} disabled={markingShipped || isEditing}>
             {markingShipped ? 'Marking…' : 'Mark as Shipped'}
           </button>
+          <button type="button" onClick={handleTakePhotoClick} disabled={isEditing}>
+            Take Photo
+          </button>
+          <input
+            ref={bolPhotoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="photo-file-input"
+            onChange={handleBolPhotoFilesSelected}
+          />
         </div>
+      )}
+
+      {bolPhotos.length > 0 && (
+        <div className="item-section no-print">
+          <h2>Shipment Photos</h2>
+          <div className="photo-thumbnails">
+            {bolPhotos.map((photo) => (
+              <div className="photo-thumb" key={photo.id}>
+                <BlobImage blob={photo.blob} />
+                {!bol.shippedAt && (
+                  <button
+                    type="button"
+                    className="photo-remove"
+                    onClick={() => deleteBolPhoto(photo.id)}
+                    aria-label="Remove photo"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showCamera && (
+        <CameraCapture onCapture={handleBolPhotoCaptured} onClose={() => setShowCamera(false)} />
       )}
 
       {signingRole && (

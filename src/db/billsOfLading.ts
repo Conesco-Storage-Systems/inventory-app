@@ -87,10 +87,13 @@ export async function signBillOfLading(
   signatureImage: string,
 ): Promise<void> {
   const now = Date.now()
+  // An empty image means the signature was cleared and saved blank — no
+  // "signed at" for something that isn't actually signed.
+  const signedAt = signatureImage ? now : 0
   const changes =
     role === 'shipper'
-      ? { shipperSignatureImage: signatureImage, shipperSignedAt: now }
-      : { carrierSignatureImage: signatureImage, carrierSignedAt: now }
+      ? { shipperSignatureImage: signatureImage, shipperSignedAt: signedAt }
+      : { carrierSignatureImage: signatureImage, carrierSignedAt: signedAt }
   await db.billsOfLading.update(id, {
     ...changes,
     lastUpdatedBy: getEditorName(),
@@ -102,6 +105,22 @@ export async function signBillOfLading(
 export async function markBillOfLadingShipped(id: string): Promise<void> {
   await db.billsOfLading.update(id, {
     shippedAt: Date.now(),
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
+// Reverses "Mark as Shipped" — e.g. it was clicked by mistake, or a real
+// shipment got canceled. Un-shipping unlocks line items, shipment photos,
+// and the ability to delete this BOL's photos again, and drops any Sales
+// Order this BOL covers back out of Shipped/Partially Shipped (since that
+// classification only counts quantity from BOLs that are actually
+// shipped) — it does not touch inventory, since tying (not shipping) is
+// what deducts it.
+export async function unmarkBillOfLadingShipped(id: string): Promise<void> {
+  await db.billsOfLading.update(id, {
+    shippedAt: 0,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
     syncStatus: 'pending',

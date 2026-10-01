@@ -3,9 +3,18 @@ interface DeleteConfirmProps {
   onCancel: () => void
   deleting: boolean
   message?: string
+  confirmLabel?: string
+  confirmingLabel?: string
 }
 
-export default function DeleteConfirm({ onConfirm, onCancel, deleting, message }: DeleteConfirmProps) {
+export default function DeleteConfirm({
+  onConfirm,
+  onCancel,
+  deleting,
+  message,
+  confirmLabel,
+  confirmingLabel,
+}: DeleteConfirmProps) {
   return (
     <div className="delete-confirm">
       <p>{message ?? 'Are you sure you want to delete the line item?'}</p>
@@ -14,7 +23,7 @@ export default function DeleteConfirm({ onConfirm, onCancel, deleting, message }
           Go Back
         </button>
         <button type="button" className="delete-confirm-button" onClick={onConfirm} disabled={deleting}>
-          Delete
+          {deleting ? (confirmingLabel ?? 'Deleting…') : (confirmLabel ?? 'Delete')}
         </button>
       </div>
     </div>

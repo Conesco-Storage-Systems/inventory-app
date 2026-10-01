@@ -167,6 +167,16 @@ create table bills_of_lading (
   last_updated_at bigint not null
 );
 
+-- Real-time photos of the actual shipment, taken on the BOL screen once
+-- it's ready to go (or already shipped) — a record of what was physically
+-- on the truck, separate from the line items themselves.
+create table bol_photos (
+  id text primary key,
+  bol_id text not null references bills_of_lading(id) on delete cascade,
+  storage_path text not null,
+  created_at bigint not null
+);
+
 -- Customer-facing spec sheets built from selected inventory items. Only
 -- the fields/photos the user chose to include are baked into line_items
 -- (photos as data URIs) — a frozen snapshot, same as Bills of Lading.
@@ -270,6 +280,7 @@ alter table wire_decks enable row level security;
 alter table misc_items enable row level security;
 alter table photos enable row level security;
 alter table project_photos enable row level security;
+alter table bol_photos enable row level security;
 alter table bills_of_lading enable row level security;
 alter table customer_sheets enable row level security;
 alter table sales_order_line_items enable row level security;
@@ -292,6 +303,8 @@ create policy "Authenticated users can do anything" on misc_items
 create policy "Authenticated users can do anything" on photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on project_photos
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on bol_photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on bills_of_lading
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -617,4 +630,19 @@ create table if not exists sales_order_schedules (
 alter table sales_order_schedules enable row level security;
 
 create policy "Authenticated users can do anything" on sales_order_schedules
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: BOL photos — real-time photos of the actual shipment, taken
+-- on the BOL screen once it's ready to go (or already shipped), separate
+-- from the line items themselves.
+create table if not exists bol_photos (
+  id text primary key,
+  bol_id text not null references bills_of_lading(id) on delete cascade,
+  storage_path text not null,
+  created_at bigint not null
+);
+
+alter table bol_photos enable row level security;
+
+create policy "Authenticated users can do anything" on bol_photos
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

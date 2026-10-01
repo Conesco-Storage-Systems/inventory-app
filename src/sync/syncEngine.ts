@@ -3,6 +3,7 @@ import { supabase, supabaseConfigured } from './supabaseClient'
 import type {
   Beam,
   BillOfLading,
+  BolPhoto,
   CustomerSheet,
   ItemType,
   MiscItem,
@@ -1052,12 +1053,73 @@ async function pullProjectPhotos(): Promise<void> {
   setCursor('project_photos', maxCreatedAt)
 }
 
+// ---------- BOL photos ----------
+
+async function pushBolPhotos(): Promise<void> {
+  const pending = await db.bolPhotos.where('uploadStatus').equals('pending').toArray()
+  for (const photo of pending) {
+    const path = `bol/${photo.bolId}/${photo.id}.jpg`
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+    if (uploadError) {
+      console.error(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+      continue
+    }
+
+    const { error } = await supabase.from('bol_photos').upsert({
+      id: photo.id,
+      bol_id: photo.bolId,
+      storage_path: path,
+      created_at: photo.createdAt,
+    })
+    if (!error) {
+      await db.bolPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+    } else {
+      console.error(`[sync] push bol_photos/${photo.id} failed:`, error.message, error)
+    }
+  }
+}
+
+async function pullBolPhotos(): Promise<void> {
+  const cursor = getCursors().bol_photos ?? 0
+  const { data, error } = await supabase.from('bol_photos').select('*').gt('created_at', cursor)
+  if (error) {
+    console.error('[sync] pull bol_photos failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxCreatedAt = cursor
+  for (const remoteRow of data) {
+    maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
+    const existing = await db.bolPhotos.get(remoteRow.id as string)
+    if (existing) continue
+
+    const path = remoteRow.storage_path as string
+    const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+    if (!blob) continue
+
+    const photo: BolPhoto = {
+      id: remoteRow.id as string,
+      bolId: remoteRow.bol_id as string,
+      blob,
+      createdAt: remoteRow.created_at as number,
+      uploadStatus: 'synced',
+      remoteUrl: path,
+    }
+    await db.bolPhotos.put(photo)
+  }
+  setCursor('bol_photos', maxCreatedAt)
+}
+
 // ---------- pending deletes ----------
 
 const REMOTE_TABLE_NAMES: Record<string, string> = {
   wireDecks: 'wire_decks',
   miscItems: 'misc_items',
   projectPhotos: 'project_photos',
+  bolPhotos: 'bol_photos',
   billsOfLading: 'bills_of_lading',
   customerSheets: 'customer_sheets',
   salesOrderLineItems: 'sales_order_line_items',
@@ -1104,6 +1166,7 @@ export async function runSync(): Promise<void> {
     await pushSites()
     await pushPhotos()
     await pushProjectPhotos()
+    await pushBolPhotos()
     await pushBolsOfLading()
     await pushCustomerSheets()
     await pushSalesOrderLineItems()
@@ -1116,6 +1179,7 @@ export async function runSync(): Promise<void> {
     await pullSites()
     await pullPhotos()
     await pullProjectPhotos()
+    await pullBolPhotos()
     await pullBolsOfLading()
     await pullCustomerSheets()
     await pullSalesOrderLineItems()
@@ -1149,6 +1213,7 @@ export function startAutoSync(): void {
     'misc_items',
     'photos',
     'project_photos',
+    'bol_photos',
     'bills_of_lading',
     'customer_sheets',
     'sales_order_line_items',

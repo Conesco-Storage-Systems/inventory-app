@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
 import { touchSiteUpdated } from './locations'
 import { enqueuePendingDeletes } from './pendingDeletes'
+import { compressImageToFile } from '../export/compressImage'
 import type { Beam, Condition, ItemType, MiscItem, Upright, WireDeck } from '../models/types'
 
 export interface NewBeamInput {
@@ -28,11 +29,17 @@ export async function savePhotos(itemType: ItemType, itemId: string, files: File
   const ids: string[] = []
   for (const file of files) {
     const id = uuidv4()
+    // A phone camera photo can be huge and isn't necessarily even a JPEG
+    // (e.g. HEIC) — normalize before it's ever stored, so it stays small
+    // and fast to sync regardless of what the camera produced. Falls back
+    // to the original file if compression fails for any reason, rather
+    // than losing the photo.
+    const blob = await compressImageToFile(file).catch(() => file)
     await db.photos.add({
       id,
       itemType,
       itemId,
-      blob: file,
+      blob,
       createdAt: Date.now(),
       uploadStatus: 'pending',
     })

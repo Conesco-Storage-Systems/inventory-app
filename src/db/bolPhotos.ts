@@ -1,12 +1,14 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
+import { compressImageToFile } from '../export/compressImage'
 import { enqueuePendingDelete } from './pendingDeletes'
 
 export async function addBolPhoto(bolId: string, file: File): Promise<void> {
+  const blob = await compressImageToFile(file).catch(() => file)
   await db.bolPhotos.add({
     id: uuidv4(),
     bolId,
-    blob: file,
+    blob,
     createdAt: Date.now(),
     uploadStatus: 'pending',
   })

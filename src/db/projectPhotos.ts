@@ -1,13 +1,15 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
 import { touchSiteUpdated } from './locations'
+import { compressImageToFile } from '../export/compressImage'
 import { enqueuePendingDelete } from './pendingDeletes'
 
 export async function addProjectPhoto(siteId: string, file: File): Promise<void> {
+  const blob = await compressImageToFile(file).catch(() => file)
   await db.projectPhotos.add({
     id: uuidv4(),
     siteId,
-    blob: file,
+    blob,
     createdAt: Date.now(),
     uploadStatus: 'pending',
   })

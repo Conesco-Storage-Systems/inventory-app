@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { db } from '../db/db'
-import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
+import { listTiedSalesOrderLineItemsBySite, sumShippedQuantity } from '../db/salesOrders'
 import { ITEM_TYPE_LABELS } from '../models/types'
 import type { SoLineItemForBol } from './NewBillOfLading'
 import { useRole } from '../state/RoleContext'
@@ -13,7 +13,13 @@ export default function SelectSoItemsForBol() {
   const { siteId } = useParams<{ siteId: string }>()
   const navigate = useNavigate()
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
-  const lineItems = useLiveQuery(() => (siteId ? listTiedSalesOrderLineItemsBySite(siteId) : []), [siteId]) ?? []
+  const allLineItems = useLiveQuery(() => (siteId ? listTiedSalesOrderLineItemsBySite(siteId) : []), [siteId]) ?? []
+  const siteBols = useLiveQuery(() => (siteId ? db.billsOfLading.where('siteId').equals(siteId).toArray() : []), [siteId]) ?? []
+  // Only what's actually left to ship — a line item already fully covered
+  // by a prior shipped BOL has nothing left to put on a new one.
+  const lineItems = allLineItems
+    .map((li) => ({ ...li, remaining: li.quantityOrdered - sumShippedQuantity([li.id], siteBols).qty }))
+    .filter((li) => li.remaining > 0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   function toggle(id: string) {
@@ -23,10 +29,11 @@ export default function SelectSoItemsForBol() {
   function handleContinue() {
     const selected = lineItems.filter((li) => selectedIds.includes(li.id))
     const soLineItems: SoLineItemForBol[] = selected.map((li) => ({
+      id: li.id,
       soNumber: li.soNumber,
       item: li.tiedItemType ? ITEM_TYPE_LABELS[li.tiedItemType] : '',
       description: li.tiedDescription,
-      qty: li.quantityOrdered,
+      qty: li.remaining,
     }))
     navigate(`/locations/${siteId}/bol/new`, { state: { soLineItems } })
   }
@@ -80,7 +87,7 @@ export default function SelectSoItemsForBol() {
                 <th></th>
                 <th>SO #</th>
                 <th>Description</th>
-                <th>Qty</th>
+                <th>Remaining</th>
               </tr>
             </thead>
             <tbody>
@@ -91,7 +98,7 @@ export default function SelectSoItemsForBol() {
                   </td>
                   <td>{formatSoNumber(li.soNumber)}</td>
                   <td>{li.tiedDescription}</td>
-                  <td>{li.quantityOrdered}</td>
+                  <td>{li.remaining}</td>
                 </tr>
               ))}
             </tbody>

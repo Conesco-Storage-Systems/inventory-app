@@ -200,6 +200,13 @@ export interface BolLineItem {
   qtyShipped: number
   weight: string
   qtyReceived: string
+  // Links back to the SalesOrderLineItem this row was drawn from, when it
+  // came from a Sales Order — undefined for a manually-added line, or for
+  // a BOL created before this link existed. A single Sales Order line item
+  // can be split across more than one BOL over time (partial shipments),
+  // so this is how the Sales Orders page adds up how much of it has
+  // actually shipped so far.
+  sourceLineItemId?: string
 }
 
 export interface BillOfLading {

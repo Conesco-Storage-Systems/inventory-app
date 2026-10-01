@@ -1,7 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
-import type { BillOfLading, SalesOrderSchedule } from '../models/types'
+import { sumShippedQuantity } from '../db/salesOrders'
+import type { BillOfLading, SalesOrderLineItem, SalesOrderSchedule } from '../models/types'
 import { useRole } from '../state/RoleContext'
 import { formatSoNumber } from '../utils/soNumber'
 
@@ -10,9 +11,11 @@ interface SalesOrderGroup {
   siteId: string
   siteName: string
   latestTiedAt: number
+  lineItemIds: string[]
+  totalOrderedQty: number
 }
 
-type Bucket = 'shipped' | 'scheduled' | 'notScheduled'
+type Bucket = 'shipped' | 'partiallyShipped' | 'scheduled' | 'notScheduled'
 
 interface ClassifiedGroup extends SalesOrderGroup {
   bucket: Bucket
@@ -26,19 +29,23 @@ interface ClassifiedGroup extends SalesOrderGroup {
 // warehouses), so it's grouped this way rather than one row per SO,
 // sorted by location first so everything from the same site clusters
 // together.
-function groupBySoAndSite(lineItems: { soNumber: string; tiedSiteId: string; tiedSiteName: string; tiedAt: number }[]): SalesOrderGroup[] {
+function groupBySoAndSite(lineItems: SalesOrderLineItem[]): SalesOrderGroup[] {
   const map = new Map<string, SalesOrderGroup>()
   for (const li of lineItems) {
     const key = `${li.soNumber}|${li.tiedSiteId}`
     const existing = map.get(key)
     if (existing) {
       existing.latestTiedAt = Math.max(existing.latestTiedAt, li.tiedAt)
+      existing.lineItemIds.push(li.id)
+      existing.totalOrderedQty += li.quantityOrdered
     } else {
       map.set(key, {
         soNumber: li.soNumber,
         siteId: li.tiedSiteId,
         siteName: li.tiedSiteName,
         latestTiedAt: li.tiedAt,
+        lineItemIds: [li.id],
+        totalOrderedQty: li.quantityOrdered,
       })
     }
   }
@@ -49,16 +56,19 @@ function groupBySoAndSite(lineItems: { soNumber: string; tiedSiteId: string; tie
   })
 }
 
-// Shipped: a BOL tied to this (SO, location) pair is signed and marked
-// shipped. Scheduled: has a planned ship date set via Schedule Shipment —
-// a BOL existing in progress (not yet shipped) isn't enough on its own.
-// Not yet Scheduled: neither.
+// Shipped: every unit tied to this (SO, location) pair has shipped on one
+// or more signed BOLs. Partially Shipped: some of it has, but not all —
+// e.g. 150 of 300 beams went out on a BOL while the rest are still here.
+// Scheduled: has a planned ship date set via Schedule Shipment — a BOL in
+// progress but not yet shipped isn't enough on its own. Not yet Scheduled:
+// neither.
 function classify(group: SalesOrderGroup, bols: BillOfLading[], schedules: SalesOrderSchedule[]): ClassifiedGroup {
-  const shippedBol = bols.find(
-    (b) => b.siteId === group.siteId && b.sourceSoNumbers.includes(group.soNumber) && b.shippedAt > 0,
-  )
-  if (shippedBol) {
-    return { ...group, bucket: 'shipped', displayDate: shippedBol.shippedAt }
+  const { qty: shippedQty, lastShippedAt } = sumShippedQuantity(group.lineItemIds, bols)
+  if (shippedQty > 0 && group.totalOrderedQty > 0) {
+    if (shippedQty >= group.totalOrderedQty) {
+      return { ...group, bucket: 'shipped', displayDate: lastShippedAt }
+    }
+    return { ...group, bucket: 'partiallyShipped', displayDate: lastShippedAt }
   }
 
   const schedule = schedules.find((s) => s.soNumber === group.soNumber && s.siteId === group.siteId)
@@ -110,6 +120,7 @@ export default function SalesOrdersList() {
 
   const classified = groupBySoAndSite(tiedLineItems).map((group) => classify(group, bols, schedules))
   const shipped = classified.filter((g) => g.bucket === 'shipped')
+  const partiallyShipped = classified.filter((g) => g.bucket === 'partiallyShipped')
   const scheduled = classified.filter((g) => g.bucket === 'scheduled')
   const notScheduled = classified.filter((g) => g.bucket === 'notScheduled')
 
@@ -137,6 +148,7 @@ export default function SalesOrdersList() {
         <>
           <SalesOrderSection title="Not yet Scheduled" groups={notScheduled} />
           <SalesOrderSection title="Scheduled" groups={scheduled} />
+          <SalesOrderSection title="Partially Shipped" groups={partiallyShipped} />
           <SalesOrderSection title="Shipped" groups={shipped} />
         </>
       )}

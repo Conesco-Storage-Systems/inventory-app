@@ -26,6 +26,7 @@ interface EditableLineItem extends Omit<BolLineItem, 'qtyShipped'> {
 }
 
 export interface SoLineItemForBol {
+  id: string
   soNumber: string
   item: string
   description: string
@@ -155,6 +156,7 @@ export default function NewBillOfLading() {
         qtyShipped: li.qty,
         weight: '',
         qtyReceived: '',
+        sourceLineItemId: li.id,
       })),
     ])
     setReferenceDoc((prev) => prev || sourceSoNumbers.join(', '))

@@ -4,7 +4,35 @@ import { deductGroupQuantity, restoreGroupQuantity } from './items'
 import { enqueuePendingDelete } from './pendingDeletes'
 import { getEditorName } from '../state/editor'
 import type { ParsedSoLineItem } from '../import/parseSoReport'
-import type { ItemType, SalesOrderLineItem } from '../models/types'
+import type { BillOfLading, ItemType, SalesOrderLineItem } from '../models/types'
+
+// A Sales Order line item can be split across more than one BOL over time
+// (a partial shipment now, the rest later) — this adds up how much of it
+// has actually shipped so far, across every BOL that's been signed and
+// marked shipped, by following each BOL line's sourceLineItemId back to
+// the SalesOrderLineItem id(s) passed in. Used both to show "X of Y
+// shipped" on a Sales Order and to classify Partially Shipped vs Shipped
+// on the Sales Orders page.
+export function sumShippedQuantity(
+  lineItemIds: string[],
+  bols: BillOfLading[],
+): { qty: number; lastShippedAt: number } {
+  const idSet = new Set(lineItemIds)
+  let qty = 0
+  let lastShippedAt = 0
+  for (const bol of bols) {
+    if (bol.shippedAt <= 0) continue
+    let contributed = false
+    for (const li of bol.lineItems) {
+      if (li.sourceLineItemId && idSet.has(li.sourceLineItemId)) {
+        qty += li.qtyShipped
+        contributed = true
+      }
+    }
+    if (contributed) lastShippedAt = Math.max(lastShippedAt, bol.shippedAt)
+  }
+  return { qty, lastShippedAt }
+}
 
 export async function listAllSalesOrderSchedules() {
   return db.salesOrderSchedules.toArray()

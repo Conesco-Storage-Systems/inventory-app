@@ -4,7 +4,12 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import ScheduleShipmentDialog from '../components/ScheduleShipmentDialog'
 import { db } from '../db/db'
-import { deleteTiedSalesOrder, getSalesOrderSchedule, listTiedLineItemsBySoNumberAndSite } from '../db/salesOrders'
+import {
+  deleteTiedSalesOrder,
+  getSalesOrderSchedule,
+  listTiedLineItemsBySoNumberAndSite,
+  sumShippedQuantity,
+} from '../db/salesOrders'
 import type { SoLineItemForBol } from './NewBillOfLading'
 import { ITEM_TYPE_LABELS } from '../models/types'
 import { useRole } from '../state/RoleContext'
@@ -26,10 +31,17 @@ export default function ViewSalesOrder() {
     [siteId, soNumber],
   )
   const siteBols = useLiveQuery(() => (siteId ? db.billsOfLading.where('siteId').equals(siteId).toArray() : []), [siteId]) ?? []
-  // Already shipped means the deducted inventory is actually gone, not just
-  // reserved — deleting at that point would incorrectly hand it back, so
-  // the delete option is withheld once a signed, shipped BOL covers this SO.
-  const isShipped = !!(soNumber && siteBols.some((b) => b.sourceSoNumbers.includes(soNumber) && b.shippedAt > 0))
+  const shippedByLineItem = new Map(
+    lineItems.map((li) => [li.id, sumShippedQuantity([li.id], siteBols).qty]),
+  )
+  const hasRemainingToShip = lineItems.some(
+    (li) => li.quantityOrdered - (shippedByLineItem.get(li.id) ?? 0) > 0,
+  )
+  // Already shipped (even partially) means some of the deducted inventory
+  // is actually gone, not just reserved — deleting at that point would
+  // incorrectly hand all of it back, so the delete option is withheld once
+  // any quantity has shipped for this SO.
+  const isShipped = lineItems.some((li) => (shippedByLineItem.get(li.id) ?? 0) > 0)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   // Reached either from a location's own Sales Orders list (back goes to
@@ -47,12 +59,15 @@ export default function ViewSalesOrder() {
 
   function handleGenerateBol() {
     if (!siteId || !soNumber) return
-    const soLineItems: SoLineItemForBol[] = lineItems.map((li) => ({
-      soNumber: li.soNumber,
-      item: li.tiedItemType ? ITEM_TYPE_LABELS[li.tiedItemType] : '',
-      description: li.tiedDescription,
-      qty: li.quantityOrdered,
-    }))
+    const soLineItems: SoLineItemForBol[] = lineItems
+      .map((li) => ({
+        id: li.id,
+        soNumber: li.soNumber,
+        item: li.tiedItemType ? ITEM_TYPE_LABELS[li.tiedItemType] : '',
+        description: li.tiedDescription,
+        qty: li.quantityOrdered - (shippedByLineItem.get(li.id) ?? 0),
+      }))
+      .filter((li) => li.qty > 0)
     navigate(`/locations/${siteId}/bol/new`, { state: { soLineItems } })
   }
 
@@ -72,7 +87,7 @@ export default function ViewSalesOrder() {
               currentDate={schedule?.scheduledShipDate ?? ''}
             />
             {permissions.generateBillOfLading && (
-              <button type="button" onClick={handleGenerateBol} disabled={lineItems.length === 0}>
+              <button type="button" onClick={handleGenerateBol} disabled={!hasRemainingToShip}>
                 Generate BOL
               </button>
             )}
@@ -90,7 +105,9 @@ export default function ViewSalesOrder() {
       </div>
 
       {isShipped && (
-        <p className="placeholder-note">This Sales Order has already shipped, so it can't be deleted.</p>
+        <p className="placeholder-note">
+          This Sales Order already has shipped quantity against it, so it can't be deleted.
+        </p>
       )}
 
       {confirmingDelete && (
@@ -116,21 +133,28 @@ export default function ViewSalesOrder() {
               <tr>
                 <th>Warehouse Code</th>
                 <th>Description</th>
-                <th>Qty</th>
+                <th>Qty Ordered</th>
+                <th>Shipped</th>
+                <th>Remaining</th>
                 <th>Tied To</th>
                 <th>Tied Date</th>
               </tr>
             </thead>
             <tbody>
-              {lineItems.map((li) => (
-                <tr key={li.id}>
-                  <td>{li.warehouseCode}</td>
-                  <td>{li.description}</td>
-                  <td>{li.quantityOrdered}</td>
-                  <td>{li.tiedDescription}</td>
-                  <td>{li.tiedAt ? new Date(li.tiedAt).toLocaleDateString() : '—'}</td>
-                </tr>
-              ))}
+              {lineItems.map((li) => {
+                const shipped = shippedByLineItem.get(li.id) ?? 0
+                return (
+                  <tr key={li.id}>
+                    <td>{li.warehouseCode}</td>
+                    <td>{li.description}</td>
+                    <td>{li.quantityOrdered}</td>
+                    <td>{shipped}</td>
+                    <td>{li.quantityOrdered - shipped}</td>
+                    <td>{li.tiedDescription}</td>
+                    <td>{li.tiedAt ? new Date(li.tiedAt).toLocaleDateString() : '—'}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

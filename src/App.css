@@ -1079,17 +1079,20 @@ button:disabled {
   min-width: 0;
 }
 
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
 /* Overrides ".field-row label" (which stacks label text under its
    control for the plain text/number fields) — a checkbox option needs its
    text beside the box, not under it, and this selector's extra class
    outweighs that rule's specificity. */
 .field-row .checkbox-option {
-  display: flex;
   flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  white-space: nowrap;
   max-width: none;
 }
 

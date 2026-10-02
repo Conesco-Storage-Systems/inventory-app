@@ -48,10 +48,15 @@ function setCursor(table: string, value: number): void {
 // SyncErrorBanner.tsx), so a sync problem is actually diagnosable without
 // devtools.
 export const SYNC_ERROR_EVENT = 'inventoryApp:syncError'
-let lastSyncError: string | null = null
+const MAX_RECENT_SYNC_ERRORS = 8
+// A single persistently-failing record (e.g. one bad row) re-fires every
+// 30s and would otherwise permanently crowd out a different, maybe-more-
+// relevant error from ever being seen — this keeps the most recent distinct
+// messages instead of just the single latest one.
+let recentSyncErrors: string[] = []
 
-export function getLastSyncError(): string | null {
-  return lastSyncError
+export function getRecentSyncErrors(): string[] {
+  return recentSyncErrors
 }
 
 function describeSyncErrorArg(arg: unknown): string {
@@ -72,8 +77,8 @@ function describeSyncErrorArg(arg: unknown): string {
 function reportSyncError(message: string, ...rest: unknown[]): void {
   console.error(message, ...rest)
   const detail = rest.length > 0 ? `${message} ${rest.map(describeSyncErrorArg).join(' — ')}` : message
-  lastSyncError = detail
-  window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail }))
+  recentSyncErrors = [detail, ...recentSyncErrors.filter((m) => m !== detail)].slice(0, MAX_RECENT_SYNC_ERRORS)
+  window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail: recentSyncErrors }))
 }
 
 // ---------- generic item tables (beams / uprights / wire decks) ----------

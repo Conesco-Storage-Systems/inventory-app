@@ -54,10 +54,26 @@ export function getLastSyncError(): string | null {
   return lastSyncError
 }
 
+function describeSyncErrorArg(arg: unknown): string {
+  if (typeof arg === 'string') return arg
+  if (arg instanceof Error) return arg.message
+  if (arg && typeof arg === 'object') {
+    const obj = arg as Record<string, unknown>
+    if (typeof obj.message === 'string' && obj.message) return obj.message
+    try {
+      return JSON.stringify(arg)
+    } catch {
+      return String(arg)
+    }
+  }
+  return String(arg)
+}
+
 function reportSyncError(message: string, ...rest: unknown[]): void {
   console.error(message, ...rest)
-  lastSyncError = message
-  window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail: message }))
+  const detail = rest.length > 0 ? `${message} ${rest.map(describeSyncErrorArg).join(' — ')}` : message
+  lastSyncError = detail
+  window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail }))
 }
 
 // ---------- generic item tables (beams / uprights / wire decks) ----------

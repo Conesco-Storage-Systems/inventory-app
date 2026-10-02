@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { Route, BrowserRouter, Routes } from 'react-router-dom'
 import LoginGate from './components/LoginGate'
-import SyncErrorBanner from './components/SyncErrorBanner'
 import { purgeExpiredDeletedSites } from './db/locations'
 import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
@@ -51,7 +50,6 @@ function App() {
     <LoginGate>
       <BrowserRouter>
         <img src="/conesco-logo.png" alt="Conesco" className="app-logo" />
-        <SyncErrorBanner />
         <Routes>
           <Route path="/" element={<LocationsList />} />
           <Route path="/all-inventory" element={<AllInventory />} />

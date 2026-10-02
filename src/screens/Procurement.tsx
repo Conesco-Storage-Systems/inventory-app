@@ -257,9 +257,9 @@ export default function Procurement() {
                 <tr>
                   <th>SO #</th>
                   <th>Warehouse Code</th>
-                  <th>Description</th>
                   <th>Qty Ordered</th>
                   <th>Assign to Inventory</th>
+                  <th>Description</th>
                   <th></th>
                 </tr>
               </thead>
@@ -269,7 +269,6 @@ export default function Procurement() {
                     <tr>
                       <td>{formatSoNumber(li.soNumber)}</td>
                       <td>{li.warehouseCode}</td>
-                      <td className="col-left">{li.description}</td>
                       <td>{li.quantityOrdered}</td>
                       <td>
                         <input
@@ -278,6 +277,7 @@ export default function Procurement() {
                           onChange={(e) => (e.target.checked ? startTying(li.id) : cancelTying())}
                         />
                       </td>
+                      <td className="col-left">{li.description}</td>
                       <td>
                         <button type="button" className="delete-button" onClick={() => deletePendingSalesOrderLineItem(li.id)}>
                           Remove

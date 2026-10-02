@@ -42,6 +42,24 @@ function setCursor(table: string, value: number): void {
   }
 }
 
+// Sync failures previously only ever went to the browser console, which a
+// field user on their phone has no practical way to check — this also
+// surfaces the most recent one as a small visible banner (see
+// SyncErrorBanner.tsx), so a sync problem is actually diagnosable without
+// devtools.
+export const SYNC_ERROR_EVENT = 'inventoryApp:syncError'
+let lastSyncError: string | null = null
+
+export function getLastSyncError(): string | null {
+  return lastSyncError
+}
+
+function reportSyncError(message: string, ...rest: unknown[]): void {
+  console.error(message, ...rest)
+  lastSyncError = message
+  window.dispatchEvent(new CustomEvent(SYNC_ERROR_EVENT, { detail: message }))
+}
+
 // ---------- generic item tables (beams / uprights / wire decks) ----------
 
 interface ItemTableConfig {
@@ -59,11 +77,15 @@ async function pushItemTable(config: ItemTableConfig): Promise<void> {
   const table = db.table(config.localTable)
   const pending = await table.where('syncStatus').equals('pending').toArray()
   for (const row of pending) {
-    const { error } = await supabase.from(config.remoteTable).upsert(config.toRemote(row))
-    if (!error) {
-      await table.update(row.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push ${config.remoteTable}/${row.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from(config.remoteTable).upsert(config.toRemote(row))
+      if (!error) {
+        await table.update(row.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push ${config.remoteTable}/${row.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push ${config.remoteTable}/${row.id} threw:`, err)
     }
   }
 }
@@ -72,7 +94,7 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
   const cursor = getCursors()[config.remoteTable] ?? 0
   const { data, error } = await supabase.from(config.remoteTable).select('*').gt('updated_at', cursor)
   if (error) {
-    console.error(`[sync] pull ${config.remoteTable} failed:`, error.message, error)
+    reportSyncError(`[sync] pull ${config.remoteTable} failed:`, error.message, error)
     return
   }
   if (!data) return
@@ -83,18 +105,22 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
     const updatedAt = Number(remoteRow.updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await table.get(remoteRow.id as string)
-    // Last-write-wins by timestamp. If we have a local change that hasn't
-    // synced yet and it's newer (or equal — don't let our own echo clobber
-    // it), keep the local version and just note it for now.
-    if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local ${config.localTable}/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await table.get(remoteRow.id as string)
+      // Last-write-wins by timestamp. If we have a local change that hasn't
+      // synced yet and it's newer (or equal — don't let our own echo clobber
+      // it), keep the local version and just note it for now.
+      if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local ${config.localTable}/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    const mapped = config.fromRemote(remoteRow)
-    const photoIds = local?.photoIds ?? []
-    await table.put({ ...mapped, photoIds, syncStatus: 'synced' })
+      const mapped = config.fromRemote(remoteRow)
+      const photoIds = local?.photoIds ?? []
+      await table.put({ ...mapped, photoIds, syncStatus: 'synced' })
+    } catch (err) {
+      reportSyncError(`[sync] pull ${config.remoteTable}/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor(config.remoteTable, maxUpdatedAt)
 }
@@ -329,33 +355,37 @@ async function pushSites(): Promise<void> {
   const sitesToPush = [...pending, ...syncedWithUnsentPhoto.filter((s) => !pendingIds.has(s.id))]
 
   for (const site of sitesToPush) {
-    let sitePhotoPath = site.sitePhotoPath
-    let photoUploadFailed = false
-    if (site.sitePhoto && site.sitePhotoDirty) {
-      // Versioned filename (not a fixed one) so the path itself changes on
-      // every replacement — otherwise other devices would never notice the
-      // photo changed, since they only re-download when the path differs.
-      const path = `${site.id}/site/${site.id}-${Date.now()}.jpg`
-      const { error: uploadError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(path, site.sitePhoto, { upsert: true, contentType: site.sitePhoto.type })
-      if (!uploadError) {
-        sitePhotoPath = path
-      } else {
-        photoUploadFailed = true
-        console.error(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+    try {
+      let sitePhotoPath = site.sitePhotoPath
+      let photoUploadFailed = false
+      if (site.sitePhoto && site.sitePhotoDirty) {
+        // Versioned filename (not a fixed one) so the path itself changes on
+        // every replacement — otherwise other devices would never notice the
+        // photo changed, since they only re-download when the path differs.
+        const path = `${site.id}/site/${site.id}-${Date.now()}.jpg`
+        const { error: uploadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(path, site.sitePhoto, { upsert: true, contentType: site.sitePhoto.type })
+        if (!uploadError) {
+          sitePhotoPath = path
+        } else {
+          photoUploadFailed = true
+          reportSyncError(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        }
       }
-    }
 
-    const { error } = await supabase.from('sites').upsert(siteToRemote({ ...site, sitePhotoPath }))
-    if (!error) {
-      await db.sites.update(site.id, {
-        syncStatus: 'synced',
-        sitePhotoPath,
-        sitePhotoDirty: photoUploadFailed,
-      })
-    } else {
-      console.error(`[sync] push sites/${site.id} failed:`, error.message, error)
+      const { error } = await supabase.from('sites').upsert(siteToRemote({ ...site, sitePhotoPath }))
+      if (!error) {
+        await db.sites.update(site.id, {
+          syncStatus: 'synced',
+          sitePhotoPath,
+          sitePhotoDirty: photoUploadFailed,
+        })
+      } else {
+        reportSyncError(`[sync] push sites/${site.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push sites/${site.id} threw:`, err)
     }
   }
 }
@@ -364,7 +394,7 @@ async function pullSites(): Promise<void> {
   const cursor = getCursors().sites ?? 0
   const { data, error } = await supabase.from('sites').select('*').gt('last_updated_at', cursor)
   if (error) {
-    console.error('[sync] pull sites failed:', error.message, error)
+    reportSyncError('[sync] pull sites failed:', error.message, error)
     return
   }
   if (!data) return
@@ -374,39 +404,43 @@ async function pullSites(): Promise<void> {
     const updatedAt = Number(remoteRow.last_updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.sites.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local site/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.sites.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local site/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    let sitePhoto = local?.sitePhoto
-    const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
-    if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
-      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
-      if (blob) sitePhoto = blob
-    } else if (!sitePhotoPath) {
-      // Remote has no photo (removed elsewhere) — don't keep showing
-      // whatever this device happened to have downloaded before.
-      sitePhoto = undefined
-    }
+      let sitePhoto = local?.sitePhoto
+      const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
+      if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
+        const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
+        if (blob) sitePhoto = blob
+      } else if (!sitePhotoPath) {
+        // Remote has no photo (removed elsewhere) — don't keep showing
+        // whatever this device happened to have downloaded before.
+        sitePhoto = undefined
+      }
 
-    await db.sites.put({
-      id: remoteRow.id as string,
-      name: remoteRow.name as string,
-      address: remoteRow.address as string,
-      otherInfo: remoteRow.other_info as string,
-      active: remoteRow.active as boolean,
-      deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
-      projectId: (remoteRow.project_id as string | null) ?? undefined,
-      sitePhoto,
-      sitePhotoPath,
-      sitePhotoDirty: false,
-      createdAt: remoteRow.created_at as number,
-      lastUpdatedBy: remoteRow.last_updated_by as string,
-      lastUpdatedAt: updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.sites.put({
+        id: remoteRow.id as string,
+        name: remoteRow.name as string,
+        address: remoteRow.address as string,
+        otherInfo: remoteRow.other_info as string,
+        active: remoteRow.active as boolean,
+        deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
+        projectId: (remoteRow.project_id as string | null) ?? undefined,
+        sitePhoto,
+        sitePhotoPath,
+        sitePhotoDirty: false,
+        createdAt: remoteRow.created_at as number,
+        lastUpdatedBy: remoteRow.last_updated_by as string,
+        lastUpdatedAt: updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull site/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('sites', maxUpdatedAt)
 }
@@ -431,11 +465,15 @@ function projectToRemote(project: Project): Record<string, unknown> {
 async function pushProjects(): Promise<void> {
   const pending = await db.projects.where('syncStatus').equals('pending').toArray()
   for (const project of pending) {
-    const { error } = await supabase.from('projects').upsert(projectToRemote(project))
-    if (!error) {
-      await db.projects.update(project.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push projects/${project.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('projects').upsert(projectToRemote(project))
+      if (!error) {
+        await db.projects.update(project.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push projects/${project.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push projects/${project.id} threw:`, err)
     }
   }
 }
@@ -444,7 +482,7 @@ async function pullProjects(): Promise<void> {
   const cursor = getCursors().projects ?? 0
   const { data, error } = await supabase.from('projects').select('*').gt('last_updated_at', cursor)
   if (error) {
-    console.error('[sync] pull projects failed:', error.message, error)
+    reportSyncError('[sync] pull projects failed:', error.message, error)
     return
   }
   if (!data) return
@@ -454,25 +492,29 @@ async function pullProjects(): Promise<void> {
     const updatedAt = Number(remoteRow.last_updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.projects.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local project/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.projects.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local project/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    await db.projects.put({
-      id: remoteRow.id as string,
-      name: remoteRow.name as string,
-      active: remoteRow.active as boolean,
-      deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
-      ownerId: (remoteRow.owner_id as string | null) ?? '',
-      ownerEmail: (remoteRow.owner_email as string) ?? '',
-      sharedWith: (remoteRow.shared_with as Project['sharedWith']) ?? [],
-      createdAt: remoteRow.created_at as number,
-      lastUpdatedBy: remoteRow.last_updated_by as string,
-      lastUpdatedAt: updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.projects.put({
+        id: remoteRow.id as string,
+        name: remoteRow.name as string,
+        active: remoteRow.active as boolean,
+        deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
+        ownerId: (remoteRow.owner_id as string | null) ?? '',
+        ownerEmail: (remoteRow.owner_email as string) ?? '',
+        sharedWith: (remoteRow.shared_with as Project['sharedWith']) ?? [],
+        createdAt: remoteRow.created_at as number,
+        lastUpdatedBy: remoteRow.last_updated_by as string,
+        lastUpdatedAt: updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull project/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('projects', maxUpdatedAt)
 }
@@ -516,11 +558,15 @@ function bolToRemote(bol: BillOfLading): Record<string, unknown> {
 async function pushBolsOfLading(): Promise<void> {
   const pending = await db.billsOfLading.where('syncStatus').equals('pending').toArray()
   for (const bol of pending) {
-    const { error } = await supabase.from('bills_of_lading').upsert(bolToRemote(bol))
-    if (!error) {
-      await db.billsOfLading.update(bol.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push bills_of_lading/${bol.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('bills_of_lading').upsert(bolToRemote(bol))
+      if (!error) {
+        await db.billsOfLading.update(bol.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push bills_of_lading/${bol.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push bills_of_lading/${bol.id} threw:`, err)
     }
   }
 }
@@ -529,7 +575,7 @@ async function pullBolsOfLading(): Promise<void> {
   const cursor = getCursors().bills_of_lading ?? 0
   const { data, error } = await supabase.from('bills_of_lading').select('*').gt('last_updated_at', cursor)
   if (error) {
-    console.error('[sync] pull bills_of_lading failed:', error.message, error)
+    reportSyncError('[sync] pull bills_of_lading failed:', error.message, error)
     return
   }
   if (!data) return
@@ -539,44 +585,48 @@ async function pullBolsOfLading(): Promise<void> {
     const updatedAt = Number(remoteRow.last_updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.billsOfLading.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local billsOfLading/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.billsOfLading.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local billsOfLading/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    await db.billsOfLading.put({
-      id: remoteRow.id as string,
-      siteId: remoteRow.site_id as string,
-      direction: remoteRow.direction as BillOfLading['direction'],
-      date: remoteRow.date as string,
-      loadNumber: remoteRow.load_number as string,
-      referenceDoc: remoteRow.reference_doc as string,
-      paymentTerm: remoteRow.payment_term as BillOfLading['paymentTerm'],
-      shipFromCompany: remoteRow.ship_from_company as string,
-      shipFromAddress: remoteRow.ship_from_address as string,
-      shipFromPhone: remoteRow.ship_from_phone as string,
-      shipToCompany: remoteRow.ship_to_company as string,
-      shipToContact: remoteRow.ship_to_contact as string,
-      shipToAddress: remoteRow.ship_to_address as string,
-      shipToPhone: remoteRow.ship_to_phone as string,
-      carrier: remoteRow.carrier as string,
-      driverPhone: remoteRow.driver_phone as string,
-      brokerInfo: remoteRow.broker_info as string,
-      trailerLoadedBy: (remoteRow.trailer_loaded_by as BillOfLading['trailerLoadedBy']) ?? '',
-      freightCountedBy: (remoteRow.freight_counted_by as BillOfLading['freightCountedBy']) ?? '',
-      shipperSignatureImage: (remoteRow.shipper_signature_image as string) ?? '',
-      shipperSignedAt: (remoteRow.shipper_signed_at as number) ?? 0,
-      carrierSignatureImage: (remoteRow.carrier_signature_image as string) ?? '',
-      carrierSignedAt: (remoteRow.carrier_signed_at as number) ?? 0,
-      shippedAt: (remoteRow.shipped_at as number) ?? 0,
-      lineItems: (remoteRow.line_items as BillOfLading['lineItems']) ?? [],
-      sourceSoNumbers: (remoteRow.source_so_numbers as string[]) ?? [],
-      createdAt: remoteRow.created_at as number,
-      lastUpdatedBy: remoteRow.last_updated_by as string,
-      lastUpdatedAt: updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.billsOfLading.put({
+        id: remoteRow.id as string,
+        siteId: remoteRow.site_id as string,
+        direction: remoteRow.direction as BillOfLading['direction'],
+        date: remoteRow.date as string,
+        loadNumber: remoteRow.load_number as string,
+        referenceDoc: remoteRow.reference_doc as string,
+        paymentTerm: remoteRow.payment_term as BillOfLading['paymentTerm'],
+        shipFromCompany: remoteRow.ship_from_company as string,
+        shipFromAddress: remoteRow.ship_from_address as string,
+        shipFromPhone: remoteRow.ship_from_phone as string,
+        shipToCompany: remoteRow.ship_to_company as string,
+        shipToContact: remoteRow.ship_to_contact as string,
+        shipToAddress: remoteRow.ship_to_address as string,
+        shipToPhone: remoteRow.ship_to_phone as string,
+        carrier: remoteRow.carrier as string,
+        driverPhone: remoteRow.driver_phone as string,
+        brokerInfo: remoteRow.broker_info as string,
+        trailerLoadedBy: (remoteRow.trailer_loaded_by as BillOfLading['trailerLoadedBy']) ?? '',
+        freightCountedBy: (remoteRow.freight_counted_by as BillOfLading['freightCountedBy']) ?? '',
+        shipperSignatureImage: (remoteRow.shipper_signature_image as string) ?? '',
+        shipperSignedAt: (remoteRow.shipper_signed_at as number) ?? 0,
+        carrierSignatureImage: (remoteRow.carrier_signature_image as string) ?? '',
+        carrierSignedAt: (remoteRow.carrier_signed_at as number) ?? 0,
+        shippedAt: (remoteRow.shipped_at as number) ?? 0,
+        lineItems: (remoteRow.line_items as BillOfLading['lineItems']) ?? [],
+        sourceSoNumbers: (remoteRow.source_so_numbers as string[]) ?? [],
+        createdAt: remoteRow.created_at as number,
+        lastUpdatedBy: remoteRow.last_updated_by as string,
+        lastUpdatedAt: updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull billsOfLading/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('bills_of_lading', maxUpdatedAt)
 }
@@ -601,11 +651,15 @@ function customerSheetToRemote(sheet: CustomerSheet): Record<string, unknown> {
 async function pushCustomerSheets(): Promise<void> {
   const pending = await db.customerSheets.where('syncStatus').equals('pending').toArray()
   for (const sheet of pending) {
-    const { error } = await supabase.from('customer_sheets').upsert(customerSheetToRemote(sheet))
-    if (!error) {
-      await db.customerSheets.update(sheet.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push customer_sheets/${sheet.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('customer_sheets').upsert(customerSheetToRemote(sheet))
+      if (!error) {
+        await db.customerSheets.update(sheet.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push customer_sheets/${sheet.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push customer_sheets/${sheet.id} threw:`, err)
     }
   }
 }
@@ -614,7 +668,7 @@ async function pullCustomerSheets(): Promise<void> {
   const cursor = getCursors().customer_sheets ?? 0
   const { data, error } = await supabase.from('customer_sheets').select('*').gt('last_updated_at', cursor)
   if (error) {
-    console.error('[sync] pull customer_sheets failed:', error.message, error)
+    reportSyncError('[sync] pull customer_sheets failed:', error.message, error)
     return
   }
   if (!data) return
@@ -624,27 +678,31 @@ async function pullCustomerSheets(): Promise<void> {
     const updatedAt = Number(remoteRow.last_updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.customerSheets.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local customerSheets/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.customerSheets.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local customerSheets/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    await db.customerSheets.put({
-      id: remoteRow.id as string,
-      siteId: remoteRow.site_id as string,
-      date: remoteRow.date as string,
-      customerName: remoteRow.customer_name as string,
-      customerCompany: remoteRow.customer_company as string,
-      customerAddress: remoteRow.customer_address as string,
-      customerPhone: remoteRow.customer_phone as string,
-      preparedBy: remoteRow.prepared_by as string,
-      lineItems: (remoteRow.line_items as CustomerSheet['lineItems']) ?? [],
-      createdAt: remoteRow.created_at as number,
-      lastUpdatedBy: remoteRow.last_updated_by as string,
-      lastUpdatedAt: updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.customerSheets.put({
+        id: remoteRow.id as string,
+        siteId: remoteRow.site_id as string,
+        date: remoteRow.date as string,
+        customerName: remoteRow.customer_name as string,
+        customerCompany: remoteRow.customer_company as string,
+        customerAddress: remoteRow.customer_address as string,
+        customerPhone: remoteRow.customer_phone as string,
+        preparedBy: remoteRow.prepared_by as string,
+        lineItems: (remoteRow.line_items as CustomerSheet['lineItems']) ?? [],
+        createdAt: remoteRow.created_at as number,
+        lastUpdatedBy: remoteRow.last_updated_by as string,
+        lastUpdatedAt: updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull customerSheets/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('customer_sheets', maxUpdatedAt)
 }
@@ -673,11 +731,15 @@ function salesOrderLineItemToRemote(li: SalesOrderLineItem): Record<string, unkn
 async function pushSalesOrderLineItems(): Promise<void> {
   const pending = await db.salesOrderLineItems.where('syncStatus').equals('pending').toArray()
   for (const li of pending) {
-    const { error } = await supabase.from('sales_order_line_items').upsert(salesOrderLineItemToRemote(li))
-    if (!error) {
-      await db.salesOrderLineItems.update(li.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push sales_order_line_items/${li.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('sales_order_line_items').upsert(salesOrderLineItemToRemote(li))
+      if (!error) {
+        await db.salesOrderLineItems.update(li.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push sales_order_line_items/${li.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push sales_order_line_items/${li.id} threw:`, err)
     }
   }
 }
@@ -686,7 +748,7 @@ async function pullSalesOrderLineItems(): Promise<void> {
   const cursor = getCursors().sales_order_line_items ?? 0
   const { data, error } = await supabase.from('sales_order_line_items').select('*').gt('updated_at', cursor)
   if (error) {
-    console.error('[sync] pull sales_order_line_items failed:', error.message, error)
+    reportSyncError('[sync] pull sales_order_line_items failed:', error.message, error)
     return
   }
   if (!data) return
@@ -696,31 +758,35 @@ async function pullSalesOrderLineItems(): Promise<void> {
     const updatedAt = Number(remoteRow.updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.salesOrderLineItems.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local salesOrderLineItems/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.salesOrderLineItems.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local salesOrderLineItems/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    await db.salesOrderLineItems.put({
-      id: remoteRow.id as string,
-      soNumber: remoteRow.so_number as string,
-      description: remoteRow.description as string,
-      warehouseCode: (remoteRow.warehouse_code as string) ?? '',
-      quantityOrdered: remoteRow.quantity_ordered as number,
-      status: remoteRow.status as SalesOrderLineItem['status'],
-      tiedSiteId: remoteRow.tied_site_id as string,
-      tiedSiteName: remoteRow.tied_site_name as string,
-      tiedItemType: remoteRow.tied_item_type as SalesOrderLineItem['tiedItemType'],
-      tiedItemIds: (remoteRow.tied_item_ids as string[]) ?? [],
-      tiedDescription: remoteRow.tied_description as string,
-      tiedAt: remoteRow.tied_at as number,
-      tiedBy: remoteRow.tied_by as string,
-      importedAt: remoteRow.imported_at as number,
-      createdAt: remoteRow.created_at as number,
-      updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.salesOrderLineItems.put({
+        id: remoteRow.id as string,
+        soNumber: remoteRow.so_number as string,
+        description: remoteRow.description as string,
+        warehouseCode: (remoteRow.warehouse_code as string) ?? '',
+        quantityOrdered: remoteRow.quantity_ordered as number,
+        status: remoteRow.status as SalesOrderLineItem['status'],
+        tiedSiteId: remoteRow.tied_site_id as string,
+        tiedSiteName: remoteRow.tied_site_name as string,
+        tiedItemType: remoteRow.tied_item_type as SalesOrderLineItem['tiedItemType'],
+        tiedItemIds: (remoteRow.tied_item_ids as string[]) ?? [],
+        tiedDescription: remoteRow.tied_description as string,
+        tiedAt: remoteRow.tied_at as number,
+        tiedBy: remoteRow.tied_by as string,
+        importedAt: remoteRow.imported_at as number,
+        createdAt: remoteRow.created_at as number,
+        updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull salesOrderLineItems/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('sales_order_line_items', maxUpdatedAt)
 }
@@ -744,11 +810,15 @@ function salesOrderScheduleToRemote(schedule: SalesOrderSchedule): Record<string
 async function pushSalesOrderSchedules(): Promise<void> {
   const pending = await db.salesOrderSchedules.where('syncStatus').equals('pending').toArray()
   for (const schedule of pending) {
-    const { error } = await supabase.from('sales_order_schedules').upsert(salesOrderScheduleToRemote(schedule))
-    if (!error) {
-      await db.salesOrderSchedules.update(schedule.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push sales_order_schedules/${schedule.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('sales_order_schedules').upsert(salesOrderScheduleToRemote(schedule))
+      if (!error) {
+        await db.salesOrderSchedules.update(schedule.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push sales_order_schedules/${schedule.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push sales_order_schedules/${schedule.id} threw:`, err)
     }
   }
 }
@@ -757,7 +827,7 @@ async function pullSalesOrderSchedules(): Promise<void> {
   const cursor = getCursors().sales_order_schedules ?? 0
   const { data, error } = await supabase.from('sales_order_schedules').select('*').gt('last_updated_at', cursor)
   if (error) {
-    console.error('[sync] pull sales_order_schedules failed:', error.message, error)
+    reportSyncError('[sync] pull sales_order_schedules failed:', error.message, error)
     return
   }
   if (!data) return
@@ -767,24 +837,28 @@ async function pullSalesOrderSchedules(): Promise<void> {
     const updatedAt = Number(remoteRow.last_updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.salesOrderSchedules.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local salesOrderSchedules/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.salesOrderSchedules.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local salesOrderSchedules/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    await db.salesOrderSchedules.put({
-      id: remoteRow.id as string,
-      soNumber: remoteRow.so_number as string,
-      siteId: remoteRow.site_id as string,
-      siteName: remoteRow.site_name as string,
-      scheduledShipDate: remoteRow.scheduled_ship_date as string,
-      createdBy: remoteRow.created_by as string,
-      createdAt: remoteRow.created_at as number,
-      lastUpdatedBy: remoteRow.last_updated_by as string,
-      lastUpdatedAt: updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.salesOrderSchedules.put({
+        id: remoteRow.id as string,
+        soNumber: remoteRow.so_number as string,
+        siteId: remoteRow.site_id as string,
+        siteName: remoteRow.site_name as string,
+        scheduledShipDate: remoteRow.scheduled_ship_date as string,
+        createdBy: remoteRow.created_by as string,
+        createdAt: remoteRow.created_at as number,
+        lastUpdatedBy: remoteRow.last_updated_by as string,
+        lastUpdatedAt: updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull salesOrderSchedules/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('sales_order_schedules', maxUpdatedAt)
 }
@@ -809,11 +883,15 @@ function salesQuoteToRemote(quote: SalesQuote): Record<string, unknown> {
 async function pushSalesQuotes(): Promise<void> {
   const pending = await db.salesQuotes.where('syncStatus').equals('pending').toArray()
   for (const quote of pending) {
-    const { error } = await supabase.from('sales_quotes').upsert(salesQuoteToRemote(quote))
-    if (!error) {
-      await db.salesQuotes.update(quote.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push sales_quotes/${quote.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('sales_quotes').upsert(salesQuoteToRemote(quote))
+      if (!error) {
+        await db.salesQuotes.update(quote.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push sales_quotes/${quote.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push sales_quotes/${quote.id} threw:`, err)
     }
   }
 }
@@ -822,7 +900,7 @@ async function pullSalesQuotes(): Promise<void> {
   const cursor = getCursors().sales_quotes ?? 0
   const { data, error } = await supabase.from('sales_quotes').select('*').gt('last_updated_at', cursor)
   if (error) {
-    console.error('[sync] pull sales_quotes failed:', error.message, error)
+    reportSyncError('[sync] pull sales_quotes failed:', error.message, error)
     return
   }
   if (!data) return
@@ -832,25 +910,29 @@ async function pullSalesQuotes(): Promise<void> {
     const updatedAt = Number(remoteRow.last_updated_at)
     maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
-    const local = await db.salesQuotes.get(remoteRow.id as string)
-    if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
-      console.warn(`[sync] keeping local salesQuotes/${remoteRow.id} over an older/equal remote change`)
-      continue
-    }
+    try {
+      const local = await db.salesQuotes.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local salesQuotes/${remoteRow.id} over an older/equal remote change`)
+        continue
+      }
 
-    await db.salesQuotes.put({
-      id: remoteRow.id as string,
-      quoteNumber: remoteRow.quote_number as string,
-      customerName: remoteRow.customer_name as string,
-      customerAddress: remoteRow.customer_address as string,
-      notes: remoteRow.notes as string,
-      createdById: remoteRow.created_by_id as string,
-      createdByEmail: remoteRow.created_by_email as string,
-      canceledAt: (remoteRow.canceled_at as number | null) ?? undefined,
-      createdAt: remoteRow.created_at as number,
-      lastUpdatedAt: updatedAt,
-      syncStatus: 'synced',
-    })
+      await db.salesQuotes.put({
+        id: remoteRow.id as string,
+        quoteNumber: remoteRow.quote_number as string,
+        customerName: remoteRow.customer_name as string,
+        customerAddress: remoteRow.customer_address as string,
+        notes: remoteRow.notes as string,
+        createdById: remoteRow.created_by_id as string,
+        createdByEmail: remoteRow.created_by_email as string,
+        canceledAt: (remoteRow.canceled_at as number | null) ?? undefined,
+        createdAt: remoteRow.created_at as number,
+        lastUpdatedAt: updatedAt,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull salesQuotes/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('sales_quotes', maxUpdatedAt)
 }
@@ -874,11 +956,15 @@ function salesQuoteLineItemToRemote(li: SalesQuoteLineItem): Record<string, unkn
 async function pushSalesQuoteLineItems(): Promise<void> {
   const pending = await db.salesQuoteLineItems.where('syncStatus').equals('pending').toArray()
   for (const li of pending) {
-    const { error } = await supabase.from('sales_quote_line_items').upsert(salesQuoteLineItemToRemote(li))
-    if (!error) {
-      await db.salesQuoteLineItems.update(li.id, { syncStatus: 'synced' })
-    } else {
-      console.error(`[sync] push sales_quote_line_items/${li.id} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from('sales_quote_line_items').upsert(salesQuoteLineItemToRemote(li))
+      if (!error) {
+        await db.salesQuoteLineItems.update(li.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push sales_quote_line_items/${li.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push sales_quote_line_items/${li.id} threw:`, err)
     }
   }
 }
@@ -887,7 +973,7 @@ async function pullSalesQuoteLineItems(): Promise<void> {
   const cursor = getCursors().sales_quote_line_items ?? 0
   const { data, error } = await supabase.from('sales_quote_line_items').select('*').gt('created_at', cursor)
   if (error) {
-    console.error('[sync] pull sales_quote_line_items failed:', error.message, error)
+    reportSyncError('[sync] pull sales_quote_line_items failed:', error.message, error)
     return
   }
   if (!data) return
@@ -895,23 +981,27 @@ async function pullSalesQuoteLineItems(): Promise<void> {
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
     maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
-    const existing = await db.salesQuoteLineItems.get(remoteRow.id as string)
-    if (existing) continue
+    try {
+      const existing = await db.salesQuoteLineItems.get(remoteRow.id as string)
+      if (existing) continue
 
-    await db.salesQuoteLineItems.put({
-      id: remoteRow.id as string,
-      quoteId: remoteRow.quote_id as string,
-      quoteNumber: remoteRow.quote_number as string,
-      siteId: remoteRow.site_id as string,
-      siteName: remoteRow.site_name as string,
-      itemType: remoteRow.item_type as SalesQuoteLineItem['itemType'],
-      itemIds: (remoteRow.item_ids as string[]) ?? [],
-      description: remoteRow.description as string,
-      quantityHeld: remoteRow.quantity_held as number,
-      heldByEmail: remoteRow.held_by_email as string,
-      createdAt: remoteRow.created_at as number,
-      syncStatus: 'synced',
-    })
+      await db.salesQuoteLineItems.put({
+        id: remoteRow.id as string,
+        quoteId: remoteRow.quote_id as string,
+        quoteNumber: remoteRow.quote_number as string,
+        siteId: remoteRow.site_id as string,
+        siteName: remoteRow.site_name as string,
+        itemType: remoteRow.item_type as SalesQuoteLineItem['itemType'],
+        itemIds: (remoteRow.item_ids as string[]) ?? [],
+        description: remoteRow.description as string,
+        quantityHeld: remoteRow.quantity_held as number,
+        heldByEmail: remoteRow.held_by_email as string,
+        createdAt: remoteRow.created_at as number,
+        syncStatus: 'synced',
+      })
+    } catch (err) {
+      reportSyncError(`[sync] pull salesQuoteLineItems/${remoteRow.id} threw:`, err)
+    }
   }
   setCursor('sales_quote_line_items', maxCreatedAt)
 }
@@ -921,26 +1011,30 @@ async function pullSalesQuoteLineItems(): Promise<void> {
 async function pushPhotos(): Promise<void> {
   const pending = await db.photos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
-    const path = `${photo.itemId}/item/${photo.id}.jpg`
-    const { error: uploadError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
-    if (uploadError) {
-      console.error(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
-      continue
-    }
+    try {
+      const path = `${photo.itemId}/item/${photo.id}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+      if (uploadError) {
+        reportSyncError(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        continue
+      }
 
-    const { error } = await supabase.from('photos').upsert({
-      id: photo.id,
-      item_type: photo.itemType,
-      item_id: photo.itemId,
-      storage_path: path,
-      created_at: photo.createdAt,
-    })
-    if (!error) {
-      await db.photos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
-    } else {
-      console.error(`[sync] push photos/${photo.id} failed:`, error.message, error)
+      const { error } = await supabase.from('photos').upsert({
+        id: photo.id,
+        item_type: photo.itemType,
+        item_id: photo.itemId,
+        storage_path: path,
+        created_at: photo.createdAt,
+      })
+      if (!error) {
+        await db.photos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+      } else {
+        reportSyncError(`[sync] push photos/${photo.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push photos/${photo.id} threw:`, err)
     }
   }
 }
@@ -949,7 +1043,7 @@ async function pullPhotos(): Promise<void> {
   const cursor = getCursors().photos ?? 0
   const { data, error } = await supabase.from('photos').select('*').gt('created_at', cursor)
   if (error) {
-    console.error('[sync] pull photos failed:', error.message, error)
+    reportSyncError('[sync] pull photos failed:', error.message, error)
     return
   }
   if (!data) return
@@ -958,24 +1052,28 @@ async function pullPhotos(): Promise<void> {
   const touchedItemIds = new Set<string>()
   for (const remoteRow of data) {
     maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
-    const existing = await db.photos.get(remoteRow.id as string)
-    if (existing) continue
+    try {
+      const existing = await db.photos.get(remoteRow.id as string)
+      if (existing) continue
 
-    const path = remoteRow.storage_path as string
-    const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-    if (!blob) continue
+      const path = remoteRow.storage_path as string
+      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) continue
 
-    const photo: Photo = {
-      id: remoteRow.id as string,
-      itemType: remoteRow.item_type as ItemType,
-      itemId: remoteRow.item_id as string,
-      blob,
-      createdAt: remoteRow.created_at as number,
-      uploadStatus: 'synced',
-      remoteUrl: path,
+      const photo: Photo = {
+        id: remoteRow.id as string,
+        itemType: remoteRow.item_type as ItemType,
+        itemId: remoteRow.item_id as string,
+        blob,
+        createdAt: remoteRow.created_at as number,
+        uploadStatus: 'synced',
+        remoteUrl: path,
+      }
+      await db.photos.put(photo)
+      touchedItemIds.add(photo.itemId)
+    } catch (err) {
+      reportSyncError(`[sync] pull photos/${remoteRow.id} threw:`, err)
     }
-    await db.photos.put(photo)
-    touchedItemIds.add(photo.itemId)
   }
   setCursor('photos', maxCreatedAt)
 
@@ -998,25 +1096,29 @@ async function refreshPhotoIds(itemId: string): Promise<void> {
 async function pushProjectPhotos(): Promise<void> {
   const pending = await db.projectPhotos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
-    const path = `${photo.siteId}/project/${photo.id}.jpg`
-    const { error: uploadError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
-    if (uploadError) {
-      console.error(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
-      continue
-    }
+    try {
+      const path = `${photo.siteId}/project/${photo.id}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+      if (uploadError) {
+        reportSyncError(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        continue
+      }
 
-    const { error } = await supabase.from('project_photos').upsert({
-      id: photo.id,
-      site_id: photo.siteId,
-      storage_path: path,
-      created_at: photo.createdAt,
-    })
-    if (!error) {
-      await db.projectPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
-    } else {
-      console.error(`[sync] push project_photos/${photo.id} failed:`, error.message, error)
+      const { error } = await supabase.from('project_photos').upsert({
+        id: photo.id,
+        site_id: photo.siteId,
+        storage_path: path,
+        created_at: photo.createdAt,
+      })
+      if (!error) {
+        await db.projectPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+      } else {
+        reportSyncError(`[sync] push project_photos/${photo.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push project_photos/${photo.id} threw:`, err)
     }
   }
 }
@@ -1025,7 +1127,7 @@ async function pullProjectPhotos(): Promise<void> {
   const cursor = getCursors().project_photos ?? 0
   const { data, error } = await supabase.from('project_photos').select('*').gt('created_at', cursor)
   if (error) {
-    console.error('[sync] pull project_photos failed:', error.message, error)
+    reportSyncError('[sync] pull project_photos failed:', error.message, error)
     return
   }
   if (!data) return
@@ -1033,22 +1135,26 @@ async function pullProjectPhotos(): Promise<void> {
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
     maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
-    const existing = await db.projectPhotos.get(remoteRow.id as string)
-    if (existing) continue
+    try {
+      const existing = await db.projectPhotos.get(remoteRow.id as string)
+      if (existing) continue
 
-    const path = remoteRow.storage_path as string
-    const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-    if (!blob) continue
+      const path = remoteRow.storage_path as string
+      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) continue
 
-    const photo: ProjectPhoto = {
-      id: remoteRow.id as string,
-      siteId: remoteRow.site_id as string,
-      blob,
-      createdAt: remoteRow.created_at as number,
-      uploadStatus: 'synced',
-      remoteUrl: path,
+      const photo: ProjectPhoto = {
+        id: remoteRow.id as string,
+        siteId: remoteRow.site_id as string,
+        blob,
+        createdAt: remoteRow.created_at as number,
+        uploadStatus: 'synced',
+        remoteUrl: path,
+      }
+      await db.projectPhotos.put(photo)
+    } catch (err) {
+      reportSyncError(`[sync] pull project_photos/${remoteRow.id} threw:`, err)
     }
-    await db.projectPhotos.put(photo)
   }
   setCursor('project_photos', maxCreatedAt)
 }
@@ -1058,25 +1164,29 @@ async function pullProjectPhotos(): Promise<void> {
 async function pushBolPhotos(): Promise<void> {
   const pending = await db.bolPhotos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
-    const path = `bol/${photo.bolId}/${photo.id}.jpg`
-    const { error: uploadError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
-    if (uploadError) {
-      console.error(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
-      continue
-    }
+    try {
+      const path = `bol/${photo.bolId}/${photo.id}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+      if (uploadError) {
+        reportSyncError(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        continue
+      }
 
-    const { error } = await supabase.from('bol_photos').upsert({
-      id: photo.id,
-      bol_id: photo.bolId,
-      storage_path: path,
-      created_at: photo.createdAt,
-    })
-    if (!error) {
-      await db.bolPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
-    } else {
-      console.error(`[sync] push bol_photos/${photo.id} failed:`, error.message, error)
+      const { error } = await supabase.from('bol_photos').upsert({
+        id: photo.id,
+        bol_id: photo.bolId,
+        storage_path: path,
+        created_at: photo.createdAt,
+      })
+      if (!error) {
+        await db.bolPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+      } else {
+        reportSyncError(`[sync] push bol_photos/${photo.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push bol_photos/${photo.id} threw:`, err)
     }
   }
 }
@@ -1085,7 +1195,7 @@ async function pullBolPhotos(): Promise<void> {
   const cursor = getCursors().bol_photos ?? 0
   const { data, error } = await supabase.from('bol_photos').select('*').gt('created_at', cursor)
   if (error) {
-    console.error('[sync] pull bol_photos failed:', error.message, error)
+    reportSyncError('[sync] pull bol_photos failed:', error.message, error)
     return
   }
   if (!data) return
@@ -1093,22 +1203,26 @@ async function pullBolPhotos(): Promise<void> {
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
     maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
-    const existing = await db.bolPhotos.get(remoteRow.id as string)
-    if (existing) continue
+    try {
+      const existing = await db.bolPhotos.get(remoteRow.id as string)
+      if (existing) continue
 
-    const path = remoteRow.storage_path as string
-    const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-    if (!blob) continue
+      const path = remoteRow.storage_path as string
+      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) continue
 
-    const photo: BolPhoto = {
-      id: remoteRow.id as string,
-      bolId: remoteRow.bol_id as string,
-      blob,
-      createdAt: remoteRow.created_at as number,
-      uploadStatus: 'synced',
-      remoteUrl: path,
+      const photo: BolPhoto = {
+        id: remoteRow.id as string,
+        bolId: remoteRow.bol_id as string,
+        blob,
+        createdAt: remoteRow.created_at as number,
+        uploadStatus: 'synced',
+        remoteUrl: path,
+      }
+      await db.bolPhotos.put(photo)
+    } catch (err) {
+      reportSyncError(`[sync] pull bol_photos/${remoteRow.id} threw:`, err)
     }
-    await db.bolPhotos.put(photo)
   }
   setCursor('bol_photos', maxCreatedAt)
 }
@@ -1131,11 +1245,15 @@ async function pushPendingDeletes(): Promise<void> {
   const pending = await db.pendingDeletes.toArray()
   for (const del of pending) {
     const remoteTable = REMOTE_TABLE_NAMES[del.table] ?? del.table
-    const { error } = await supabase.from(remoteTable).delete().eq('id', del.recordId)
-    if (!error) {
-      await db.pendingDeletes.delete(del.id)
-    } else {
-      console.error(`[sync] delete ${remoteTable}/${del.recordId} failed:`, error.message, error)
+    try {
+      const { error } = await supabase.from(remoteTable).delete().eq('id', del.recordId)
+      if (!error) {
+        await db.pendingDeletes.delete(del.id)
+      } else {
+        reportSyncError(`[sync] delete ${remoteTable}/${del.recordId} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] delete ${remoteTable}/${del.recordId} threw:`, err)
     }
   }
 }
@@ -1188,7 +1306,7 @@ export async function runSync(): Promise<void> {
     await pullSalesQuoteLineItems()
     console.log('[sync] finished')
   } catch (err) {
-    console.error('[sync] sync run failed', err)
+    reportSyncError('[sync] sync run failed', err)
   } finally {
     syncing = false
   }

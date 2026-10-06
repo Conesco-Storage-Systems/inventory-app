@@ -30,6 +30,26 @@ export function compressImageToDataUrl(blob: Blob, maxWidth = 800, quality = 0.7
   })
 }
 
+// iPhones save camera-roll photos as HEIC by default. Safari/iOS decode
+// that natively through <img>, but Chrome/Edge/Firefox on Windows (and
+// most non-Apple software) can't display HEIC at all — picking one of
+// those photos via "Add From Files" on a PC silently produced an
+// undecodable image (the record saved fine, but the photo itself never
+// rendered). heic2any does the HEIC decode in WASM, independent of the
+// browser's own image codecs, so it works the same everywhere.
+function looksLikeHeic(file: File): boolean {
+  const type = file.type.toLowerCase()
+  if (type === 'image/heic' || type === 'image/heif') return true
+  return /\.hei[cf]$/i.test(file.name)
+}
+
+async function convertHeicToJpeg(file: File): Promise<File> {
+  const { default: heic2any } = await import('heic2any')
+  const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+  const blob = Array.isArray(result) ? result[0] : result
+  return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })
+}
+
 /**
  * Same idea as compressImageToDataUrl, but produces a File — for photos
  * that get stored and synced as-is (item/BOL/project photos), rather than
@@ -41,9 +61,10 @@ export function compressImageToDataUrl(blob: Blob, maxWidth = 800, quality = 0.7
  * and in a universally-supported format regardless of what the camera
  * actually produced.
  */
-export function compressImageToFile(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
+export async function compressImageToFile(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
+  const sourceFile = looksLikeHeic(file) ? await convertHeicToJpeg(file) : file
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file)
+    const objectUrl = URL.createObjectURL(sourceFile)
     const img = new Image()
     img.onload = () => {
       const scale = Math.min(1, maxWidth / img.width)

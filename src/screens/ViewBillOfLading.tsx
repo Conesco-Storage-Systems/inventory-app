@@ -94,13 +94,26 @@ export default function ViewBillOfLading() {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null)
   const selectedPhoto = bolPhotos.find((photo) => photo.id === selectedPhotoId) ?? null
   const [showCamera, setShowCamera] = useState(false)
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const bolPhotoInputRef = useRef<HTMLInputElement>(null)
+  const photoMenuRef = useRef<HTMLDivElement>(null)
 
-  function handleTakePhotoClick() {
+  useEffect(() => {
+    if (!showPhotoMenu) return
+    function handleClickOutside(e: MouseEvent) {
+      if (photoMenuRef.current && !photoMenuRef.current.contains(e.target as Node)) {
+        setShowPhotoMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showPhotoMenu])
+
+  function handleAddPhotoClick() {
     if (isMobileDevice) {
       bolPhotoInputRef.current?.click()
     } else {
-      setShowCamera(true)
+      setShowPhotoMenu((prev) => !prev)
     }
   }
 
@@ -783,9 +796,33 @@ export default function ViewBillOfLading() {
           <button type="button" onClick={handleMarkShipped} disabled={markingShipped || isEditing}>
             {markingShipped ? 'Marking…' : 'Mark as Shipped'}
           </button>
-          <button type="button" onClick={handleTakePhotoClick} disabled={isEditing}>
-            Take Photo
-          </button>
+          <div className="photo-add-wrapper" ref={photoMenuRef}>
+            <button type="button" onClick={handleAddPhotoClick} disabled={isEditing}>
+              Add Photo
+            </button>
+            {!isMobileDevice && showPhotoMenu && (
+              <div className="photo-add-menu">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCamera(true)
+                    setShowPhotoMenu(false)
+                  }}
+                >
+                  Take Photo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    bolPhotoInputRef.current?.click()
+                    setShowPhotoMenu(false)
+                  }}
+                >
+                  Add From Files
+                </button>
+              </div>
+            )}
+          </div>
           <input
             ref={bolPhotoInputRef}
             type="file"

@@ -30,41 +30,9 @@ export function compressImageToDataUrl(blob: Blob, maxWidth = 800, quality = 0.7
   })
 }
 
-// iPhones save camera-roll photos as HEIC by default. Safari/iOS decode
-// that natively through <img>, but Chrome/Edge/Firefox on Windows (and
-// most non-Apple software) can't display HEIC at all — picking one of
-// those photos via "Add From Files" on a PC silently produced an
-// undecodable image (the record saved fine, but the photo itself never
-// rendered). heic2any does the HEIC decode in WASM, independent of the
-// browser's own image codecs, so it works the same everywhere.
-function looksLikeHeic(file: File): boolean {
-  const type = file.type.toLowerCase()
-  if (type === 'image/heic' || type === 'image/heif') return true
-  return /\.hei[cf]$/i.test(file.name)
-}
-
-async function convertHeicToJpeg(file: File): Promise<File> {
-  const { default: heic2any } = await import('heic2any')
-  const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
-  const blob = Array.isArray(result) ? result[0] : result
-  return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })
-}
-
-/**
- * Same idea as compressImageToDataUrl, but produces a File — for photos
- * that get stored and synced as-is (item/BOL/project photos), rather than
- * baked into a generated document. A phone's camera photo can be a large,
- * multi-megabyte file and, depending on the phone's settings, isn't
- * necessarily even a JPEG (e.g. HEIC on iPhones) — decoding it through
- * <img>/canvas once here and re-encoding to JPEG normalizes both the size
- * and the format before it's ever stored, so every synced photo is small
- * and in a universally-supported format regardless of what the camera
- * actually produced.
- */
-export async function compressImageToFile(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
-  const sourceFile = looksLikeHeic(file) ? await convertHeicToJpeg(file) : file
+function compressBlobToFile(blob: Blob, maxWidth: number, quality: number, name: string): Promise<File> {
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(sourceFile)
+    const objectUrl = URL.createObjectURL(blob)
     const img = new Image()
     img.onload = () => {
       const scale = Math.min(1, maxWidth / img.width)
@@ -80,12 +48,12 @@ export async function compressImageToFile(file: File, maxWidth = 1600, quality =
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       URL.revokeObjectURL(objectUrl)
       canvas.toBlob(
-        (blob) => {
-          if (!blob) {
+        (result) => {
+          if (!result) {
             reject(new Error('Could not compress image'))
             return
           }
-          resolve(new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }))
+          resolve(new File([result], name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }))
         },
         'image/jpeg',
         quality,
@@ -97,4 +65,34 @@ export async function compressImageToFile(file: File, maxWidth = 1600, quality =
     }
     img.src = objectUrl
   })
+}
+
+/**
+ * Same idea as compressImageToDataUrl, but produces a File — for photos
+ * that get stored and synced as-is (item/BOL/project photos), rather than
+ * baked into a generated document. A phone's camera photo can be a large,
+ * multi-megabyte file and, depending on the phone's settings, isn't
+ * necessarily even a JPEG (e.g. HEIC on iPhones) — decoding it through
+ * <img>/canvas once here and re-encoding to JPEG normalizes both the size
+ * and the format before it's ever stored, so every synced photo is small
+ * and in a universally-supported format regardless of what the camera
+ * actually produced.
+ *
+ * Safari/iOS decode HEIC natively through <img>, so that path is tried
+ * first and left alone everywhere it already works. Chrome/Edge/Firefox
+ * on Windows (and most non-Apple software) can't display HEIC at all —
+ * picking one of those photos via "Add From Files" on a PC used to save
+ * the record fine but never render it. Only on that failure do we convert
+ * through heic-to (WASM, independent of the browser's own image codecs)
+ * and retry, so browsers that already handle HEIC never pay for it.
+ */
+export async function compressImageToFile(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
+  try {
+    return await compressBlobToFile(file, maxWidth, quality, file.name)
+  } catch (err) {
+    const { isHeic, heicTo } = await import('heic-to')
+    if (!(await isHeic(file).catch(() => false))) throw err
+    const converted = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.9 })
+    return compressBlobToFile(converted, maxWidth, quality, file.name)
+  }
 }

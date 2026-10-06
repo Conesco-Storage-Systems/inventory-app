@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/db'
 import { supabase, supabaseConfigured } from './supabaseClient'
 import type {
@@ -1268,15 +1269,72 @@ async function pushPendingDeletes(): Promise<void> {
     const remoteTable = REMOTE_TABLE_NAMES[del.table] ?? del.table
     try {
       const { error } = await supabase.from(remoteTable).delete().eq('id', del.recordId)
-      if (!error) {
-        await db.pendingDeletes.delete(del.id)
-      } else {
+      if (error) {
         reportSyncError(`[sync] delete ${remoteTable}/${del.recordId} failed:`, error.message, error)
+        continue
       }
+      // A device that already pulled this row down before the delete has
+      // no other way to find out it's gone — pulls only ever discover
+      // new/changed rows. This tombstone is what every device's pull
+      // checks to know to remove its own local copy too.
+      const { error: tombstoneError } = await supabase.from('tombstones').insert({
+        id: uuidv4(),
+        table_name: del.table,
+        record_id: del.recordId,
+        deleted_at: Date.now(),
+      })
+      if (tombstoneError) {
+        reportSyncError(`[sync] tombstone for ${del.table}/${del.recordId} failed:`, tombstoneError.message, tombstoneError)
+        continue
+      }
+      await db.pendingDeletes.delete(del.id)
     } catch (err) {
       reportSyncError(`[sync] delete ${remoteTable}/${del.recordId} threw:`, err)
     }
   }
+}
+
+// ---------- tombstones ----------
+
+const LOCAL_TABLE_NAMES = new Set([
+  'sites',
+  'projects',
+  'beams',
+  'uprights',
+  'wireDecks',
+  'miscItems',
+  'photos',
+  'projectPhotos',
+  'bolPhotos',
+  'billsOfLading',
+  'customerSheets',
+  'salesOrderLineItems',
+  'salesOrderSchedules',
+  'salesQuotes',
+  'salesQuoteLineItems',
+])
+
+async function pullTombstones(): Promise<void> {
+  const cursor = getCursors().tombstones ?? 0
+  const { data, error } = await supabase.from('tombstones').select('*').gt('deleted_at', cursor)
+  if (error) {
+    reportSyncError('[sync] pull tombstones failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxDeletedAt = cursor
+  for (const remoteRow of data) {
+    maxDeletedAt = Math.max(maxDeletedAt, Number(remoteRow.deleted_at))
+    const tableName = remoteRow.table_name as string
+    if (!LOCAL_TABLE_NAMES.has(tableName)) continue
+    try {
+      await db.table(tableName).delete(remoteRow.record_id as string)
+    } catch (err) {
+      reportSyncError(`[sync] applying tombstone for ${tableName}/${remoteRow.record_id} threw:`, err)
+    }
+  }
+  setCursor('tombstones', maxDeletedAt)
 }
 
 // ---------- orchestration ----------
@@ -1313,6 +1371,7 @@ export async function runSync(): Promise<void> {
     await pushSalesQuotes()
     await pushSalesQuoteLineItems()
 
+    await pullTombstones()
     await pullProjects()
     for (const config of ITEM_CONFIGS) await pullItemTable(config)
     await pullSites()
@@ -1359,6 +1418,7 @@ export function startAutoSync(): void {
     'sales_order_schedules',
     'sales_quotes',
     'sales_quote_line_items',
+    'tombstones',
   ]
   for (const table of remoteTables) {
     supabase

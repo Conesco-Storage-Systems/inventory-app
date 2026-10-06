@@ -269,6 +269,19 @@ create table sales_quote_line_items (
   created_at bigint not null
 );
 
+-- Tombstones: a lightweight record of "this row was deleted" for every
+-- table that uses a real delete rather than a soft deletedAt flag (sites
+-- and projects already soft-delete and don't need this). Without this, a
+-- device that already pulled a row has no way to ever learn it was
+-- deleted elsewhere — pulls only ever discover new/changed rows, never
+-- removed ones.
+create table tombstones (
+  id text primary key,
+  table_name text not null,
+  record_id text not null,
+  deleted_at bigint not null
+);
+
 -- Row Level Security: must be logged in to read or write anything.
 -- Everyone who's logged in shares full access — this is a shared company
 -- inventory system, not a multi-tenant app with per-user data.
@@ -287,6 +300,7 @@ alter table sales_order_line_items enable row level security;
 alter table sales_order_schedules enable row level security;
 alter table sales_quotes enable row level security;
 alter table sales_quote_line_items enable row level security;
+alter table tombstones enable row level security;
 
 create policy "Authenticated users can do anything" on projects
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -317,6 +331,8 @@ create policy "Authenticated users can do anything" on sales_order_schedules
 create policy "Authenticated users can do anything" on sales_quotes
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 create policy "Authenticated users can do anything" on sales_quote_line_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create policy "Authenticated users can do anything" on tombstones
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 -- Storage bucket policy: creating the "inventory-photos" bucket in the
@@ -645,4 +661,20 @@ create table if not exists bol_photos (
 alter table bol_photos enable row level security;
 
 create policy "Authenticated users can do anything" on bol_photos
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: tombstones — lets every device learn when a row was deleted
+-- elsewhere, not just when something is new or changed (run this in the
+-- SQL editor against the already-live database — the create table near
+-- the top is only for a brand new setup).
+create table if not exists tombstones (
+  id text primary key,
+  table_name text not null,
+  record_id text not null,
+  deleted_at bigint not null
+);
+
+alter table tombstones enable row level security;
+
+create policy "Authenticated users can do anything" on tombstones
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

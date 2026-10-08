@@ -456,11 +456,6 @@ export default function LocationDetail() {
       </div>
 
       <p className="add-item-row">
-        {permissions.addItems && (
-          <Link to={`/locations/${site.id}/items/new`}>
-            <button type="button">+ Add item</button>
-          </Link>
-        )}
         {hasItems && (
           <button type="button" onClick={handleExport} className="export-button">
             Export to Excel
@@ -635,7 +630,18 @@ export default function LocationDetail() {
         </details>
       )}
 
-      {!hasItems && <p className="placeholder-note">No items added yet.</p>}
+      {!hasItems && (
+        <>
+          <p className="placeholder-note">No items added yet.</p>
+          {permissions.addItems && (
+            <p>
+              <Link to={`/locations/${site.id}/items/new`}>
+                <button type="button">+ Add item</button>
+              </Link>
+            </p>
+          )}
+        </>
+      )}
 
       {hasItems && (
         <>
@@ -662,6 +668,11 @@ export default function LocationDetail() {
               </p>
             )}
             <div className="selection-actions">
+              {permissions.addItems && (
+                <Link to={`/locations/${site.id}/items/new`}>
+                  <button type="button">+ Add item</button>
+                </Link>
+              )}
               {permissions.generateCustomerSheet && (
                 selectedItems.length > 0 ? (
                   <Link

@@ -222,12 +222,18 @@ export default function LocationDetail() {
   const miscRows = groupMiscItems(miscItems)
 
   const normalizedSearch = normalizeForSearch(searchTerm)
-  const displayedUprightRows = normalizedSearch
+  // Fully-allocated/shipped items (quantity deducted down to 0) stay in
+  // the database — they're still a real record, visible on whatever Sales
+  // Order or BOL used them — but they're dead weight on this live
+  // on-hand-inventory view, so they're left out of it specifically.
+  const displayedUprightRows = (normalizedSearch
     ? uprightRows.filter((row) => matchesSearch(row, normalizedSearch))
     : uprightRows
-  const displayedBeamRows = normalizedSearch
+  ).filter((row) => row.quantity > 0)
+  const displayedBeamRows = (normalizedSearch
     ? beamRows.filter((row) => matchesSearch(row, normalizedSearch))
     : beamRows
+  ).filter((row) => row.quantity > 0)
 
   function toggleSelect(itemType: ItemKind, row: UprightRow | BeamRow | WireDeckRow | MiscItemRow) {
     setSelectedItems((prev) => {
@@ -263,12 +269,14 @@ export default function LocationDetail() {
     }
   }
 
-  const displayedWireDeckRows = normalizedSearch
+  const displayedWireDeckRows = (normalizedSearch
     ? wireDeckRows.filter((row) => matchesSearch(row, normalizedSearch))
     : wireDeckRows
-  const displayedMiscRows = normalizedSearch
+  ).filter((row) => row.quantity > 0)
+  const displayedMiscRows = (normalizedSearch
     ? miscRows.filter((row) => matchesSearch(row, normalizedSearch))
     : miscRows
+  ).filter((row) => row.quantity > 0)
 
   // Held rows are merged in as extra rows right alongside the ones they
   // belong to, rather than a separate table — "On Hold" stays a visible

@@ -254,6 +254,65 @@ export async function tieSalesOrderLineItem(lineItemId: string, allocations: Tie
   )
 }
 
+// Retroactively links a manually-added BOL line item (one with no
+// sourceLineItemId, e.g. an item shipped on a Sales Order that never came
+// through the Procurement import/tie flow) back to that Sales Order, by
+// creating the same kind of 'tied' SalesOrderLineItem a normal tie would
+// have produced. Doesn't touch inventory quantity — unlike a normal tie,
+// whatever this line represents was already manually accounted for by
+// whoever added it, so this is pure bookkeeping to make it show up
+// alongside everything else tied to that Sales Order.
+export async function linkBolLineItemToSalesOrder(
+  bolId: string,
+  lineItemIndex: number,
+  input: { soNumber: string; itemType: ItemType; itemIds: string[]; tiedDescription: string },
+): Promise<void> {
+  await db.transaction('rw', [db.billsOfLading, db.salesOrderLineItems, db.sites], async () => {
+    const bol = await db.billsOfLading.get(bolId)
+    if (!bol) return
+    const lineItem = bol.lineItems[lineItemIndex]
+    if (!lineItem || lineItem.sourceLineItemId) return
+
+    const site = await db.sites.get(bol.siteId)
+    const now = Date.now()
+    const editorName = getEditorName()
+    const soLineItemId = uuidv4()
+
+    await db.salesOrderLineItems.add({
+      id: soLineItemId,
+      soNumber: input.soNumber,
+      description: lineItem.description,
+      warehouseCode: '',
+      quantityOrdered: lineItem.qtyShipped,
+      status: 'tied',
+      tiedSiteId: bol.siteId,
+      tiedSiteName: site?.name ?? '',
+      tiedItemType: input.itemType,
+      tiedItemIds: input.itemIds,
+      tiedDescription: input.tiedDescription,
+      tiedAt: now,
+      tiedBy: editorName,
+      importedAt: 0,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+    })
+
+    const lineItems = bol.lineItems.map((li, i) => (i === lineItemIndex ? { ...li, sourceLineItemId: soLineItemId } : li))
+    const sourceSoNumbers = bol.sourceSoNumbers.includes(input.soNumber)
+      ? bol.sourceSoNumbers
+      : [...bol.sourceSoNumbers, input.soNumber]
+
+    await db.billsOfLading.update(bolId, {
+      lineItems,
+      sourceSoNumbers,
+      lastUpdatedBy: editorName,
+      lastUpdatedAt: now,
+      syncStatus: 'pending',
+    })
+  })
+}
+
 // "Delete SO" on a location's Sales Order page — reverses the tie: restores
 // the quantity that was deducted from inventory and sends the line item(s)
 // back to 'pending' so they reappear in Procurement to be reconciled again,

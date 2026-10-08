@@ -745,14 +745,24 @@ export default function AllInventory() {
     'photos',
   ]
 
+  // Fully-allocated/shipped items (quantity deducted down to 0) stay in
+  // the database — they're still a real record, visible on whatever Sales
+  // Order or BOL used them — but they're dead weight on this live
+  // on-hand-inventory view, so they're left out of it specifically. The
+  // Excel export still uses the un-filtered rows above.
+  const nonZeroUprightRows = uprightRows.filter((row) => row.quantity > 0)
+  const nonZeroBeamRows = beamRows.filter((row) => row.quantity > 0)
+  const nonZeroWireDeckRows = wireDeckRows.filter((row) => row.quantity > 0)
+  const nonZeroMiscRows = miscRows.filter((row) => row.quantity > 0)
+
   // Held rows are merged in as extra rows right alongside the ones they
   // belong to, rather than a separate table — "On Hold" stays a visible
   // distinction (via the Held By column) but the section itself is one
   // combined, sortable/filterable table.
-  const uprightMergedRows = mergeRowsWithHolds(uprightRows, holds, 'upright')
-  const beamMergedRows = mergeRowsWithHolds(beamRows, holds, 'beam')
-  const wireDeckMergedRows = mergeRowsWithHolds(wireDeckRows, holds, 'wireDeck')
-  const miscMergedRows = mergeRowsWithHolds(miscRows, holds, 'misc')
+  const uprightMergedRows = mergeRowsWithHolds(nonZeroUprightRows, holds, 'upright')
+  const beamMergedRows = mergeRowsWithHolds(nonZeroBeamRows, holds, 'beam')
+  const wireDeckMergedRows = mergeRowsWithHolds(nonZeroWireDeckRows, holds, 'wireDeck')
+  const miscMergedRows = mergeRowsWithHolds(nonZeroMiscRows, holds, 'misc')
 
   const uprightMergedColumns = withHoldAwareColumns(uprightColumns)
   const beamMergedColumns = withHoldAwareColumns(beamColumns)

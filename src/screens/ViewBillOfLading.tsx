@@ -5,6 +5,7 @@ import BlobImage from '../components/BlobImage'
 import CameraCapture from '../components/CameraCapture'
 import SignaturePad from '../components/SignaturePad'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
+import LinkBolLineItemDialog from '../components/LinkBolLineItemDialog'
 import { addBolPhoto, deleteBolPhoto, listBolPhotos } from '../db/bolPhotos'
 import {
   getBillOfLading,
@@ -521,7 +522,7 @@ export default function ViewBillOfLading() {
                 <th>Weight (lbs)</th>
                 <th>QTY Received</th>
                 <th>Item Description</th>
-                {isEditing && !lineItemsLocked && <th className="no-print"></th>}
+                <th className="no-print"></th>
               </tr>
             </thead>
             <tbody>
@@ -586,6 +587,16 @@ export default function ViewBillOfLading() {
                       <td>{li.weight}</td>
                       <td>{li.qtyReceived}</td>
                       <td>{[li.item, li.description].filter(Boolean).join(' — ')}</td>
+                      <td className="no-print">
+                        {!li.sourceLineItemId && permissions.generateBillOfLading && bolId && siteId && (
+                          <LinkBolLineItemDialog
+                            bolId={bolId}
+                            lineItemIndex={index}
+                            siteId={siteId}
+                            lineDescription={[li.item, li.description].filter(Boolean).join(' — ')}
+                          />
+                        )}
+                      </td>
                     </tr>
                   ))}
               {(!isEditing || lineItemsLocked) &&
@@ -595,6 +606,7 @@ export default function ViewBillOfLading() {
                     <td>&nbsp;</td>
                     <td>&nbsp;</td>
                     <td>&nbsp;</td>
+                    <td className="no-print">&nbsp;</td>
                   </tr>
                 ))}
               <tr className="bol-totals-row">
@@ -602,7 +614,7 @@ export default function ViewBillOfLading() {
                 <td>lbs.</td>
                 <td></td>
                 <td className="bol-totals-label">← TOTALS</td>
-                {isEditing && !lineItemsLocked && <td className="no-print"></td>}
+                <td className="no-print"></td>
               </tr>
             </tbody>
           </table>

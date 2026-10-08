@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import BeamTable from '../components/BeamTable'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
@@ -96,6 +96,13 @@ export default function LocationDetail() {
     observer.observe(node)
     toolbarObserverRef.current = observer
   }, [])
+
+  // Which item-type section the page is currently scrolled into, shown in
+  // the sticky toolbar so it still reads "Beams" (etc.) once the section
+  // headings themselves have scrolled out from under it.
+  const stickyToolbarRef = useRef<HTMLDivElement>(null)
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
+  const [activeSectionLabel, setActiveSectionLabel] = useState<string | null>(null)
 
   const importFileInputRef = useRef<HTMLInputElement>(null)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -220,6 +227,38 @@ export default function LocationDetail() {
   const beamRows = groupBeams(beams)
   const wireDeckRows = groupWireDecks(wireDecks)
   const miscRows = groupMiscItems(miscItems)
+
+  useEffect(() => {
+    const labels = ['Uprights', 'Beams', 'Wire Decks', 'Other']
+    let frame = 0
+
+    function recompute() {
+      frame = 0
+      const headerBottom = stickyToolbarRef.current?.getBoundingClientRect().bottom ?? 0
+      let current: string | null = null
+      for (const label of labels) {
+        const el = sectionRefs.current[label]
+        if (el && el.getBoundingClientRect().top <= headerBottom + 1) {
+          current = label
+        }
+      }
+      setActiveSectionLabel(current)
+    }
+
+    function onScrollOrResize() {
+      if (frame) return
+      frame = requestAnimationFrame(recompute)
+    }
+
+    recompute()
+    window.addEventListener('scroll', onScrollOrResize, { passive: true })
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize)
+      window.removeEventListener('resize', onScrollOrResize)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [uprightRows.length > 0, beamRows.length > 0, wireDeckRows.length > 0, miscRows.length > 0])
 
   const normalizedSearch = normalizeForSearch(searchTerm)
   // Fully-allocated/shipped items (quantity deducted down to 0) stay in
@@ -646,7 +685,9 @@ export default function LocationDetail() {
       {hasItems && (
         <>
           <div ref={toolbarSentinelRef} />
-          <div className={`sticky-toolbar${toolbarStuck ? ' sticky-toolbar--stuck' : ''}`}>
+          <div ref={stickyToolbarRef} className={`sticky-toolbar${toolbarStuck ? ' sticky-toolbar--stuck' : ''}`}>
+          <div className="sticky-toolbar-inner">
+          <div className="sticky-toolbar-left">
           <div className="item-search-row">
             <input
               type="text"
@@ -655,6 +696,8 @@ export default function LocationDetail() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+          {activeSectionLabel && <h2 className="sticky-toolbar-section-label">{activeSectionLabel}</h2>}
           </div>
           <div className="item-section-header-actions">
             {site.lastUpdatedBy && (
@@ -718,11 +761,12 @@ export default function LocationDetail() {
             </div>
           </div>
           </div>
+          </div>
         </>
       )}
 
       {uprightRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Uprights'] = el }}>
           <h2>Uprights</h2>
           <UprightTable
             rows={uprightMergedRows}
@@ -735,7 +779,7 @@ export default function LocationDetail() {
       )}
 
       {beamRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Beams'] = el }}>
           <h2>Beams</h2>
           <BeamTable
             rows={beamMergedRows}
@@ -748,7 +792,7 @@ export default function LocationDetail() {
       )}
 
       {wireDeckRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Wire Decks'] = el }}>
           <h2>Wire Decks</h2>
           <WireDeckTable
             rows={wireDeckMergedRows}
@@ -762,7 +806,7 @@ export default function LocationDetail() {
       )}
 
       {miscRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Other'] = el }}>
           <h2>Other</h2>
           <MiscItemTable
             rows={miscMergedRows}

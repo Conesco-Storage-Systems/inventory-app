@@ -436,8 +436,12 @@ async function pullSites(): Promise<void> {
       let sitePhoto = local?.sitePhoto
       const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
       if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
-        const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
-        if (blob) sitePhoto = blob
+        const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
+        if (blob) {
+          sitePhoto = blob
+        } else {
+          reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        }
       } else if (!sitePhotoPath) {
         // Remote has no photo (removed elsewhere) — don't keep showing
         // whatever this device happened to have downloaded before.
@@ -1079,8 +1083,11 @@ async function pullPhotos(): Promise<void> {
       if (existing) continue
 
       const path = remoteRow.storage_path as string
-      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-      if (!blob) continue
+      const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) {
+        reportSyncError(`[sync] photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        continue
+      }
 
       const photo: Photo = {
         id: remoteRow.id as string,
@@ -1162,8 +1169,11 @@ async function pullProjectPhotos(): Promise<void> {
       if (existing) continue
 
       const path = remoteRow.storage_path as string
-      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-      if (!blob) continue
+      const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) {
+        reportSyncError(`[sync] project photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        continue
+      }
 
       const photo: ProjectPhoto = {
         id: remoteRow.id as string,
@@ -1230,8 +1240,11 @@ async function pullBolPhotos(): Promise<void> {
       if (existing) continue
 
       const path = remoteRow.storage_path as string
-      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-      if (!blob) continue
+      const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) {
+        reportSyncError(`[sync] bol photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        continue
+      }
 
       const photo: BolPhoto = {
         id: remoteRow.id as string,

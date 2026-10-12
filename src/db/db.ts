@@ -251,6 +251,15 @@ class InventoryDB extends Dexie {
         .toCollection()
         .modify((upright) => {
           if (upright.height) return
+          // A device that's sat dormant since before this migration existed
+          // can reach this with neither the old heightFeet/heightInches
+          // fields NOR a height ever set locally — there's nothing real to
+          // convert. Defaulting to "0'" in that case previously fabricated
+          // a fake zero height and flagged it 'pending', which could push
+          // and overwrite a perfectly good height already on the server.
+          // Leaving the record untouched here lets a normal sync pull fill
+          // in the real value instead.
+          if (upright.heightFeet == null && upright.heightInches == null) return
           const feet = upright.heightFeet ?? 0
           const inches = upright.heightInches ?? 0
           upright.height = inches > 0 ? `${feet}' ${inches}"` : `${feet}'`
@@ -286,7 +295,12 @@ class InventoryDB extends Dexie {
         .toCollection()
         .modify((beam) => {
           if (typeof beam.length === 'string') return
-          beam.length = String(beam.length ?? '')
+          // Same reasoning as the upright height fix: a device with no
+          // real legacy numeric length to convert has nothing to push —
+          // forcing it to 'pending' here could overwrite a correct server
+          // value with a fabricated blank one.
+          if (beam.length == null) return
+          beam.length = String(beam.length)
           beam.syncStatus = 'pending'
           beam.updatedAt = Date.now()
         })

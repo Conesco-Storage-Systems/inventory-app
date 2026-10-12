@@ -343,6 +343,56 @@ create policy "Authenticated users can do anything with inventory photos"
   using (bucket_id = 'inventory-photos' and auth.uid() is not null)
   with check (bucket_id = 'inventory-photos' and auth.uid() is not null);
 
+-- Guards every "last write wins" table against being pushed in reverse.
+-- The app's own conflict logic only ever applies when PULLING (an
+-- incoming remote row is compared against a pending local one) — nothing
+-- stopped a push from blindly overwriting a newer server row with an
+-- older one. That's exactly how a years-dormant device's bad local
+-- migration output won over good, already-synced data. This rejects any
+-- incoming write whose own timestamp isn't actually newer than what's
+-- already stored, regardless of which device or code path sends it.
+create or replace function reject_stale_update_at() returns trigger as $$
+begin
+  if new.updated_at <= old.updated_at then
+    return old;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function reject_stale_last_update_at() returns trigger as $$
+begin
+  if new.last_updated_at <= old.last_updated_at then
+    return old;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger beams_reject_stale_update before update on beams
+  for each row execute function reject_stale_update_at();
+create trigger uprights_reject_stale_update before update on uprights
+  for each row execute function reject_stale_update_at();
+create trigger wire_decks_reject_stale_update before update on wire_decks
+  for each row execute function reject_stale_update_at();
+create trigger misc_items_reject_stale_update before update on misc_items
+  for each row execute function reject_stale_update_at();
+create trigger sales_order_line_items_reject_stale_update before update on sales_order_line_items
+  for each row execute function reject_stale_update_at();
+
+create trigger projects_reject_stale_update before update on projects
+  for each row execute function reject_stale_last_update_at();
+create trigger sites_reject_stale_update before update on sites
+  for each row execute function reject_stale_last_update_at();
+create trigger bills_of_lading_reject_stale_update before update on bills_of_lading
+  for each row execute function reject_stale_last_update_at();
+create trigger customer_sheets_reject_stale_update before update on customer_sheets
+  for each row execute function reject_stale_last_update_at();
+create trigger sales_order_schedules_reject_stale_update before update on sales_order_schedules
+  for each row execute function reject_stale_last_update_at();
+create trigger sales_quotes_reject_stale_update before update on sales_quotes
+  for each row execute function reject_stale_last_update_at();
+
 -- Migration: adds the Beam "Step" field (run this in the SQL editor against
 -- the already-live database — the create table above is only for a brand
 -- new setup and won't re-run against an existing table).
@@ -678,3 +728,61 @@ alter table tombstones enable row level security;
 
 create policy "Authenticated users can do anything" on tombstones
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: reject-stale-update guard (run this in the SQL editor against
+-- the already-live database — the create trigger statements near the top
+-- are only for a brand new setup). See the comment there for why this
+-- exists: a push should never be able to overwrite a newer server row
+-- with an older one, no matter which device or code path sends it.
+create or replace function reject_stale_update_at() returns trigger as $$
+begin
+  if new.updated_at <= old.updated_at then
+    return old;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function reject_stale_last_update_at() returns trigger as $$
+begin
+  if new.last_updated_at <= old.last_updated_at then
+    return old;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists beams_reject_stale_update on beams;
+create trigger beams_reject_stale_update before update on beams
+  for each row execute function reject_stale_update_at();
+drop trigger if exists uprights_reject_stale_update on uprights;
+create trigger uprights_reject_stale_update before update on uprights
+  for each row execute function reject_stale_update_at();
+drop trigger if exists wire_decks_reject_stale_update on wire_decks;
+create trigger wire_decks_reject_stale_update before update on wire_decks
+  for each row execute function reject_stale_update_at();
+drop trigger if exists misc_items_reject_stale_update on misc_items;
+create trigger misc_items_reject_stale_update before update on misc_items
+  for each row execute function reject_stale_update_at();
+drop trigger if exists sales_order_line_items_reject_stale_update on sales_order_line_items;
+create trigger sales_order_line_items_reject_stale_update before update on sales_order_line_items
+  for each row execute function reject_stale_update_at();
+
+drop trigger if exists projects_reject_stale_update on projects;
+create trigger projects_reject_stale_update before update on projects
+  for each row execute function reject_stale_last_update_at();
+drop trigger if exists sites_reject_stale_update on sites;
+create trigger sites_reject_stale_update before update on sites
+  for each row execute function reject_stale_last_update_at();
+drop trigger if exists bills_of_lading_reject_stale_update on bills_of_lading;
+create trigger bills_of_lading_reject_stale_update before update on bills_of_lading
+  for each row execute function reject_stale_last_update_at();
+drop trigger if exists customer_sheets_reject_stale_update on customer_sheets;
+create trigger customer_sheets_reject_stale_update before update on customer_sheets
+  for each row execute function reject_stale_last_update_at();
+drop trigger if exists sales_order_schedules_reject_stale_update on sales_order_schedules;
+create trigger sales_order_schedules_reject_stale_update before update on sales_order_schedules
+  for each row execute function reject_stale_last_update_at();
+drop trigger if exists sales_quotes_reject_stale_update on sales_quotes;
+create trigger sales_quotes_reject_stale_update before update on sales_quotes
+  for each row execute function reject_stale_last_update_at();

@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import ColumnPickerDialog from './ColumnPickerDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
+import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { BeamRow } from '../db/groupBeams'
 import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
@@ -51,15 +52,17 @@ interface BeamTableProps {
   selectedKeys: Set<string>
   onToggleSelect: (row: BeamRow) => void
   holds?: SalesQuoteLineItem[]
+  active?: boolean
 }
 
-export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [] }: BeamTableProps) {
+export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [], active = false }: BeamTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<BeamColumnKey>(
     'beamColumns',
     DEFAULT_BEAM_COLUMN_ORDER,
   )
   const [draggingKey, setDraggingKey] = useState<BeamColumnKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   const primaryRows = rows.filter((row) => !row.heldByEmail)
   const heldRows = rows.filter((row) => row.heldByEmail)
@@ -102,10 +105,10 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, 
         Filter Columns
       </button>
 
-      <div className="item-table-wrap">
+      <div className="item-table-wrap" ref={wrapperRef}>
         <table className="item-table">
           <thead>
-            <tr>
+            <StickyHeaderRow wrapperRef={wrapperRef} active={active}>
               <th className="col-edit"></th>
               <th></th>
               {visibleOrder.map((key) => (
@@ -118,11 +121,12 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, 
                     if (draggingKey) moveColumn(draggingKey, k)
                   }}
                   onDragEnd={() => setDraggingKey(null)}
+                  style={key === 'notes' ? { textAlign: 'left' } : undefined}
                 >
                   {columns[key].label}
                 </DraggableColumnHeader>
               ))}
-            </tr>
+            </StickyHeaderRow>
           </thead>
           <tbody>
             {rows.length === 0 && (

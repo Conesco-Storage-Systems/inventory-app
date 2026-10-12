@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import ColumnPickerDialog from './ColumnPickerDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
+import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { UprightRow } from '../db/groupUprights'
 import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
@@ -55,15 +56,19 @@ interface UprightTableProps {
   selectedKeys: Set<string>
   onToggleSelect: (row: UprightRow) => void
   holds?: SalesQuoteLineItem[]
+  // Whether the page is currently scrolled into this section — only then
+  // does the header need to freeze in place as you scroll through it.
+  active?: boolean
 }
 
-export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [] }: UprightTableProps) {
+export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [], active = false }: UprightTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<UprightColumnKey>(
     'uprightColumns',
     DEFAULT_UPRIGHT_COLUMN_ORDER,
   )
   const [draggingKey, setDraggingKey] = useState<UprightColumnKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   const primaryRows = rows.filter((row) => !row.heldByEmail)
   const heldRows = rows.filter((row) => row.heldByEmail)
@@ -108,10 +113,10 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
         Filter Columns
       </button>
 
-      <div className="item-table-wrap">
+      <div className="item-table-wrap" ref={wrapperRef}>
         <table className="item-table">
           <thead>
-            <tr>
+            <StickyHeaderRow wrapperRef={wrapperRef} active={active}>
               <th className="col-edit"></th>
               <th></th>
               {visibleOrder.map((key) => (
@@ -124,11 +129,12 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
                     if (draggingKey) moveColumn(draggingKey, k)
                   }}
                   onDragEnd={() => setDraggingKey(null)}
+                  style={key === 'notes' ? { textAlign: 'left' } : undefined}
                 >
                   {columns[key].label}
                 </DraggableColumnHeader>
               ))}
-            </tr>
+            </StickyHeaderRow>
           </thead>
           <tbody>
             {rows.length === 0 && (

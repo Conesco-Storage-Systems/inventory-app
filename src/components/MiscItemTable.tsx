@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import ColumnPickerDialog from './ColumnPickerDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
+import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { MiscItemRow } from '../db/groupMiscItems'
 import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
@@ -41,13 +42,22 @@ interface MiscItemTableProps {
   selectedKeys: Set<string>
   onToggleSelect: (row: MiscItemRow) => void
   holds?: SalesQuoteLineItem[]
+  active?: boolean
 }
 
-export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [] }: MiscItemTableProps) {
+export default function MiscItemTable({
+  rows,
+  siteId,
+  selectedKeys,
+  onToggleSelect,
+  holds = [],
+  active = false,
+}: MiscItemTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } =
     useColumnConfig<MiscItemColumnKey>('miscItemColumns', DEFAULT_MISC_ITEM_COLUMN_ORDER)
   const [draggingKey, setDraggingKey] = useState<MiscItemColumnKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   const primaryRows = rows.filter((row) => !row.heldByEmail)
   const heldRows = rows.filter((row) => row.heldByEmail)
@@ -88,10 +98,10 @@ export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSele
         Filter Columns
       </button>
 
-      <div className="item-table-wrap">
+      <div className="item-table-wrap" ref={wrapperRef}>
         <table className="item-table">
           <thead>
-            <tr>
+            <StickyHeaderRow wrapperRef={wrapperRef} active={active}>
               <th className="col-edit"></th>
               <th></th>
               {visibleOrder.map((key) => (
@@ -104,11 +114,12 @@ export default function MiscItemTable({ rows, siteId, selectedKeys, onToggleSele
                     if (draggingKey) moveColumn(draggingKey, k)
                   }}
                   onDragEnd={() => setDraggingKey(null)}
+                  style={key === 'notes' || key === 'itemDescription' ? { textAlign: 'left' } : undefined}
                 >
                   {columns[key].label}
                 </DraggableColumnHeader>
               ))}
-            </tr>
+            </StickyHeaderRow>
           </thead>
           <tbody>
             {rows.length === 0 && (

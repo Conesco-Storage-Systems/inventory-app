@@ -260,6 +260,7 @@ export default function LocationDetail() {
     }
   }, [uprightRows.length > 0, beamRows.length > 0, wireDeckRows.length > 0, miscRows.length > 0])
 
+
   const normalizedSearch = normalizeForSearch(searchTerm)
   // Fully-allocated/shipped items (quantity deducted down to 0) stay in
   // the database — they're still a real record, visible on whatever Sales
@@ -774,6 +775,7 @@ export default function LocationDetail() {
             selectedKeys={selectedUprightKeys}
             onToggleSelect={(row) => toggleSelect('upright', row)}
             holds={quoteHolds}
+            active={activeSectionLabel === 'Uprights'}
           />
         </section>
       )}
@@ -787,6 +789,7 @@ export default function LocationDetail() {
             selectedKeys={selectedBeamKeys}
             onToggleSelect={(row) => toggleSelect('beam', row)}
             holds={quoteHolds}
+            active={activeSectionLabel === 'Beams'}
           />
         </section>
       )}
@@ -801,6 +804,7 @@ export default function LocationDetail() {
             onToggleSelect={(row) => toggleSelect('wireDeck', row)}
             searchActive={!!normalizedSearch}
             holds={quoteHolds}
+            active={activeSectionLabel === 'Wire Decks'}
           />
         </section>
       )}
@@ -814,6 +818,7 @@ export default function LocationDetail() {
             selectedKeys={selectedMiscKeys}
             onToggleSelect={(row) => toggleSelect('misc', row)}
             holds={quoteHolds}
+            active={activeSectionLabel === 'Other'}
           />
         </section>
       )}

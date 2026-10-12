@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import ColumnPickerDialog from './ColumnPickerDialog'
 import ColumnValueFilterDialog from './ColumnValueFilterDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
+import StickyHeaderRow from './StickyHeaderRow'
+import StickyTableToolbarButtons from './StickyTableToolbarButtons'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 
 export interface ColumnDef<TRow> {
@@ -44,6 +46,11 @@ interface ReadOnlyItemTableProps<TKey extends string, TRow extends { key: string
   // (e.g. a "Held By" column that only has something to show once a
   // secondary/held row exists).
   leadingColumns?: { label: string; render: (row: TRow) => ReactNode; showOnSecondary?: boolean }[]
+  // Whether the page is currently scrolled into this table's own section
+  // — drives both the frozen header row and the frozen Filter
+  // Columns/Sort buttons. Omit on a page with no sticky toolbar at all.
+  active?: boolean
+  toolbarButtonSlot?: HTMLDivElement | null
 }
 
 function compareValues(a: number | string, b: number | string): number {
@@ -66,6 +73,8 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   secondaryGroupLabel,
   isSecondaryRow,
   leadingColumns = [],
+  active = false,
+  toolbarButtonSlot = null,
 }: ReadOnlyItemTableProps<TKey, TRow>) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<TKey>(
     storageKey,
@@ -73,6 +82,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   )
   const [draggingKey, setDraggingKey] = useState<TKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const [openFilterKey, setOpenFilterKey] = useState<TKey | null>(null)
   const [sortEnabled, setSortEnabled] = useState(false)
   const [sortState, setSortState] = useState<SortState<TKey> | null>(null)
@@ -143,7 +153,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
 
   return (
     <>
-      <div className="table-toolbar-row">
+      <StickyTableToolbarButtons wrapperRef={wrapperRef} active={active} portalTarget={toolbarButtonSlot}>
         <button type="button" className="column-picker-button" onClick={() => setPickerOpen(true)}>
           Filter Columns
         </button>
@@ -154,12 +164,12 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
         >
           Sort
         </button>
-      </div>
+      </StickyTableToolbarButtons>
 
-      <div className="item-table-wrap">
+      <div className="item-table-wrap" ref={wrapperRef}>
         <table className="item-table">
           <thead>
-            <tr>
+            <StickyHeaderRow wrapperRef={wrapperRef} active={active}>
               {leadingColumns.map((_, i) => (
                 <th key={i}></th>
               ))}
@@ -167,6 +177,11 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
                 const filterActive = (filters[key]?.size ?? 0) > 0
                 const filterable = columns[key].filterable !== false
                 const isSortedColumn = sortState?.key === key
+                // The body cells for these columns are left-aligned (see
+                // renderRow's col-notes/col-left classes) for readability of
+                // longer text — the header label needs to match, or it sits
+                // centered over data that starts at the left edge instead.
+                const isLeftAligned = wrapColumnKeys.includes(key) || leftAlignColumnKeys.includes(key)
                 return (
                   <DraggableColumnHeader
                     key={key}
@@ -178,6 +193,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
                       if (draggingKey) moveColumn(draggingKey, k)
                     }}
                     onDragEnd={() => setDraggingKey(null)}
+                    style={isLeftAligned ? { textAlign: 'left' } : undefined}
                   >
                     <div className="column-header-inner">
                       <span
@@ -204,7 +220,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
                   </DraggableColumnHeader>
                 )
               })}
-            </tr>
+            </StickyHeaderRow>
           </thead>
           <tbody>
             {primaryRows.length === 0 && secondaryRows.length === 0 && (

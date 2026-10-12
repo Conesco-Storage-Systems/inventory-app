@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 interface DraggableColumnHeaderProps<T extends string> {
   columnKey: T
@@ -8,6 +8,9 @@ interface DraggableColumnHeaderProps<T extends string> {
   onDragEnd: () => void
   children: ReactNode
   draggable?: boolean
+  // Lets StickyHeaderRow's frozen clone force this cell to an exact
+  // measured width (see its own comment for why) — unused otherwise.
+  style?: CSSProperties
 }
 
 export default function DraggableColumnHeader<T extends string>({
@@ -18,6 +21,7 @@ export default function DraggableColumnHeader<T extends string>({
   onDragEnd,
   children,
   draggable = true,
+  style,
 }: DraggableColumnHeaderProps<T>) {
   return (
     <th
@@ -30,6 +34,7 @@ export default function DraggableColumnHeader<T extends string>({
         onDragOverKey(columnKey)
       }}
       onDragEnd={onDragEnd}
+      style={style}
     >
       {children}
     </th>

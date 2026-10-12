@@ -696,26 +696,32 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+/* The border is always present (transparent until stuck) and the inner
+   padding is constant regardless of stuck state — a per-table sticky
+   header (see .item-table thead th) relies on this bar's rendered height
+   being stable, since the two are measured independently. Letting the
+   padding/border only appear once stuck used to change this bar's actual
+   height at exactly the moment it became stuck, racing against that
+   measurement and leaving the table header briefly offset wrong. */
+.sticky-toolbar {
+  border-bottom: 1px solid transparent;
+}
+
 .sticky-toolbar--stuck {
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  border-bottom-color: var(--border);
   box-shadow: var(--shadow);
 }
 
 .sticky-toolbar-inner {
   max-width: 1300px;
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 12px 16px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
-}
-
-.sticky-toolbar--stuck .sticky-toolbar-inner {
-  padding-top: 12px;
-  padding-bottom: 12px;
 }
 
 .sticky-toolbar-left {
@@ -734,6 +740,16 @@ button:disabled {
 
 .sticky-toolbar .item-search-row {
   margin: 0;
+}
+
+/* Portal target for whichever table's own Filter Columns/Sort buttons
+   currently belong here (see StickyTableToolbarButtons) — only ever
+   holds one table's pair at a time, matching whichever section is
+   active, so it just needs to lay out its current children in a row. */
+.sticky-toolbar-table-actions {
+  display: flex;
+  gap: 12px;
+  align-self: flex-start;
 }
 
 .item-section-header-actions {
@@ -808,6 +824,52 @@ button:disabled {
 .item-table th {
   background: var(--code-bg);
   font-weight: 500;
+}
+
+/* Keeps each section's own column headers on screen while scrolling
+   through its rows, right below the page's sticky toolbar. Plain
+   position:sticky on the th doesn't work here: .item-table-wrap needs
+   overflow-x:auto for wide tables, and per the CSS overflow spec, a
+   container with overflow set on only one axis gets the other axis
+   forced to 'auto' too — making that wrapper (which never actually
+   scrolls on its own) the sticky containing block instead of the page,
+   so it silently stops tracking page scroll. StickyHeaderRow works
+   around this by cloning the header into this fixed overlay once the
+   real one scrolls out of view (see its own comment for the full
+   reasoning), with its horizontal scroll synced to the real table by
+   hand — these rules are just the overlay's visual shell. */
+.frozen-header-overlay {
+  position: fixed;
+  left: 0;
+  width: 100vw;
+  z-index: 15;
+  overflow: hidden;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+/* .item-table normally sets min-width:100% so a narrow table still fills
+   its wrapper — but this clone's own container (.frozen-header-overlay)
+   is deliberately 100vw wide for the edge-to-edge look, so that 100%
+   resolved to the full viewport width. Once that exceeded the clone's
+   real, measured total width, min-width overrode the explicit width
+   below and table-layout:fixed stretched every column proportionally to
+   fill the gap — a uniform inflation across all columns that only
+   showed up at wide viewports (hence looking fine with DevTools docked,
+   narrowing the page). min-width:0 lets the explicit width win. */
+.frozen-header-table {
+  table-layout: fixed;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Overrides .item-table th's usual tinted background (two classes beats
+   one, regardless of source order) — here it needs to match the plain
+   bar above it, not look like a normal table header, so the two read as
+   one continuous piece while scrolling. */
+.item-table.frozen-header-table th {
+  background: var(--bg);
 }
 
 /* Divider row inside a table body that separates a subgroup (e.g. "On

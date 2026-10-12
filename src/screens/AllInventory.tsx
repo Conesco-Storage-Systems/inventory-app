@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { CustomerSheetSeed } from '../components/GenerateCustomerSheetFlow'
 import ReadOnlyItemTable, { type ColumnDef } from '../components/ReadOnlyItemTable'
@@ -92,6 +92,28 @@ export default function AllInventory() {
   const wireDecks = useLiveQuery(() => db.wireDecks.toArray(), []) ?? []
   const miscItems = useLiveQuery(() => db.miscItems.toArray(), []) ?? []
   const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
+
+  const toolbarObserverRef = useRef<IntersectionObserver | null>(null)
+  const [toolbarStuck, setToolbarStuck] = useState(false)
+
+  const toolbarSentinelRef = useCallback((node: HTMLDivElement | null) => {
+    toolbarObserverRef.current?.disconnect()
+    toolbarObserverRef.current = null
+    if (!node) return
+    const observer = new IntersectionObserver(([entry]) => setToolbarStuck(!entry.isIntersecting), {
+      threshold: 0,
+    })
+    observer.observe(node)
+    toolbarObserverRef.current = observer
+  }, [])
+
+  // Which item-type section the page is currently scrolled into, shown in
+  // the sticky toolbar (and used to decide which table's own Filter
+  // Columns/Sort buttons currently belong there too).
+  const stickyToolbarRef = useRef<HTMLDivElement>(null)
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
+  const [activeSectionLabel, setActiveSectionLabel] = useState<string | null>(null)
+  const [toolbarButtonSlot, setToolbarButtonSlot] = useState<HTMLDivElement | null>(null)
 
   // Present when this page was reached via "Create Sales Quote → Select
   // Inventory" — turns on the selection checkboxes and Generate Quote
@@ -197,6 +219,38 @@ export default function AllInventory() {
   const beamRows = combineRowsAcrossSites(beams, sites, groupBeams)
   const wireDeckRows = combineRowsAcrossSites(wireDecks, sites, groupWireDecks)
   const miscRows = combineRowsAcrossSites(miscItems, sites, groupMiscItems)
+
+  useEffect(() => {
+    const labels = ['Uprights', 'Beams', 'Wire Decks', 'Other']
+    let frame = 0
+
+    function recompute() {
+      frame = 0
+      const headerBottom = stickyToolbarRef.current?.getBoundingClientRect().bottom ?? 0
+      let current: string | null = null
+      for (const label of labels) {
+        const el = sectionRefs.current[label]
+        if (el && el.getBoundingClientRect().top <= headerBottom + 1) {
+          current = label
+        }
+      }
+      setActiveSectionLabel(current)
+    }
+
+    function onScrollOrResize() {
+      if (frame) return
+      frame = requestAnimationFrame(recompute)
+    }
+
+    recompute()
+    window.addEventListener('scroll', onScrollOrResize, { passive: true })
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize)
+      window.removeEventListener('resize', onScrollOrResize)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [uprightRows.length > 0, beamRows.length > 0, wireDeckRows.length > 0, miscRows.length > 0])
 
   const pageTitle = projectId ? (project ? `All ${project.name} Inventory` : 'All Project Inventory') : 'All Offsite Inventory'
   const backLink = projectId ? `/projects/${projectId}` : '/'
@@ -822,15 +876,6 @@ export default function AllInventory() {
 
       {hasItems && (
         <>
-          <div className="item-search-row">
-            <input
-              type="text"
-              className="item-search-input"
-              placeholder="Search…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
           <p className="add-item-row">
             <button type="button" onClick={handleExport} className="export-button">
               Export to Excel
@@ -844,13 +889,32 @@ export default function AllInventory() {
               </button>
             )}
           </p>
+
+          <div ref={toolbarSentinelRef} />
+          <div ref={stickyToolbarRef} className={`sticky-toolbar${toolbarStuck ? ' sticky-toolbar--stuck' : ''}`}>
+            <div className="sticky-toolbar-inner">
+              <div className="sticky-toolbar-left">
+                <div className="item-search-row">
+                  <input
+                    type="text"
+                    className="item-search-input"
+                    placeholder="Search…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                {activeSectionLabel && <h2 className="sticky-toolbar-section-label">{activeSectionLabel}</h2>}
+                <div className="sticky-toolbar-table-actions" ref={setToolbarButtonSlot} />
+              </div>
+            </div>
+          </div>
         </>
       )}
 
       {!hasItems && <p className="placeholder-note">No items across any active locations yet.</p>}
 
       {uprightRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Uprights'] = el }}>
           <h2>Uprights</h2>
           <ReadOnlyItemTable<string, AllUprightRow & { heldByEmail?: string }>
             storageKey={quoteId ? 'allInventoryUprightColumnsQuote' : 'allInventoryUprightColumns'}
@@ -866,13 +930,15 @@ export default function AllInventory() {
             leftAlignColumnKeys={['location']}
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
+            active={activeSectionLabel === 'Uprights'}
+            toolbarButtonSlot={toolbarButtonSlot}
             leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('upright'), heldByLeadingColumn]}
           />
         </section>
       )}
 
       {beamRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Beams'] = el }}>
           <h2>Beams</h2>
           <ReadOnlyItemTable<string, AllBeamRow & { heldByEmail?: string }>
             storageKey={quoteId ? 'allInventoryBeamColumnsQuote' : 'allInventoryBeamColumns'}
@@ -889,12 +955,14 @@ export default function AllInventory() {
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
             leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('beam'), heldByLeadingColumn]}
+            active={activeSectionLabel === 'Beams'}
+            toolbarButtonSlot={toolbarButtonSlot}
           />
         </section>
       )}
 
       {wireDeckRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Wire Decks'] = el }}>
           <h2>Wire Decks</h2>
           <ReadOnlyItemTable<string, AllWireDeckRow & { heldByEmail?: string }>
             storageKey={quoteId ? 'allInventoryWireDeckColumnsQuote' : 'allInventoryWireDeckColumns'}
@@ -911,12 +979,14 @@ export default function AllInventory() {
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
             leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('wireDeck'), heldByLeadingColumn]}
+            active={activeSectionLabel === 'Wire Decks'}
+            toolbarButtonSlot={toolbarButtonSlot}
           />
         </section>
       )}
 
       {miscRows.length > 0 && (
-        <section className="item-section">
+        <section className="item-section" ref={(el) => { sectionRefs.current['Other'] = el }}>
           <h2>Other</h2>
           <ReadOnlyItemTable<string, AllMiscItemRow & { heldByEmail?: string }>
             storageKey={quoteId ? 'allInventoryMiscColumnsQuote' : 'allInventoryMiscColumns'}
@@ -933,6 +1003,8 @@ export default function AllInventory() {
             secondaryGroupLabel="On Hold"
             isSecondaryRow={(row) => !!row.heldByEmail}
             leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('misc'), heldByLeadingColumn]}
+            active={activeSectionLabel === 'Other'}
+            toolbarButtonSlot={toolbarButtonSlot}
           />
         </section>
       )}

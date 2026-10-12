@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import ColumnPickerDialog from './ColumnPickerDialog'
 import DraggableColumnHeader from './DraggableColumnHeader'
 import FilterOptionList from './FilterOptionList'
 import FilterSection from './FilterSection'
+import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { WireDeckRow } from '../db/groupWireDecks'
 import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
@@ -46,6 +47,7 @@ interface WireDeckTableProps {
   onToggleSelect: (row: WireDeckRow) => void
   searchActive: boolean
   holds?: SalesQuoteLineItem[]
+  active?: boolean
 }
 
 export default function WireDeckTable({
@@ -55,6 +57,7 @@ export default function WireDeckTable({
   onToggleSelect,
   searchActive,
   holds = [],
+  active = false,
 }: WireDeckTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<WireDeckColumnKey>(
     'wireDeckColumns',
@@ -62,6 +65,7 @@ export default function WireDeckTable({
   )
   const [draggingKey, setDraggingKey] = useState<WireDeckColumnKey | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   const [filterOpen, setFilterOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
@@ -216,10 +220,10 @@ export default function WireDeckTable({
         </div>
       )}
 
-      <div className="item-table-wrap">
+      <div className="item-table-wrap" ref={wrapperRef}>
         <table className="item-table">
           <thead>
-            <tr>
+            <StickyHeaderRow wrapperRef={wrapperRef} active={active}>
               <th className="col-edit"></th>
               <th></th>
               {visibleOrder.map((key) => (
@@ -232,11 +236,12 @@ export default function WireDeckTable({
                     if (draggingKey) moveColumn(draggingKey, k)
                   }}
                   onDragEnd={() => setDraggingKey(null)}
+                  style={key === 'notes' ? { textAlign: 'left' } : undefined}
                 >
                   {columns[key].label}
                 </DraggableColumnHeader>
               ))}
-            </tr>
+            </StickyHeaderRow>
           </thead>
           <tbody>
             {displayedRows.length === 0 && (

@@ -338,6 +338,12 @@ export default function AllInventory() {
       getValue: (row) => row.footplateSizeDisplay,
       sortValue: (row) => uprightDimensionSortValue(row.footplateLength) * 100000 + uprightDimensionSortValue(row.footplateWidth),
     },
+    footplateThickness: {
+      label: 'Footplate Thickness',
+      render: (row) => row.footplateThickness || '—',
+      getValue: (row) => row.footplateThickness,
+      sortValue: (row) => row.footplateThickness,
+    },
     anchorHoleCount: {
       label: 'Anchor Hole Count',
       render: (row) => row.anchorHoleCount,
@@ -409,6 +415,7 @@ export default function AllInventory() {
     'color',
     'columnSize',
     'footplateSize',
+    'footplateThickness',
     'anchorHoleCount',
     'holeSize',
     'gauge',

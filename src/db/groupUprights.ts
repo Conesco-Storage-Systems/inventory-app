@@ -32,9 +32,15 @@ export interface UprightRow {
 // Height is free text (like Beam's width) so it can hold a range for a
 // cut/repaired upright (e.g. "8' - 10'") — this pulls out a rough numeric
 // value (the low end when it's a range) for sorting only, never stored.
-export function uprightHeightSortValue(height: string | undefined | null): number {
+export function uprightHeightSortValue(height: unknown): number {
   if (!height) return 0
-  const m = height.match(/(\d+)'\s*(\d+)?/)
+  // A record that predates this field becoming free text (or that hasn't
+  // gone through the migration yet for any other reason) can still have a
+  // plain number sitting here at runtime despite what the type says —
+  // coerce defensively rather than letting one bad record crash sorting
+  // for every location.
+  const str = typeof height === 'string' ? height : String(height)
+  const m = str.match(/(\d+)'\s*(\d+)?/)
   if (!m) return 0
   return Number(m[1]) * 12 + (m[2] ? Number(m[2]) : 0)
 }
@@ -42,9 +48,10 @@ export function uprightHeightSortValue(height: string | undefined | null): numbe
 // Column/Footplate Length & Width are free text (same convention as
 // height) so they can hold a fraction exactly as written (e.g. "1-5/8")
 // — this pulls out a numeric value for sorting only, never stored.
-export function uprightDimensionSortValue(value: string | undefined | null): number {
+export function uprightDimensionSortValue(value: unknown): number {
   if (!value) return 0
-  const cleaned = value.replace(/"/g, '').trim()
+  const str = typeof value === 'string' ? value : String(value)
+  const cleaned = str.replace(/"/g, '').trim()
   let m = cleaned.match(/^(\d+(?:\.\d+)?)[\s-](\d+)\/(\d+)$/)
   if (m) return Number(m[1]) + Number(m[2]) / Number(m[3])
   m = cleaned.match(/^(\d+)\/(\d+)$/)

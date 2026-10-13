@@ -16,6 +16,7 @@ type UprightColumnKey =
   | 'color'
   | 'columnSize'
   | 'footplateSize'
+  | 'footplateThickness'
   | 'anchorHoleCount'
   | 'holeSize'
   | 'gauge'
@@ -35,6 +36,7 @@ const DEFAULT_UPRIGHT_COLUMN_ORDER: UprightColumnKey[] = [
   'color',
   'columnSize',
   'footplateSize',
+  'footplateThickness',
   'anchorHoleCount',
   'holeSize',
   'gauge',
@@ -84,6 +86,7 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
     color: { label: 'Color', render: (row) => row.color },
     columnSize: { label: 'Column Size', render: (row) => row.columnSizeDisplay },
     footplateSize: { label: 'Footplate Size', render: (row) => row.footplateSizeDisplay },
+    footplateThickness: { label: 'Footplate Thickness', render: (row) => row.footplateThickness || '—' },
     anchorHoleCount: { label: 'Anchor Hole Count', render: (row) => row.anchorHoleCount },
     holeSize: { label: 'Hole Size', render: (row) => row.holeSize || '—' },
     gauge: { label: 'Gauge', render: (row) => row.gauge },

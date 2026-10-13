@@ -619,6 +619,64 @@ class InventoryDB extends Dexie {
           }
         })
     })
+    // Defensive backfill — a record that somehow still has a plain number
+    // in any of these fields (e.g. a device whose version 18/19 upgrade
+    // didn't fully apply for any reason) used to crash every location
+    // page's sort, since it violated what every consumer now assumes.
+    // Checks each field independently (unlike 18/19's single-field guard)
+    // so a partially-converted record still gets fully fixed, and is a
+    // no-op wherever the earlier migrations already did their job.
+    this.version(20).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    }).upgrade(async (tx) => {
+      const fields = [
+        'width',
+        'anchorHoleCount',
+        'columnLength',
+        'columnWidth',
+        'footplateLength',
+        'footplateWidth',
+      ] as const
+      await tx
+        .table('uprights')
+        .toCollection()
+        .modify((upright) => {
+          let changed = false
+          for (const field of fields) {
+            if (upright[field] == null || typeof upright[field] === 'string') continue
+            upright[field] = String(upright[field])
+            changed = true
+          }
+          if (changed) {
+            upright.syncStatus = 'pending'
+            upright.updatedAt = Date.now()
+          }
+        })
+    })
   }
 }
 

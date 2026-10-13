@@ -143,7 +143,9 @@ export interface Beam extends ItemBase {
 export interface Upright extends ItemBase {
   color: string
   style: string
-  width: number
+  // Free text, same convention as height below — was a plain number,
+  // which silently discarded a fraction like "1-5/8" at save time.
+  width: string
   // Free text, same convention as Beam's width — usually "12'" or
   // "12' 6"", but a cut/repaired upright is sometimes a range as it's
   // written on the sheet, e.g. "8' - 10'" or "19'6" - 20'".
@@ -159,7 +161,10 @@ export interface Upright extends ItemBase {
   // footplate's length/width above, so it's its own field rather than
   // folded into either of them.
   footplateThickness: string
-  anchorHoleCount: number
+  // Free text — a count, so normally just digits, but kept free text for
+  // consistency with the other footplate fields (and to avoid the same
+  // Number()-coercion pitfall if a note ever gets appended here).
+  anchorHoleCount: string
   holeSize: string
   gauge: string
   stamp: string

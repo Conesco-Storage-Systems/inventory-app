@@ -184,8 +184,8 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
         Width
         <div className="input-with-unit">
           <input
-            type="number"
-            inputMode="decimal"
+            type="text"
+            placeholder={`e.g. 4 or 1-5/8`}
             value={value.width}
             onChange={(e) => onChange({ ...value, width: e.target.value })}
           />
@@ -251,8 +251,7 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
       <label>
         Number of Usable Anchor Holes in Footplate
         <input
-          type="number"
-          inputMode="numeric"
+          type="text"
           value={value.anchorHoleCount}
           onChange={(e) => onChange({ ...value, anchorHoleCount: e.target.value })}
         />

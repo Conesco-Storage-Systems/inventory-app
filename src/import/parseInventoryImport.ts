@@ -336,7 +336,7 @@ function buildUpright(
     notes,
     color: mixed.color || color.color,
     style: style.style,
-    width: dims?.width ?? 0,
+    width: String(dims?.width ?? 0),
     height: dims?.height ?? '',
     columnLength: String(dims?.columnLength ?? 0),
     columnWidth: String(dims?.columnWidth ?? 0),
@@ -345,7 +345,7 @@ function buildUpright(
     // Not present in the legacy spreadsheet format being imported here —
     // left for someone to fill in later if needed.
     footplateThickness: '',
-    anchorHoleCount: holes.count ?? 0,
+    anchorHoleCount: String(holes.count ?? 0),
     holeSize: holes.size,
     gauge: gauge.gauge,
     stamp: '',

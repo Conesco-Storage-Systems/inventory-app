@@ -5,7 +5,7 @@ export interface UprightRow {
   ids: string[]
   color: string
   style: string
-  width: number
+  width: string
   height: string
   widthByHeight: string
   columnLength: string
@@ -15,7 +15,7 @@ export interface UprightRow {
   footplateWidth: string
   footplateSizeDisplay: string
   footplateThickness: string
-  anchorHoleCount: number
+  anchorHoleCount: string
   holeSize: string
   gauge: string
   condition: string
@@ -60,14 +60,14 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
     const key = [
       upright.color,
       upright.style,
-      upright.width,
+      upright.width ?? '',
       upright.height,
       upright.columnLength ?? '',
       upright.columnWidth ?? '',
       upright.footplateLength ?? '',
       upright.footplateWidth ?? '',
       upright.footplateThickness ?? '',
-      upright.anchorHoleCount,
+      upright.anchorHoleCount ?? '',
       upright.holeSize,
       upright.gauge,
       upright.condition,
@@ -90,9 +90,9 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       ids: [upright.id],
       color: upright.color,
       style: upright.style,
-      width: upright.width,
+      width: upright.width ?? '',
       height: upright.height ?? '',
-      widthByHeight: `${upright.width}" x ${upright.height ?? ''}`,
+      widthByHeight: `${upright.width ?? ''}" x ${upright.height ?? ''}`,
       columnLength: upright.columnLength ?? '',
       columnWidth: upright.columnWidth ?? '',
       columnSizeDisplay: `${upright.columnLength ?? ''}" x ${upright.columnWidth ?? ''}"`,
@@ -103,7 +103,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
           ? `${upright.footplateLength}" x ${upright.footplateWidth}"`
           : '',
       footplateThickness: upright.footplateThickness ?? '',
-      anchorHoleCount: upright.anchorHoleCount,
+      anchorHoleCount: upright.anchorHoleCount ?? '',
       holeSize: upright.holeSize,
       gauge: upright.gauge,
       condition: upright.condition,
@@ -119,7 +119,8 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
   }
 
   return Array.from(rows.values()).sort((a, b) => {
-    if (a.width !== b.width) return a.width - b.width
+    const widthDiff = uprightDimensionSortValue(a.width) - uprightDimensionSortValue(b.width)
+    if (widthDiff !== 0) return widthDiff
     return uprightHeightSortValue(a.height) - uprightHeightSortValue(b.height)
   })
 }

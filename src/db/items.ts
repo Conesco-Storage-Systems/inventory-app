@@ -308,14 +308,14 @@ export interface NewUprightInput {
   notes: string
   color: string
   style: string
-  width: number
+  width: string
   height: string
   columnLength: string
   columnWidth: string
   footplateLength: string
   footplateWidth: string
   footplateThickness: string
-  anchorHoleCount: number
+  anchorHoleCount: string
   holeSize: string
   gauge: string
   stamp: string
@@ -380,14 +380,14 @@ export interface UprightEditInput {
   notes: string
   color: string
   style: string
-  width: number
+  width: string
   height: string
   columnLength: string
   columnWidth: string
   footplateLength: string
   footplateWidth: string
   footplateThickness: string
-  anchorHoleCount: number
+  anchorHoleCount: string
   holeSize: string
   gauge: string
   stamp: string

@@ -569,6 +569,56 @@ class InventoryDB extends Dexie {
           }
         })
     })
+    // Upright Width and Anchor Hole Count become free text too (same
+    // reasoning as the column/footplate fields above) — Width could lose a
+    // fraction the same way, and Anchor Hole Count is converted purely for
+    // consistency with the rest of this section now that the others are
+    // free text.
+    this.version(19).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    }).upgrade(async (tx) => {
+      const fields = ['width', 'anchorHoleCount'] as const
+      await tx
+        .table('uprights')
+        .toCollection()
+        .modify((upright) => {
+          if (typeof upright.width === 'string') return
+          let changed = false
+          for (const field of fields) {
+            if (upright[field] == null) continue
+            upright[field] = String(upright[field])
+            changed = true
+          }
+          if (changed) {
+            upright.syncStatus = 'pending'
+            upright.updatedAt = Date.now()
+          }
+        })
+    })
   }
 }
 

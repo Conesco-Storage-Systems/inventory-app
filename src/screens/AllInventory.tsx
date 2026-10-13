@@ -323,7 +323,7 @@ export default function AllInventory() {
       label: 'Width x Height',
       render: (row) => row.widthByHeight,
       getValue: (row) => row.widthByHeight,
-      sortValue: (row) => row.width * 100000 + uprightHeightSortValue(row.height),
+      sortValue: (row) => uprightDimensionSortValue(row.width) * 100000 + uprightHeightSortValue(row.height),
     },
     color: { label: 'Color', render: (row) => row.color, getValue: (row) => row.color, sortValue: (row) => row.color },
     columnSize: {
@@ -341,8 +341,8 @@ export default function AllInventory() {
     anchorHoleCount: {
       label: 'Anchor Hole Count',
       render: (row) => row.anchorHoleCount,
-      getValue: (row) => String(row.anchorHoleCount),
-      sortValue: (row) => row.anchorHoleCount,
+      getValue: (row) => row.anchorHoleCount,
+      sortValue: (row) => uprightDimensionSortValue(row.anchorHoleCount),
     },
     holeSize: {
       label: 'Hole Size',

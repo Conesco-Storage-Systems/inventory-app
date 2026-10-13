@@ -63,14 +63,14 @@ create table uprights (
   recorded_by text not null default '',
   color text not null default '',
   style text not null default '',
-  width numeric not null default 0,
+  width text not null default '',
   height text not null default '',
   column_length text not null default '',
   column_width text not null default '',
   footplate_length text not null default '',
   footplate_width text not null default '',
   footplate_thickness text not null default '',
-  anchor_hole_count integer not null default 0,
+  anchor_hole_count text not null default '',
   hole_size text not null default '',
   gauge text not null default '',
   stamp text not null default '',
@@ -811,3 +811,10 @@ alter table uprights alter column footplate_length type text using footplate_len
 alter table uprights alter column footplate_length set default '';
 alter table uprights alter column footplate_width type text using footplate_width::text;
 alter table uprights alter column footplate_width set default '';
+
+-- Width and Anchor Hole Count on Uprights become free text too, for the
+-- same reason and with the same lossless cast as above.
+alter table uprights alter column width type text using width::text;
+alter table uprights alter column width set default '';
+alter table uprights alter column anchor_hole_count type text using anchor_hole_count::text;
+alter table uprights alter column anchor_hole_count set default '';

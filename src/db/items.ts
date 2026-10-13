@@ -119,7 +119,13 @@ export async function updateBeamGroup(input: BeamEditInput): Promise<void> {
   const photoIds = [...input.existingPhotoIds, ...newPhotoIds]
 
   if (input.otherIds.length > 0) {
-    await db.photos.where('itemId').anyOf(input.otherIds).modify({ itemId: input.survivingId })
+    // Re-mark as pending so the push side re-uploads under the new itemId —
+    // otherwise an already-synced photo's reassignment never leaves this
+    // device (push only looks at pending rows).
+    await db.photos
+      .where('itemId')
+      .anyOf(input.otherIds)
+      .modify({ itemId: input.survivingId, uploadStatus: 'pending' })
     await enqueuePendingDeletes('beams', input.otherIds)
     await db.beams.bulkDelete(input.otherIds)
   }
@@ -247,7 +253,10 @@ export async function updateWireDeckGroup(input: WireDeckEditInput): Promise<voi
   const photoIds = [...input.existingPhotoIds, ...newPhotoIds]
 
   if (input.otherIds.length > 0) {
-    await db.photos.where('itemId').anyOf(input.otherIds).modify({ itemId: input.survivingId })
+    await db.photos
+      .where('itemId')
+      .anyOf(input.otherIds)
+      .modify({ itemId: input.survivingId, uploadStatus: 'pending' })
     await enqueuePendingDeletes('wireDecks', input.otherIds)
     await db.wireDecks.bulkDelete(input.otherIds)
   }
@@ -382,7 +391,10 @@ export async function updateUprightGroup(input: UprightEditInput): Promise<void>
   const photoIds = [...input.existingPhotoIds, ...newPhotoIds]
 
   if (input.otherIds.length > 0) {
-    await db.photos.where('itemId').anyOf(input.otherIds).modify({ itemId: input.survivingId })
+    await db.photos
+      .where('itemId')
+      .anyOf(input.otherIds)
+      .modify({ itemId: input.survivingId, uploadStatus: 'pending' })
     await enqueuePendingDeletes('uprights', input.otherIds)
     await db.uprights.bulkDelete(input.otherIds)
   }
@@ -495,7 +507,10 @@ export async function updateMiscItemGroup(input: MiscItemEditInput): Promise<voi
   const photoIds = [...input.existingPhotoIds, ...newPhotoIds]
 
   if (input.otherIds.length > 0) {
-    await db.photos.where('itemId').anyOf(input.otherIds).modify({ itemId: input.survivingId })
+    await db.photos
+      .where('itemId')
+      .anyOf(input.otherIds)
+      .modify({ itemId: input.survivingId, uploadStatus: 'pending' })
     await enqueuePendingDeletes('miscItems', input.otherIds)
     await db.miscItems.bulkDelete(input.otherIds)
   }
@@ -567,10 +582,17 @@ export async function deductGroupQuantity(itemType: ItemType, ids: string[], amo
 // item) — there's no record of exactly how a deduction was originally
 // split across the group's raw records, so the full amount goes back onto
 // whichever one of them still exists, which keeps the group's total
-// correct even if the per-record split isn't identical to before. If none
-// of the group's records exist anymore, there's nowhere left to restore
-// it to, so this silently does nothing rather than failing the caller.
-export async function restoreGroupQuantity(itemType: ItemType, ids: string[], amount: number): Promise<void> {
+// correct even if the per-record split isn't identical to before. If a
+// group edit (see updateBeamGroup etc.) later folded every one of those
+// original ids into a different surviving record, fall back to crediting
+// any remaining record of this type at the same site — without this, the
+// quantity would be silently dropped instead of restored anywhere.
+export async function restoreGroupQuantity(
+  itemType: ItemType,
+  ids: string[],
+  amount: number,
+  fallbackSiteId?: string,
+): Promise<void> {
   const table = db.table(ITEM_TABLE_NAMES[itemType])
   for (const id of ids) {
     const record = await table.get(id)
@@ -582,5 +604,17 @@ export async function restoreGroupQuantity(itemType: ItemType, ids: string[], am
     })
     await touchSiteUpdated(record.siteId)
     return
+  }
+
+  if (fallbackSiteId) {
+    const fallback = await table.where('siteId').equals(fallbackSiteId).first()
+    if (fallback) {
+      await table.update(fallback.id, {
+        quantity: fallback.quantity + amount,
+        updatedAt: Date.now(),
+        syncStatus: 'pending',
+      })
+      await touchSiteUpdated(fallbackSiteId)
+    }
   }
 }

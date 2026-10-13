@@ -336,7 +336,7 @@ export async function deleteTiedSalesOrder(soNumber: string, siteId: string): Pr
       const items = await listTiedLineItemsBySoNumberAndSite(soNumber, siteId)
       for (const item of items) {
         if (item.tiedItemType) {
-          await restoreGroupQuantity(item.tiedItemType, item.tiedItemIds, item.quantityOrdered)
+          await restoreGroupQuantity(item.tiedItemType, item.tiedItemIds, item.quantityOrdered, item.tiedSiteId)
         }
         await db.salesOrderLineItems.update(item.id, {
           status: 'pending',

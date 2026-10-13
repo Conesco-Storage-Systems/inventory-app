@@ -125,7 +125,6 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await table.get(remoteRow.id as string)
@@ -134,12 +133,18 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
       // it), keep the local version and just note it for now.
       if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
         console.warn(`[sync] keeping local ${config.localTable}/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
       const mapped = config.fromRemote(remoteRow)
       const photoIds = local?.photoIds ?? []
       await table.put({ ...mapped, photoIds, syncStatus: 'synced' })
+      // Only advance the cursor past rows that actually applied — advancing
+      // unconditionally (even on a row whose put() throws) would mean the
+      // next pull's gt(cursor) never fetches that row again, permanently
+      // losing it instead of retrying on the next sync pass.
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull ${config.remoteTable}/${remoteRow.id} threw:`, err)
     }
@@ -424,12 +429,12 @@ async function pullSites(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.sites.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local site/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -464,6 +469,7 @@ async function pullSites(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull site/${remoteRow.id} threw:`, err)
     }
@@ -516,12 +522,12 @@ async function pullProjects(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.projects.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local project/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -538,6 +544,7 @@ async function pullProjects(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull project/${remoteRow.id} threw:`, err)
     }
@@ -609,12 +616,12 @@ async function pullBolsOfLading(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.billsOfLading.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local billsOfLading/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -650,6 +657,7 @@ async function pullBolsOfLading(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull billsOfLading/${remoteRow.id} threw:`, err)
     }
@@ -702,12 +710,12 @@ async function pullCustomerSheets(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.customerSheets.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local customerSheets/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -726,6 +734,7 @@ async function pullCustomerSheets(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull customerSheets/${remoteRow.id} threw:`, err)
     }
@@ -782,12 +791,12 @@ async function pullSalesOrderLineItems(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.salesOrderLineItems.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
         console.warn(`[sync] keeping local salesOrderLineItems/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -810,6 +819,7 @@ async function pullSalesOrderLineItems(): Promise<void> {
         updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesOrderLineItems/${remoteRow.id} threw:`, err)
     }
@@ -837,7 +847,14 @@ async function pushSalesOrderSchedules(): Promise<void> {
   const pending = await db.salesOrderSchedules.where('syncStatus').equals('pending').toArray()
   for (const schedule of pending) {
     try {
-      const { error } = await supabase.from('sales_order_schedules').upsert(salesOrderScheduleToRemote(schedule))
+      // Two offline devices can each create their own new row for the same
+      // (so_number, site_id) pair before either has synced — upsert must
+      // target that unique pair (not just the differing local ids), or the
+      // second device's insert permanently fails on the unique constraint
+      // instead of overwriting with its (probably more current) ship date.
+      const { error } = await supabase
+        .from('sales_order_schedules')
+        .upsert(salesOrderScheduleToRemote(schedule), { onConflict: 'so_number,site_id' })
       if (!error) {
         await db.salesOrderSchedules.update(schedule.id, { syncStatus: 'synced' })
       } else {
@@ -861,12 +878,12 @@ async function pullSalesOrderSchedules(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.salesOrderSchedules.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local salesOrderSchedules/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -882,6 +899,7 @@ async function pullSalesOrderSchedules(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesOrderSchedules/${remoteRow.id} threw:`, err)
     }
@@ -898,7 +916,7 @@ function salesQuoteToRemote(quote: SalesQuote): Record<string, unknown> {
     customer_name: quote.customerName,
     customer_address: quote.customerAddress,
     notes: quote.notes,
-    created_by_id: quote.createdById,
+    created_by_id: quote.createdById || null,
     created_by_email: quote.createdByEmail,
     canceled_at: quote.canceledAt ?? null,
     created_at: quote.createdAt,
@@ -934,12 +952,12 @@ async function pullSalesQuotes(): Promise<void> {
   let maxUpdatedAt = cursor
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
-    maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
 
     try {
       const local = await db.salesQuotes.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local salesQuotes/${remoteRow.id} over an older/equal remote change`)
+        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -949,13 +967,14 @@ async function pullSalesQuotes(): Promise<void> {
         customerName: remoteRow.customer_name as string,
         customerAddress: remoteRow.customer_address as string,
         notes: remoteRow.notes as string,
-        createdById: remoteRow.created_by_id as string,
+        createdById: (remoteRow.created_by_id as string) ?? '',
         createdByEmail: remoteRow.created_by_email as string,
         canceledAt: (remoteRow.canceled_at as number | null) ?? undefined,
         createdAt: remoteRow.created_at as number,
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
+      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesQuotes/${remoteRow.id} threw:`, err)
     }
@@ -968,7 +987,7 @@ function salesQuoteLineItemToRemote(li: SalesQuoteLineItem): Record<string, unkn
     id: li.id,
     quote_id: li.quoteId,
     quote_number: li.quoteNumber,
-    site_id: li.siteId,
+    site_id: li.siteId || null,
     site_name: li.siteName,
     item_type: li.itemType,
     item_ids: li.itemIds,
@@ -1006,25 +1025,29 @@ async function pullSalesQuoteLineItems(): Promise<void> {
 
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
-    maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
+    const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.salesQuoteLineItems.get(remoteRow.id as string)
-      if (existing) continue
+      if (existing) {
+        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
 
       await db.salesQuoteLineItems.put({
         id: remoteRow.id as string,
         quoteId: remoteRow.quote_id as string,
         quoteNumber: remoteRow.quote_number as string,
-        siteId: remoteRow.site_id as string,
+        siteId: (remoteRow.site_id as string) ?? '',
         siteName: remoteRow.site_name as string,
         itemType: remoteRow.item_type as SalesQuoteLineItem['itemType'],
         itemIds: (remoteRow.item_ids as string[]) ?? [],
         description: remoteRow.description as string,
         quantityHeld: remoteRow.quantity_held as number,
         heldByEmail: remoteRow.held_by_email as string,
-        createdAt: remoteRow.created_at as number,
+        createdAt,
         syncStatus: 'synced',
       })
+      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesQuoteLineItems/${remoteRow.id} threw:`, err)
     }
@@ -1077,10 +1100,24 @@ async function pullPhotos(): Promise<void> {
   let maxCreatedAt = cursor
   const touchedItemIds = new Set<string>()
   for (const remoteRow of data) {
-    maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
+    const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.photos.get(remoteRow.id as string)
-      if (existing) continue
+      if (existing) {
+        // A photo's itemId isn't actually immutable — merging two item
+        // groups on one device reassigns a photo to the surviving id and
+        // re-pushes it (see items.ts) — so a device that already pulled this
+        // photo needs to pick up that reassignment too, not just dedupe on
+        // id and ignore the rest of the row forever.
+        const remoteItemId = remoteRow.item_id as string
+        if (existing.itemId !== remoteItemId) {
+          await db.photos.update(existing.id, { itemId: remoteItemId })
+          touchedItemIds.add(existing.itemId)
+          touchedItemIds.add(remoteItemId)
+        }
+        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
 
       const path = remoteRow.storage_path as string
       const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
@@ -1094,12 +1131,13 @@ async function pullPhotos(): Promise<void> {
         itemType: remoteRow.item_type as ItemType,
         itemId: remoteRow.item_id as string,
         blob,
-        createdAt: remoteRow.created_at as number,
+        createdAt,
         uploadStatus: 'synced',
         remoteUrl: path,
       }
       await db.photos.put(photo)
       touchedItemIds.add(photo.itemId)
+      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull photos/${remoteRow.id} threw:`, err)
     }
@@ -1113,7 +1151,7 @@ async function pullPhotos(): Promise<void> {
 
 async function refreshPhotoIds(itemId: string): Promise<void> {
   const photoIds = (await db.photos.where('itemId').equals(itemId).toArray()).map((p) => p.id)
-  for (const localTable of ['beams', 'uprights', 'wireDecks'] as const) {
+  for (const localTable of ['beams', 'uprights', 'wireDecks', 'miscItems'] as const) {
     const table = db.table(localTable)
     const item = await table.get(itemId)
     if (item) await table.update(itemId, { photoIds })
@@ -1163,10 +1201,13 @@ async function pullProjectPhotos(): Promise<void> {
 
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
-    maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
+    const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.projectPhotos.get(remoteRow.id as string)
-      if (existing) continue
+      if (existing) {
+        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
 
       const path = remoteRow.storage_path as string
       const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
@@ -1179,11 +1220,12 @@ async function pullProjectPhotos(): Promise<void> {
         id: remoteRow.id as string,
         siteId: remoteRow.site_id as string,
         blob,
-        createdAt: remoteRow.created_at as number,
+        createdAt,
         uploadStatus: 'synced',
         remoteUrl: path,
       }
       await db.projectPhotos.put(photo)
+      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull project_photos/${remoteRow.id} threw:`, err)
     }
@@ -1234,10 +1276,13 @@ async function pullBolPhotos(): Promise<void> {
 
   let maxCreatedAt = cursor
   for (const remoteRow of data) {
-    maxCreatedAt = Math.max(maxCreatedAt, Number(remoteRow.created_at))
+    const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.bolPhotos.get(remoteRow.id as string)
-      if (existing) continue
+      if (existing) {
+        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
 
       const path = remoteRow.storage_path as string
       const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
@@ -1250,11 +1295,12 @@ async function pullBolPhotos(): Promise<void> {
         id: remoteRow.id as string,
         bolId: remoteRow.bol_id as string,
         blob,
-        createdAt: remoteRow.created_at as number,
+        createdAt,
         uploadStatus: 'synced',
         remoteUrl: path,
       }
       await db.bolPhotos.put(photo)
+      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull bol_photos/${remoteRow.id} threw:`, err)
     }
@@ -1338,11 +1384,15 @@ async function pullTombstones(): Promise<void> {
 
   let maxDeletedAt = cursor
   for (const remoteRow of data) {
-    maxDeletedAt = Math.max(maxDeletedAt, Number(remoteRow.deleted_at))
+    const deletedAt = Number(remoteRow.deleted_at)
     const tableName = remoteRow.table_name as string
-    if (!LOCAL_TABLE_NAMES.has(tableName)) continue
+    if (!LOCAL_TABLE_NAMES.has(tableName)) {
+      maxDeletedAt = Math.max(maxDeletedAt, deletedAt)
+      continue
+    }
     try {
       await db.table(tableName).delete(remoteRow.record_id as string)
+      maxDeletedAt = Math.max(maxDeletedAt, deletedAt)
     } catch (err) {
       reportSyncError(`[sync] applying tombstone for ${tableName}/${remoteRow.record_id} threw:`, err)
     }

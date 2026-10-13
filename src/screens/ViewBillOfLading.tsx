@@ -97,6 +97,7 @@ export default function ViewBillOfLading() {
   const [showCamera, setShowCamera] = useState(false)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const bolPhotoInputRef = useRef<HTMLInputElement>(null)
+  const bolCameraInputRef = useRef<HTMLInputElement>(null)
   const photoMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -111,11 +112,16 @@ export default function ViewBillOfLading() {
   }, [showPhotoMenu])
 
   function handleAddPhotoClick() {
+    setShowPhotoMenu((prev) => !prev)
+  }
+
+  function handleTakeBolPhotoClick() {
     if (isMobileDevice) {
-      bolPhotoInputRef.current?.click()
+      bolCameraInputRef.current?.click()
     } else {
-      setShowPhotoMenu((prev) => !prev)
+      setShowCamera(true)
     }
+    setShowPhotoMenu(false)
   }
 
   async function handleBolPhotoCaptured(file: File) {
@@ -812,15 +818,9 @@ export default function ViewBillOfLading() {
             <button type="button" onClick={handleAddPhotoClick} disabled={isEditing}>
               Add Photo
             </button>
-            {!isMobileDevice && showPhotoMenu && (
+            {showPhotoMenu && (
               <div className="photo-add-menu">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCamera(true)
-                    setShowPhotoMenu(false)
-                  }}
-                >
+                <button type="button" onClick={handleTakeBolPhotoClick}>
                   Take Photo
                 </button>
                 <button
@@ -835,6 +835,16 @@ export default function ViewBillOfLading() {
               </div>
             )}
           </div>
+          {isMobileDevice && (
+            <input
+              ref={bolCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="photo-file-input"
+              onChange={handleBolPhotoFilesSelected}
+            />
+          )}
           <input
             ref={bolPhotoInputRef}
             type="file"

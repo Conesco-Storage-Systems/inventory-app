@@ -16,6 +16,7 @@ export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: Site
   const [showCamera, setShowCamera] = useState(false)
   const [confirmingRemove, setConfirmingRemove] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -55,19 +56,20 @@ export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: Site
       setShowViewer(true)
       return
     }
-    if (isMobileDevice) {
-      fileInputRef.current?.click()
-    } else {
-      setShowMenu(!showMenu)
-    }
+    setShowMenu(!showMenu)
   }
 
   function handleReplaceClick() {
+    setShowMenu(!showMenu)
+  }
+
+  function handleTakePhotoClick() {
     if (isMobileDevice) {
-      fileInputRef.current?.click()
+      cameraInputRef.current?.click()
     } else {
-      setShowMenu(!showMenu)
+      setShowCamera(true)
     }
+    setShowMenu(false)
   }
 
   function closeViewer() {
@@ -91,15 +93,9 @@ export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: Site
         )}
       </button>
 
-      {!photo && !isMobileDevice && showMenu && (
+      {!photo && showMenu && (
         <div className="photo-add-menu">
-          <button
-            type="button"
-            onClick={() => {
-              setShowCamera(true)
-              setShowMenu(false)
-            }}
-          >
+          <button type="button" onClick={handleTakePhotoClick}>
             Take Photo
           </button>
           <button
@@ -112,6 +108,17 @@ export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: Site
             Add From Files
           </button>
         </div>
+      )}
+
+      {isMobileDevice && (
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFilesSelected}
+          className="photo-file-input"
+        />
       )}
 
       <input
@@ -154,15 +161,9 @@ export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: Site
                   <button type="button" onClick={handleReplaceClick}>
                     Replace Photo
                   </button>
-                  {!isMobileDevice && showMenu && (
+                  {showMenu && (
                     <div className="photo-add-menu photo-add-menu-up">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCamera(true)
-                          setShowMenu(false)
-                        }}
-                      >
+                      <button type="button" onClick={handleTakePhotoClick}>
                         Take Photo
                       </button>
                       <button

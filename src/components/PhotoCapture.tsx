@@ -12,6 +12,7 @@ export default function PhotoCapture({ files, onChange }: PhotoCaptureProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,45 +47,58 @@ export default function PhotoCapture({ files, onChange }: PhotoCaptureProps) {
     />
   )
 
+  // A plain file input with no `capture` attribute leaves it up to the
+  // device's own chooser to decide whether "camera" is even offered as an
+  // option — iOS Safari reliably includes it, but it's inconsistent across
+  // Android versions/manufacturers/browsers. Setting `capture` explicitly
+  // forces the camera app open directly on both platforms instead of
+  // gambling on the generic chooser.
+  const cameraInput = isMobileDevice ? (
+    <input
+      ref={cameraInputRef}
+      type="file"
+      accept="image/*"
+      capture="environment"
+      onChange={handleFilesSelected}
+      className="photo-file-input"
+    />
+  ) : null
+
   return (
     <div className="photo-capture">
-      {isMobileDevice ? (
-        <div className="photo-add-wrapper">
-          <button type="button" className="photo-add-button" onClick={() => fileInputRef.current?.click()}>
-            + Add Photos
-          </button>
-          {fileInput}
-        </div>
-      ) : (
-        <div className="photo-add-wrapper" ref={menuRef}>
-          <button type="button" className="photo-add-button" onClick={() => setShowMenu(!showMenu)}>
-            + Add Photos
-          </button>
-          {showMenu && (
-            <div className="photo-add-menu">
-              <button
-                type="button"
-                onClick={() => {
+      <div className="photo-add-wrapper" ref={menuRef}>
+        <button type="button" className="photo-add-button" onClick={() => setShowMenu(!showMenu)}>
+          + Add Photos
+        </button>
+        {showMenu && (
+          <div className="photo-add-menu">
+            <button
+              type="button"
+              onClick={() => {
+                if (isMobileDevice) {
+                  cameraInputRef.current?.click()
+                } else {
                   setShowCamera(true)
-                  setShowMenu(false)
-                }}
-              >
-                Take Photo
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  fileInputRef.current?.click()
-                  setShowMenu(false)
-                }}
-              >
-                Add From Files
-              </button>
-            </div>
-          )}
-          {fileInput}
-        </div>
-      )}
+                }
+                setShowMenu(false)
+              }}
+            >
+              Take Photo
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                fileInputRef.current?.click()
+                setShowMenu(false)
+              }}
+            >
+              Add From Files
+            </button>
+          </div>
+        )}
+        {cameraInput}
+        {fileInput}
+      </div>
       {files.length > 0 && (
         <div className="photo-thumbnails">
           {files.map((file, index) => (

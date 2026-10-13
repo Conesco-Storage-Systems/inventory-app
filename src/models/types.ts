@@ -169,7 +169,6 @@ export interface Photo {
   id: string
   itemType: ItemType
   itemId: string
-  blob: Blob
   createdAt: number
   uploadStatus: 'pending' | 'uploading' | 'synced' | 'failed'
   remoteUrl?: string
@@ -178,10 +177,23 @@ export interface Photo {
 export interface ProjectPhoto {
   id: string
   siteId: string
-  blob: Blob
   createdAt: number
   uploadStatus: 'pending' | 'uploading' | 'synced' | 'failed'
   remoteUrl?: string
+}
+
+// The actual image data for Photo/ProjectPhoto/BolPhoto lives in its own
+// table (photoBlobs/projectPhotoBlobs/bolPhotoBlobs), keyed by the same id
+// as its metadata row, rather than inline on the metadata itself. iOS
+// Safari has a documented IndexedDB bug (WebKit #240216) where re-saving a
+// record that carries a Blob under the same key can silently corrupt it
+// down to 0 bytes — routine metadata writes (an upload status flip, a
+// group-merge reassignment) would otherwise trigger exactly that read-
+// modify-write pattern on every photo, every time. Keeping the blob in its
+// own record means those routine writes never touch it at all.
+export interface PhotoBlob {
+  id: string
+  blob: Blob
 }
 
 // A real-time photo of the actual shipment, taken on the BOL screen once
@@ -190,7 +202,6 @@ export interface ProjectPhoto {
 export interface BolPhoto {
   id: string
   bolId: string
-  blob: Blob
   createdAt: number
   uploadStatus: 'pending' | 'uploading' | 'synced' | 'failed'
   remoteUrl?: string

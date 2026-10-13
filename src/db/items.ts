@@ -35,11 +35,14 @@ export async function savePhotos(itemType: ItemType, itemId: string, files: File
     // to the original file if compression fails for any reason, rather
     // than losing the photo.
     const blob = await compressImageToFile(file).catch(() => file)
+    // Blob written first, under its own key — if anything fails between
+    // these two writes, there's no metadata record pointing at a missing
+    // blob, just an orphaned (harmless, invisible) blob row.
+    await db.photoBlobs.add({ id, blob })
     await db.photos.add({
       id,
       itemType,
       itemId,
-      blob,
       createdAt: Date.now(),
       uploadStatus: 'pending',
     })
@@ -156,14 +159,22 @@ export async function updateBeamGroup(input: BeamEditInput): Promise<void> {
 export async function getPhotosForItem(itemIds: string[]): Promise<{ id: string; blob: Blob }[]> {
   if (itemIds.length === 0) return []
   const photos = await db.photos.where('itemId').anyOf(itemIds).toArray()
-  return photos.map((p) => ({ id: p.id, blob: p.blob }))
+  if (photos.length === 0) return []
+  const blobRows = await db.photoBlobs.bulkGet(photos.map((p) => p.id))
+  // A blob missing or corrupted to 0 bytes (see PhotoBlob in models/types.ts)
+  // can't be displayed either way — leave it out rather than render broken.
+  return photos
+    .map((p, i) => ({ id: p.id, blob: blobRows[i]?.blob }))
+    .filter((p): p is { id: string; blob: Blob } => p.blob instanceof Blob && p.blob.size > 0)
 }
 
 async function deletePhotosForItems(itemIds: string[]): Promise<void> {
   if (itemIds.length === 0) return
   const photos = await db.photos.where('itemId').anyOf(itemIds).toArray()
-  await enqueuePendingDeletes('photos', photos.map((p) => p.id))
+  const ids = photos.map((p) => p.id)
+  await enqueuePendingDeletes('photos', ids)
   await db.photos.where('itemId').anyOf(itemIds).delete()
+  await db.photoBlobs.bulkDelete(ids)
 }
 
 export async function deleteBeamGroup(ids: string[]): Promise<void> {

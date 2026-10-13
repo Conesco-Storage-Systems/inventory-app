@@ -9,6 +9,7 @@ import type {
   PendingDelete,
   PickerOption,
   Photo,
+  PhotoBlob,
   Project,
   ProjectPhoto,
   SalesOrderLineItem,
@@ -29,8 +30,11 @@ class InventoryDB extends Dexie {
   wireDecks!: Table<WireDeck, string>
   miscItems!: Table<MiscItem, string>
   photos!: Table<Photo, string>
+  photoBlobs!: Table<PhotoBlob, string>
   projectPhotos!: Table<ProjectPhoto, string>
+  projectPhotoBlobs!: Table<PhotoBlob, string>
   bolPhotos!: Table<BolPhoto, string>
+  bolPhotoBlobs!: Table<PhotoBlob, string>
   pendingDeletes!: Table<PendingDelete, string>
   projects!: Table<Project, string>
   billsOfLading!: Table<BillOfLading, string>
@@ -412,6 +416,59 @@ class InventoryDB extends Dexie {
       salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
       salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
       salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    })
+    // Moves each photo's actual image Blob out of its metadata record and
+    // into its own table, keyed by the same id — see the comment on
+    // PhotoBlob in models/types.ts for why (a documented iOS Safari
+    // IndexedDB bug where re-saving a record that carries a Blob under the
+    // same key can silently corrupt it to 0 bytes). Existing photos are
+    // carried forward: their blob is copied into the new table and
+    // stripped from the old record, with no change to what's displayed or
+    // what's still pending upload.
+    this.version(16).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    }).upgrade(async (tx) => {
+      const moves: Array<[string, string]> = [
+        ['photos', 'photoBlobs'],
+        ['projectPhotos', 'projectPhotoBlobs'],
+        ['bolPhotos', 'bolPhotoBlobs'],
+      ]
+      for (const [metaTable, blobTable] of moves) {
+        const rows = await tx.table(metaTable).toArray()
+        const blobRows = rows.filter((row) => row.blob instanceof Blob).map((row) => ({ id: row.id, blob: row.blob }))
+        if (blobRows.length > 0) {
+          await tx.table(blobTable).bulkPut(blobRows)
+        }
+        await tx
+          .table(metaTable)
+          .toCollection()
+          .modify((row) => {
+            delete row.blob
+          })
+      }
     })
   }
 }

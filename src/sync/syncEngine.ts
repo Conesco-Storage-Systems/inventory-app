@@ -1061,10 +1061,21 @@ async function pushPhotos(): Promise<void> {
   const pending = await db.photos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
     try {
+      const blobRow = await db.photoBlobs.get(photo.id)
+      if (!blobRow || !(blobRow.blob instanceof Blob) || blobRow.blob.size === 0) {
+        // Known iOS Safari/WebKit IndexedDB bug: a stored Blob can silently
+        // corrupt down to 0 bytes. There's no image data left to retry —
+        // flag it distinctly and stop retrying, rather than looping forever
+        // on Supabase's generic "No content provided".
+        reportSyncError(`[sync] photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+        await db.photos.update(photo.id, { uploadStatus: 'failed' })
+        continue
+      }
+
       const path = `${photo.itemId}/item/${photo.id}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+        .upload(path, blobRow.blob, { upsert: true, contentType: blobRow.blob.type })
       if (uploadError) {
         reportSyncError(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
         continue
@@ -1130,11 +1141,11 @@ async function pullPhotos(): Promise<void> {
         id: remoteRow.id as string,
         itemType: remoteRow.item_type as ItemType,
         itemId: remoteRow.item_id as string,
-        blob,
         createdAt,
         uploadStatus: 'synced',
         remoteUrl: path,
       }
+      await db.photoBlobs.put({ id: photo.id, blob })
       await db.photos.put(photo)
       touchedItemIds.add(photo.itemId)
       maxCreatedAt = Math.max(maxCreatedAt, createdAt)
@@ -1164,10 +1175,17 @@ async function pushProjectPhotos(): Promise<void> {
   const pending = await db.projectPhotos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
     try {
+      const blobRow = await db.projectPhotoBlobs.get(photo.id)
+      if (!blobRow || !(blobRow.blob instanceof Blob) || blobRow.blob.size === 0) {
+        reportSyncError(`[sync] project photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+        await db.projectPhotos.update(photo.id, { uploadStatus: 'failed' })
+        continue
+      }
+
       const path = `${photo.siteId}/project/${photo.id}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+        .upload(path, blobRow.blob, { upsert: true, contentType: blobRow.blob.type })
       if (uploadError) {
         reportSyncError(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
         continue
@@ -1219,11 +1237,11 @@ async function pullProjectPhotos(): Promise<void> {
       const photo: ProjectPhoto = {
         id: remoteRow.id as string,
         siteId: remoteRow.site_id as string,
-        blob,
         createdAt,
         uploadStatus: 'synced',
         remoteUrl: path,
       }
+      await db.projectPhotoBlobs.put({ id: photo.id, blob })
       await db.projectPhotos.put(photo)
       maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
@@ -1239,10 +1257,17 @@ async function pushBolPhotos(): Promise<void> {
   const pending = await db.bolPhotos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
     try {
+      const blobRow = await db.bolPhotoBlobs.get(photo.id)
+      if (!blobRow || !(blobRow.blob instanceof Blob) || blobRow.blob.size === 0) {
+        reportSyncError(`[sync] bol photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+        await db.bolPhotos.update(photo.id, { uploadStatus: 'failed' })
+        continue
+      }
+
       const path = `bol/${photo.bolId}/${photo.id}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(path, photo.blob, { upsert: true, contentType: photo.blob.type })
+        .upload(path, blobRow.blob, { upsert: true, contentType: blobRow.blob.type })
       if (uploadError) {
         reportSyncError(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
         continue
@@ -1294,11 +1319,11 @@ async function pullBolPhotos(): Promise<void> {
       const photo: BolPhoto = {
         id: remoteRow.id as string,
         bolId: remoteRow.bol_id as string,
-        blob,
         createdAt,
         uploadStatus: 'synced',
         remoteUrl: path,
       }
+      await db.bolPhotoBlobs.put({ id: photo.id, blob })
       await db.bolPhotos.put(photo)
       maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {

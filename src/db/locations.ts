@@ -149,12 +149,14 @@ export async function permanentlyDeleteSite(siteId: string): Promise<void> {
 
   if (itemIds.length > 0) {
     await db.photos.where('itemId').anyOf(itemIds).delete()
+    await db.photoBlobs.bulkDelete(photos.map((p) => p.id))
   }
   await db.beams.where('siteId').equals(siteId).delete()
   await db.uprights.where('siteId').equals(siteId).delete()
   await db.wireDecks.where('siteId').equals(siteId).delete()
   await db.miscItems.where('siteId').equals(siteId).delete()
   await db.projectPhotos.where('siteId').equals(siteId).delete()
+  await db.projectPhotoBlobs.bulkDelete(projectPhotos.map((p) => p.id))
   await db.areas.where('siteId').equals(siteId).delete()
   await db.sites.delete(siteId)
 }

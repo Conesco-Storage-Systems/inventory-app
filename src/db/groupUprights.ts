@@ -14,6 +14,7 @@ export interface UprightRow {
   footplateLength: number
   footplateWidth: number
   footplateSizeDisplay: string
+  footplateThickness: string
   anchorHoleCount: number
   holeSize: string
   gauge: string
@@ -51,6 +52,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       upright.columnWidth,
       upright.footplateLength,
       upright.footplateWidth,
+      upright.footplateThickness ?? '',
       upright.anchorHoleCount,
       upright.holeSize,
       upright.gauge,
@@ -86,6 +88,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
         upright.footplateLength || upright.footplateWidth
           ? `${upright.footplateLength}" x ${upright.footplateWidth}"`
           : '',
+      footplateThickness: upright.footplateThickness ?? '',
       anchorHoleCount: upright.anchorHoleCount,
       holeSize: upright.holeSize,
       gauge: upright.gauge,

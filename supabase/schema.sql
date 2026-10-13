@@ -69,6 +69,7 @@ create table uprights (
   column_width numeric not null default 0,
   footplate_length numeric not null default 0,
   footplate_width numeric not null default 0,
+  footplate_thickness text not null default '',
   anchor_hole_count integer not null default 0,
   hole_size text not null default '',
   gauge text not null default '',
@@ -786,3 +787,10 @@ create trigger sales_order_schedules_reject_stale_update before update on sales_
 drop trigger if exists sales_quotes_reject_stale_update on sales_quotes;
 create trigger sales_quotes_reject_stale_update before update on sales_quotes
   for each row execute function reject_stale_last_update_at();
+
+-- Adds Footplate Thickness to Uprights — a distinct measurement from the
+-- existing Footplate Length/Width (e.g. "3/16" or "1/4"), its own field
+-- rather than folded into either of them. Run this against the live
+-- database (it's just the one new column; the create table above already
+-- reflects it for a fresh setup).
+alter table uprights add column if not exists footplate_thickness text not null default '';

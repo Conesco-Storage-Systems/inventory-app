@@ -152,6 +152,10 @@ export interface Upright extends ItemBase {
   columnWidth: number
   footplateLength: number
   footplateWidth: number
+  // Free text (e.g. "3/16" or "1/4") — a distinct measurement from the
+  // footplate's length/width above, so it's its own field rather than
+  // folded into either of them.
+  footplateThickness: string
   anchorHoleCount: number
   holeSize: string
   gauge: string

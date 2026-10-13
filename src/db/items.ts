@@ -314,6 +314,7 @@ export interface NewUprightInput {
   columnWidth: number
   footplateLength: number
   footplateWidth: number
+  footplateThickness: string
   anchorHoleCount: number
   holeSize: string
   gauge: string
@@ -351,6 +352,7 @@ export async function createUpright(input: NewUprightInput): Promise<string> {
     columnWidth: input.columnWidth,
     footplateLength: input.footplateLength,
     footplateWidth: input.footplateWidth,
+    footplateThickness: input.footplateThickness,
     anchorHoleCount: input.anchorHoleCount,
     holeSize: input.holeSize,
     gauge: input.gauge,
@@ -384,6 +386,7 @@ export interface UprightEditInput {
   columnWidth: number
   footplateLength: number
   footplateWidth: number
+  footplateThickness: string
   anchorHoleCount: number
   holeSize: string
   gauge: string
@@ -424,6 +427,7 @@ export async function updateUprightGroup(input: UprightEditInput): Promise<void>
     columnWidth: input.columnWidth,
     footplateLength: input.footplateLength,
     footplateWidth: input.footplateWidth,
+    footplateThickness: input.footplateThickness,
     anchorHoleCount: input.anchorHoleCount,
     holeSize: input.holeSize,
     gauge: input.gauge,

@@ -108,6 +108,7 @@ export default function NewItem() {
         columnWidth: Number(uprightDraft.columnWidth) || 0,
         footplateLength: Number(uprightDraft.footplateLength) || 0,
         footplateWidth: Number(uprightDraft.footplateWidth) || 0,
+        footplateThickness: uprightDraft.footplateThickness,
         anchorHoleCount: Number(uprightDraft.anchorHoleCount) || 0,
         holeSize: uprightDraft.holeSize,
         gauge: uprightDraft.gauge === 'Other' ? uprightDraft.gaugeOther : uprightDraft.gauge,

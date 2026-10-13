@@ -342,6 +342,9 @@ function buildUpright(
     columnWidth: dims?.columnWidth ?? 0,
     footplateLength: fp.length ?? 0,
     footplateWidth: fp.width ?? 0,
+    // Not present in the legacy spreadsheet format being imported here —
+    // left for someone to fill in later if needed.
+    footplateThickness: '',
     anchorHoleCount: holes.count ?? 0,
     holeSize: holes.size,
     gauge: gauge.gauge,

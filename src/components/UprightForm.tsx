@@ -31,6 +31,7 @@ export interface UprightDraft {
   columnWidth: string
   footplateLength: string
   footplateWidth: string
+  footplateThickness: string
   anchorHoleCount: string
   holeSize: string
   gauge: string
@@ -58,6 +59,7 @@ export const emptyUprightDraft: UprightDraft = {
   columnWidth: '',
   footplateLength: '',
   footplateWidth: '',
+  footplateThickness: '',
   anchorHoleCount: '',
   holeSize: '',
   gauge: '',
@@ -81,6 +83,7 @@ type UprightFieldKey =
   | 'height'
   | 'columnSize'
   | 'footplateSize'
+  | 'footplateThickness'
   | 'anchorHoleCount'
   | 'holeSize'
   | 'gauge'
@@ -101,6 +104,7 @@ const DEFAULT_UPRIGHT_FIELD_ORDER: UprightFieldKey[] = [
   'height',
   'columnSize',
   'footplateSize',
+  'footplateThickness',
   'anchorHoleCount',
   'holeSize',
   'gauge',
@@ -230,6 +234,17 @@ export default function UprightForm({ value, onChange, siteId }: UprightFormProp
             onChange={(footplateWidth) => onChange({ ...value, footplateWidth })}
           />
         </div>
+      </label>
+    ),
+    footplateThickness: (
+      <label>
+        Footplate Thickness
+        <input
+          type="text"
+          placeholder={`e.g. 3/16" or 1/4"`}
+          value={value.footplateThickness}
+          onChange={(e) => onChange({ ...value, footplateThickness: e.target.value })}
+        />
       </label>
     ),
     anchorHoleCount: (

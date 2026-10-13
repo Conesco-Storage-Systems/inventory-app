@@ -402,6 +402,11 @@ async function pushSites(): Promise<void> {
               .upload(path, bytes, { upsert: true, contentType: blobRow.blob.type || 'image/jpeg' })
             if (!uploadError) {
               sitePhotoPath = path
+            } else if (isEmptyContentError(uploadError)) {
+              // Deterministic server-side "nothing to upload" — leave
+              // photoUploadFailed false so sitePhotoDirty clears below
+              // instead of retrying forever.
+              reportSyncError(`[sync] site photo for ${site.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
             } else {
               photoUploadFailed = true
               reportSyncError(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
@@ -1085,6 +1090,18 @@ async function readBlobBytes(blob: Blob): Promise<ArrayBuffer | null> {
   }
 }
 
+// Even an ArrayBuffer read out of a corrupted disk-backed Blob can still
+// report a nonzero byteLength locally while genuinely containing nothing —
+// readBlobBytes() can't catch every case. But Supabase's own server gives an
+// unambiguous, deterministic answer when that happens: "No content
+// provided" means it received zero bytes, full stop — retrying changes
+// nothing, since the local data is what's gone, not the network. Treat this
+// exactly like a client-side-detected corrupt blob (stop retrying) instead
+// of a transient failure (keep retrying forever).
+function isEmptyContentError(error: { message?: string } | null | undefined): boolean {
+  return error?.message === 'No content provided'
+}
+
 async function pushPhotos(): Promise<void> {
   const pending = await db.photos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
@@ -1102,7 +1119,12 @@ async function pushPhotos(): Promise<void> {
         .from(STORAGE_BUCKET)
         .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
       if (uploadError) {
-        reportSyncError(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        if (isEmptyContentError(uploadError)) {
+          reportSyncError(`[sync] photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+          await db.photos.update(photo.id, { uploadStatus: 'failed' })
+        } else {
+          reportSyncError(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        }
         continue
       }
 
@@ -1213,7 +1235,12 @@ async function pushProjectPhotos(): Promise<void> {
         .from(STORAGE_BUCKET)
         .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
       if (uploadError) {
-        reportSyncError(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        if (isEmptyContentError(uploadError)) {
+          reportSyncError(`[sync] project photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+          await db.projectPhotos.update(photo.id, { uploadStatus: 'failed' })
+        } else {
+          reportSyncError(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        }
         continue
       }
 
@@ -1296,7 +1323,12 @@ async function pushBolPhotos(): Promise<void> {
         .from(STORAGE_BUCKET)
         .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
       if (uploadError) {
-        reportSyncError(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        if (isEmptyContentError(uploadError)) {
+          reportSyncError(`[sync] bol photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+          await db.bolPhotos.update(photo.id, { uploadStatus: 'failed' })
+        } else {
+          reportSyncError(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        }
         continue
       }
 

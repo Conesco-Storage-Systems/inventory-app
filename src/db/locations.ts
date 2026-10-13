@@ -159,6 +159,7 @@ export async function permanentlyDeleteSite(siteId: string): Promise<void> {
   await db.projectPhotoBlobs.bulkDelete(projectPhotos.map((p) => p.id))
   await db.areas.where('siteId').equals(siteId).delete()
   await db.sites.delete(siteId)
+  await db.siteHeroPhotoBlobs.delete(siteId)
 }
 
 // Runs on app load: anything that's been sitting in "Recently Deleted"
@@ -176,8 +177,10 @@ export async function purgeExpiredDeletedSites(): Promise<void> {
 }
 
 export async function setSitePhoto(siteId: string, file: File): Promise<void> {
+  // Blob written first, under its own key — see siteHeroPhotoBlobs in db.ts
+  // for why it's kept out of the site record itself.
+  await db.siteHeroPhotoBlobs.put({ id: siteId, blob: file })
   await db.sites.update(siteId, {
-    sitePhoto: file,
     sitePhotoDirty: true,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
@@ -186,18 +189,19 @@ export async function setSitePhoto(siteId: string, file: File): Promise<void> {
 }
 
 export async function removeSitePhoto(siteId: string): Promise<void> {
-  const site = await db.sites.get(siteId)
-  if (!site) return
-  delete site.sitePhoto
-
-  await db.sites.put({
-    ...site,
+  await db.siteHeroPhotoBlobs.delete(siteId)
+  await db.sites.update(siteId, {
     sitePhotoPath: '',
     sitePhotoDirty: true,
     lastUpdatedBy: getEditorName(),
     lastUpdatedAt: Date.now(),
     syncStatus: 'pending',
   })
+}
+
+export async function getSiteHeroPhoto(siteId: string): Promise<Blob | undefined> {
+  const row = await db.siteHeroPhotoBlobs.get(siteId)
+  return row?.blob instanceof Blob && row.blob.size > 0 ? row.blob : undefined
 }
 
 export async function createArea(

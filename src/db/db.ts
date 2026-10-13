@@ -23,6 +23,7 @@ import type {
 
 class InventoryDB extends Dexie {
   sites!: Table<Site, string>
+  siteHeroPhotoBlobs!: Table<PhotoBlob, string>
   areas!: Table<Area, string>
   pickerOptions!: Table<PickerOption, string>
   beams!: Table<Beam, string>
@@ -469,6 +470,50 @@ class InventoryDB extends Dexie {
             delete row.blob
           })
       }
+    })
+    // Same move as version 16, for the site's own hero photo — sites.sitePhoto
+    // was the most aggravated case of this bug, since touchSiteUpdated()
+    // rewrites the site record (and, until now, its inline photo Blob) on
+    // nearly every item add/edit at that location, not just on an upload
+    // status flip.
+    this.version(17).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    }).upgrade(async (tx) => {
+      const rows = await tx.table('sites').toArray()
+      const blobRows = rows.filter((row) => row.sitePhoto instanceof Blob).map((row) => ({ id: row.id, blob: row.sitePhoto }))
+      if (blobRows.length > 0) {
+        await tx.table('siteHeroPhotoBlobs').bulkPut(blobRows)
+      }
+      await tx
+        .table('sites')
+        .toCollection()
+        .modify((row) => {
+          delete row.sitePhoto
+        })
     })
   }
 }

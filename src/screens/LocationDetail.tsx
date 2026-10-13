@@ -34,7 +34,7 @@ import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
 import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
 import { listHoldsBySite } from '../db/salesQuotes'
-import { removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
+import { getSiteHeroPhoto, removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { exportSitePhotosZip } from '../export/exportSitePhotosZip'
 import { beamExportRow, miscExportRow, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
@@ -61,6 +61,7 @@ export default function LocationDetail() {
   const { permissions } = useRole()
   const { siteId } = useParams<{ siteId: string }>()
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
+  const siteHeroPhoto = useLiveQuery(() => (siteId ? getSiteHeroPhoto(siteId) : undefined), [siteId])
   const uprights = useLiveQuery(() => (siteId ? listUprightsBySite(siteId) : []), [siteId]) ?? []
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
@@ -484,7 +485,7 @@ export default function LocationDetail() {
         </div>
         <div className="locked-image-box">
           <SitePhotoPicker
-            photo={site.sitePhoto}
+            photo={siteHeroPhoto}
             alt={`${site.name} site photo`}
             onSelect={handleSitePhotoSelected}
             onRemove={handleSitePhotoRemoved}
@@ -501,7 +502,7 @@ export default function LocationDetail() {
             Export to Excel
           </button>
         )}
-        {(hasItems || site.sitePhoto) && (
+        {(hasItems || siteHeroPhoto) && (
           <button type="button" onClick={handleDownloadPhotos} disabled={downloadingPhotos}>
             {downloadingPhotos ? 'Zipping…' : 'Download All Photos'}
           </button>

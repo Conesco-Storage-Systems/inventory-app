@@ -376,7 +376,7 @@ async function pushSites(): Promise<void> {
   // show up as "pending" anymore, so it has to be found separately or its
   // photo would be stranded forever.
   const syncedWithUnsentPhoto = await db.sites
-    .filter((site) => site.syncStatus === 'synced' && !!site.sitePhoto && !!site.sitePhotoDirty)
+    .filter((site) => site.syncStatus === 'synced' && !!site.sitePhotoDirty)
     .toArray()
   const pendingIds = new Set(pending.map((s) => s.id))
   const sitesToPush = [...pending, ...syncedWithUnsentPhoto.filter((s) => !pendingIds.has(s.id))]
@@ -385,20 +385,32 @@ async function pushSites(): Promise<void> {
     try {
       let sitePhotoPath = site.sitePhotoPath
       let photoUploadFailed = false
-      if (site.sitePhoto && site.sitePhotoDirty) {
-        // Versioned filename (not a fixed one) so the path itself changes on
-        // every replacement — otherwise other devices would never notice the
-        // photo changed, since they only re-download when the path differs.
-        const path = `${site.id}/site/${site.id}-${Date.now()}.jpg`
-        const { error: uploadError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(path, site.sitePhoto, { upsert: true, contentType: site.sitePhoto.type })
-        if (!uploadError) {
-          sitePhotoPath = path
-        } else {
-          photoUploadFailed = true
-          reportSyncError(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+      if (site.sitePhotoDirty) {
+        const blobRow = await db.siteHeroPhotoBlobs.get(site.id)
+        if (blobRow) {
+          const bytes = await readBlobBytes(blobRow.blob)
+          if (!bytes) {
+            reportSyncError(`[sync] site photo for ${site.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+          } else {
+            // Versioned filename (not a fixed one) so the path itself changes
+            // on every replacement — otherwise other devices would never
+            // notice the photo changed, since they only re-download when the
+            // path differs.
+            const path = `${site.id}/site/${site.id}-${Date.now()}.jpg`
+            const { error: uploadError } = await supabase.storage
+              .from(STORAGE_BUCKET)
+              .upload(path, bytes, { upsert: true, contentType: blobRow.blob.type || 'image/jpeg' })
+            if (!uploadError) {
+              sitePhotoPath = path
+            } else {
+              photoUploadFailed = true
+              reportSyncError(`[sync] site photo upload for ${site.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+            }
+          }
         }
+        // No blobRow at all means the photo was removed locally
+        // (removeSitePhoto) — sitePhotoPath is already '' from that call,
+        // and it just needs to go out below, nothing to upload.
       }
 
       const { error } = await supabase.from('sites').upsert(siteToRemote({ ...site, sitePhotoPath }))
@@ -438,19 +450,18 @@ async function pullSites(): Promise<void> {
         continue
       }
 
-      let sitePhoto = local?.sitePhoto
       const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
       if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
         const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
         if (blob) {
-          sitePhoto = blob
+          await db.siteHeroPhotoBlobs.put({ id: remoteRow.id as string, blob })
         } else {
           reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
         }
       } else if (!sitePhotoPath) {
         // Remote has no photo (removed elsewhere) — don't keep showing
         // whatever this device happened to have downloaded before.
-        sitePhoto = undefined
+        await db.siteHeroPhotoBlobs.delete(remoteRow.id as string)
       }
 
       await db.sites.put({
@@ -461,7 +472,6 @@ async function pullSites(): Promise<void> {
         active: remoteRow.active as boolean,
         deletedAt: (remoteRow.deleted_at as number | null) ?? undefined,
         projectId: (remoteRow.project_id as string | null) ?? undefined,
-        sitePhoto,
         sitePhotoPath,
         sitePhotoDirty: false,
         createdAt: remoteRow.created_at as number,

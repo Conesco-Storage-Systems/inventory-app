@@ -29,9 +29,14 @@ export interface Site {
   createdAt: number
   lastUpdatedBy: string
   lastUpdatedAt: number
-  sitePhoto?: Blob
+  // The actual image data lives in its own table (siteHeroPhotoBlobs), keyed
+  // by this site's own id — see the comment on PhotoBlob further down for
+  // why. A site record gets rewritten constantly (touchSiteUpdated runs on
+  // nearly every item add/edit at that location), so an inline Blob here
+  // would hit the same iOS Safari corruption bug far more often than any of
+  // the dedicated photo tables did.
   sitePhotoPath?: string
-  // True when the local sitePhoto blob is newer than whatever's at
+  // True when the local hero photo blob is newer than whatever's at
   // sitePhotoPath remotely — set on every photo change, cleared once the
   // replacement upload actually succeeds. Needed because sitePhotoPath alone
   // can't tell "no photo yet" apart from "photo changed since this path was

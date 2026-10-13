@@ -8,6 +8,7 @@ import { groupUprights } from '../db/groupUprights'
 import type { WireDeckRow } from '../db/groupWireDecks'
 import { groupWireDecks } from '../db/groupWireDecks'
 import { getPhotosForItem, listBeamsBySite, listMiscItemsBySite, listUprightsBySite, listWireDecksBySite } from '../db/items'
+import { getSiteHeroPhoto } from '../db/locations'
 import { listProjectPhotos } from '../db/projectPhotos'
 import type { Site } from '../models/types'
 
@@ -54,9 +55,10 @@ export async function exportSitePhotosZip(site: Site, siteId: string): Promise<n
   const zip = new JSZip()
   let fileCount = 0
 
-  if (site.sitePhoto) {
+  const siteHeroPhoto = await getSiteHeroPhoto(siteId)
+  if (siteHeroPhoto) {
     fileCount++
-    zip.file(`Site Photo/site-photo.${blobExtension(site.sitePhoto)}`, site.sitePhoto)
+    zip.file(`Site Photo/site-photo.${blobExtension(siteHeroPhoto)}`, siteHeroPhoto)
   }
 
   const additionalPhotos = await listProjectPhotos(siteId)

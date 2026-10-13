@@ -476,6 +476,13 @@ button:disabled {
 .draggable-column-header {
   cursor: grab;
   user-select: none;
+  /* Without this, touch browsers treat a press-and-move on the header as a
+     scroll gesture instead of handing it to our pointer handlers, and iOS
+     shows its text-selection/callout menu on the long press. Only applied
+     while actually draggable — sort mode (.not-draggable below) needs
+     normal tap/scroll behavior back. */
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .draggable-column-header.dragging {
@@ -484,6 +491,8 @@ button:disabled {
 
 .draggable-column-header.not-draggable {
   cursor: default;
+  touch-action: auto;
+  -webkit-touch-callout: default;
 }
 
 .column-header-inner {
@@ -1102,6 +1111,11 @@ button:disabled {
   line-height: 1;
   padding-top: 4px;
   user-select: none;
+  /* Without this, touch browsers treat a press-and-move on the handle as a
+     scroll gesture instead of handing it to our pointer handlers, and iOS
+     shows its text-selection/callout menu on the long press. */
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .field-order-toolbar {

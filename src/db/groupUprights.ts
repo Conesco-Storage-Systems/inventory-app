@@ -8,11 +8,11 @@ export interface UprightRow {
   width: number
   height: string
   widthByHeight: string
-  columnLength: number
-  columnWidth: number
+  columnLength: string
+  columnWidth: string
   columnSizeDisplay: string
-  footplateLength: number
-  footplateWidth: number
+  footplateLength: string
+  footplateWidth: string
   footplateSizeDisplay: string
   footplateThickness: string
   anchorHoleCount: number
@@ -39,6 +39,20 @@ export function uprightHeightSortValue(height: string | undefined | null): numbe
   return Number(m[1]) * 12 + (m[2] ? Number(m[2]) : 0)
 }
 
+// Column/Footplate Length & Width are free text (same convention as
+// height) so they can hold a fraction exactly as written (e.g. "1-5/8")
+// — this pulls out a numeric value for sorting only, never stored.
+export function uprightDimensionSortValue(value: string | undefined | null): number {
+  if (!value) return 0
+  const cleaned = value.replace(/"/g, '').trim()
+  let m = cleaned.match(/^(\d+(?:\.\d+)?)[\s-](\d+)\/(\d+)$/)
+  if (m) return Number(m[1]) + Number(m[2]) / Number(m[3])
+  m = cleaned.match(/^(\d+)\/(\d+)$/)
+  if (m) return Number(m[1]) / Number(m[2])
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : 0
+}
+
 export function groupUprights(uprights: Upright[]): UprightRow[] {
   const rows = new Map<string, UprightRow>()
 
@@ -48,10 +62,10 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       upright.style,
       upright.width,
       upright.height,
-      upright.columnLength,
-      upright.columnWidth,
-      upright.footplateLength,
-      upright.footplateWidth,
+      upright.columnLength ?? '',
+      upright.columnWidth ?? '',
+      upright.footplateLength ?? '',
+      upright.footplateWidth ?? '',
       upright.footplateThickness ?? '',
       upright.anchorHoleCount,
       upright.holeSize,
@@ -79,11 +93,11 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       width: upright.width,
       height: upright.height ?? '',
       widthByHeight: `${upright.width}" x ${upright.height ?? ''}`,
-      columnLength: upright.columnLength,
-      columnWidth: upright.columnWidth,
-      columnSizeDisplay: `${upright.columnLength}" x ${upright.columnWidth}"`,
-      footplateLength: upright.footplateLength,
-      footplateWidth: upright.footplateWidth,
+      columnLength: upright.columnLength ?? '',
+      columnWidth: upright.columnWidth ?? '',
+      columnSizeDisplay: `${upright.columnLength ?? ''}" x ${upright.columnWidth ?? ''}"`,
+      footplateLength: upright.footplateLength ?? '',
+      footplateWidth: upright.footplateWidth ?? '',
       footplateSizeDisplay:
         upright.footplateLength || upright.footplateWidth
           ? `${upright.footplateLength}" x ${upright.footplateWidth}"`

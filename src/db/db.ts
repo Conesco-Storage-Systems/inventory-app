@@ -515,6 +515,60 @@ class InventoryDB extends Dexie {
           delete row.sitePhoto
         })
     })
+    // Upright Column Length/Width and Footplate Length/Width become free
+    // text (same convention as Beam length / Upright height) — these were
+    // plain numbers, which silently discarded anything that wasn't a clean
+    // decimal: typing a fraction like "1-5/8" got coerced to 0 at save
+    // time instead of kept.
+    this.version(18).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+    }).upgrade(async (tx) => {
+      const fields = ['columnLength', 'columnWidth', 'footplateLength', 'footplateWidth'] as const
+      await tx
+        .table('uprights')
+        .toCollection()
+        .modify((upright) => {
+          if (typeof upright.columnLength === 'string') return
+          let changed = false
+          for (const field of fields) {
+            // Same reasoning as the upright height / beam length fixes: a
+            // device with nothing real set locally has nothing to push —
+            // forcing it to 'pending' here could overwrite a correct
+            // server value with a fabricated one.
+            if (upright[field] == null) continue
+            upright[field] = String(upright[field])
+            changed = true
+          }
+          if (changed) {
+            upright.syncStatus = 'pending'
+            upright.updatedAt = Date.now()
+          }
+        })
+    })
   }
 }
 

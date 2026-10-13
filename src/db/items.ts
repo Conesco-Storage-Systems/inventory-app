@@ -310,10 +310,10 @@ export interface NewUprightInput {
   style: string
   width: number
   height: string
-  columnLength: number
-  columnWidth: number
-  footplateLength: number
-  footplateWidth: number
+  columnLength: string
+  columnWidth: string
+  footplateLength: string
+  footplateWidth: string
   footplateThickness: string
   anchorHoleCount: number
   holeSize: string
@@ -382,10 +382,10 @@ export interface UprightEditInput {
   style: string
   width: number
   height: string
-  columnLength: number
-  columnWidth: number
-  footplateLength: number
-  footplateWidth: number
+  columnLength: string
+  columnWidth: string
+  footplateLength: string
+  footplateWidth: string
   footplateThickness: string
   anchorHoleCount: number
   holeSize: string

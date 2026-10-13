@@ -338,10 +338,10 @@ function buildUpright(
     style: style.style,
     width: dims?.width ?? 0,
     height: dims?.height ?? '',
-    columnLength: dims?.columnLength ?? 0,
-    columnWidth: dims?.columnWidth ?? 0,
-    footplateLength: fp.length ?? 0,
-    footplateWidth: fp.width ?? 0,
+    columnLength: String(dims?.columnLength ?? 0),
+    columnWidth: String(dims?.columnWidth ?? 0),
+    footplateLength: String(fp.length ?? 0),
+    footplateWidth: String(fp.width ?? 0),
     // Not present in the legacy spreadsheet format being imported here —
     // left for someone to fill in later if needed.
     footplateThickness: '',

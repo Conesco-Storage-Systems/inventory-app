@@ -148,10 +148,13 @@ export interface Upright extends ItemBase {
   // "12' 6"", but a cut/repaired upright is sometimes a range as it's
   // written on the sheet, e.g. "8' - 10'" or "19'6" - 20'".
   height: string
-  columnLength: number
-  columnWidth: number
-  footplateLength: number
-  footplateWidth: number
+  // Free text, same convention as height — was a plain number, but that
+  // silently discarded anything that wasn't a clean decimal (a fraction
+  // like "1-5/8" would get coerced to 0 at save time instead of kept).
+  columnLength: string
+  columnWidth: string
+  footplateLength: string
+  footplateWidth: string
   // Free text (e.g. "3/16" or "1/4") — a distinct measurement from the
   // footplate's length/width above, so it's its own field rather than
   // folded into either of them.

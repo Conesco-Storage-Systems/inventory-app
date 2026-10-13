@@ -7,7 +7,7 @@ import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
 import { groupBeams, type BeamRow } from '../db/groupBeams'
 import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
-import { groupUprights, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
+import { groupUprights, uprightDimensionSortValue, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
 import { exportSheetsToExcel } from '../export/exportToExcel'
@@ -330,13 +330,13 @@ export default function AllInventory() {
       label: 'Column Size',
       render: (row) => row.columnSizeDisplay,
       getValue: (row) => row.columnSizeDisplay,
-      sortValue: (row) => row.columnLength * 100000 + row.columnWidth,
+      sortValue: (row) => uprightDimensionSortValue(row.columnLength) * 100000 + uprightDimensionSortValue(row.columnWidth),
     },
     footplateSize: {
       label: 'Footplate Size',
       render: (row) => row.footplateSizeDisplay,
       getValue: (row) => row.footplateSizeDisplay,
-      sortValue: (row) => row.footplateLength * 100000 + row.footplateWidth,
+      sortValue: (row) => uprightDimensionSortValue(row.footplateLength) * 100000 + uprightDimensionSortValue(row.footplateWidth),
     },
     anchorHoleCount: {
       label: 'Anchor Hole Count',

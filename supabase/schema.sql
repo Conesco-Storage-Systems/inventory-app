@@ -65,10 +65,10 @@ create table uprights (
   style text not null default '',
   width numeric not null default 0,
   height text not null default '',
-  column_length numeric not null default 0,
-  column_width numeric not null default 0,
-  footplate_length numeric not null default 0,
-  footplate_width numeric not null default 0,
+  column_length text not null default '',
+  column_width text not null default '',
+  footplate_length text not null default '',
+  footplate_width text not null default '',
   footplate_thickness text not null default '',
   anchor_hole_count integer not null default 0,
   hole_size text not null default '',
@@ -794,3 +794,20 @@ create trigger sales_quotes_reject_stale_update before update on sales_quotes
 -- database (it's just the one new column; the create table above already
 -- reflects it for a fresh setup).
 alter table uprights add column if not exists footplate_thickness text not null default '';
+
+-- Column Length/Width and Footplate Length/Width on Uprights become free
+-- text (same convention as height/footplate_thickness above), so a
+-- fraction like "1-5/8" can be entered exactly as written instead of
+-- silently being discarded. These columns previously existed as `numeric`
+-- — this changes their type in place rather than adding new ones, so run
+-- it against the live database (the create table above already reflects
+-- the new type for a fresh setup). The `using ... ::text` cast preserves
+-- every existing value exactly (e.g. 18 -> '18'), with no data loss.
+alter table uprights alter column column_length type text using column_length::text;
+alter table uprights alter column column_length set default '';
+alter table uprights alter column column_width type text using column_width::text;
+alter table uprights alter column column_width set default '';
+alter table uprights alter column footplate_length type text using footplate_length::text;
+alter table uprights alter column footplate_length set default '';
+alter table uprights alter column footplate_width type text using footplate_width::text;
+alter table uprights alter column footplate_width set default '';

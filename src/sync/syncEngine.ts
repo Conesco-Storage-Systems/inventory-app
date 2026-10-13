@@ -1057,16 +1057,31 @@ async function pullSalesQuoteLineItems(): Promise<void> {
 
 // ---------- item photos ----------
 
+// iOS Safari's IndexedDB can hand back a Blob whose `.size` property still
+// reports the original (correct) byte count even though the underlying
+// disk-backed data is actually gone — passing that Blob straight to
+// fetch/XHR either silently serializes an empty body or fails outright,
+// which is why checking `.size` alone wasn't enough (some corrupted photos
+// still reported a nonzero size). Actually reading the bytes out via
+// arrayBuffer() exposes the real state, and uploading that materialized
+// buffer instead of the original Blob reference sidesteps whatever is
+// broken in the browser's handling of the disk-backed reference itself.
+async function readBlobBytes(blob: Blob): Promise<ArrayBuffer | null> {
+  try {
+    const buf = await blob.arrayBuffer()
+    return buf.byteLength > 0 ? buf : null
+  } catch {
+    return null
+  }
+}
+
 async function pushPhotos(): Promise<void> {
   const pending = await db.photos.where('uploadStatus').equals('pending').toArray()
   for (const photo of pending) {
     try {
       const blobRow = await db.photoBlobs.get(photo.id)
-      if (!blobRow || !(blobRow.blob instanceof Blob) || blobRow.blob.size === 0) {
-        // Known iOS Safari/WebKit IndexedDB bug: a stored Blob can silently
-        // corrupt down to 0 bytes. There's no image data left to retry —
-        // flag it distinctly and stop retrying, rather than looping forever
-        // on Supabase's generic "No content provided".
+      const bytes = blobRow ? await readBlobBytes(blobRow.blob) : null
+      if (!bytes) {
         reportSyncError(`[sync] photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
         await db.photos.update(photo.id, { uploadStatus: 'failed' })
         continue
@@ -1075,7 +1090,7 @@ async function pushPhotos(): Promise<void> {
       const path = `${photo.itemId}/item/${photo.id}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(path, blobRow.blob, { upsert: true, contentType: blobRow.blob.type })
+        .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
       if (uploadError) {
         reportSyncError(`[sync] photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
         continue
@@ -1176,7 +1191,8 @@ async function pushProjectPhotos(): Promise<void> {
   for (const photo of pending) {
     try {
       const blobRow = await db.projectPhotoBlobs.get(photo.id)
-      if (!blobRow || !(blobRow.blob instanceof Blob) || blobRow.blob.size === 0) {
+      const bytes = blobRow ? await readBlobBytes(blobRow.blob) : null
+      if (!bytes) {
         reportSyncError(`[sync] project photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
         await db.projectPhotos.update(photo.id, { uploadStatus: 'failed' })
         continue
@@ -1185,7 +1201,7 @@ async function pushProjectPhotos(): Promise<void> {
       const path = `${photo.siteId}/project/${photo.id}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(path, blobRow.blob, { upsert: true, contentType: blobRow.blob.type })
+        .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
       if (uploadError) {
         reportSyncError(`[sync] project photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
         continue
@@ -1258,7 +1274,8 @@ async function pushBolPhotos(): Promise<void> {
   for (const photo of pending) {
     try {
       const blobRow = await db.bolPhotoBlobs.get(photo.id)
-      if (!blobRow || !(blobRow.blob instanceof Blob) || blobRow.blob.size === 0) {
+      const bytes = blobRow ? await readBlobBytes(blobRow.blob) : null
+      if (!bytes) {
         reportSyncError(`[sync] bol photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
         await db.bolPhotos.update(photo.id, { uploadStatus: 'failed' })
         continue
@@ -1267,7 +1284,7 @@ async function pushBolPhotos(): Promise<void> {
       const path = `bol/${photo.bolId}/${photo.id}.jpg`
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(path, blobRow.blob, { upsert: true, contentType: blobRow.blob.type })
+        .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
       if (uploadError) {
         reportSyncError(`[sync] bol photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
         continue

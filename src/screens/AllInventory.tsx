@@ -874,30 +874,24 @@ export default function AllInventory() {
             <button type="button" onClick={handleExport} className="export-button">
               Export to Excel
             </button>
-            <button type="button" onClick={handleGeneratePdf} disabled={pdfSelections.size === 0}>
-              Generate PDF{pdfSelections.size > 0 ? ` (${pdfSelections.size})` : ''}
-            </button>
-            {quoteId && (
-              <button type="button" onClick={handleGenerateQuote} disabled={selections.size === 0}>
-                Generate Quote ({selections.size})
-              </button>
-            )}
           </p>
 
           <div ref={toolbarSentinelRef} />
           <div ref={stickyToolbarRef} className={`sticky-toolbar${toolbarStuck ? ' sticky-toolbar--stuck' : ''}`}>
             <div className="sticky-toolbar-inner">
-              <div className="sticky-toolbar-left">
-                <div className="item-search-row">
-                  <input
-                    type="text"
-                    className="item-search-input"
-                    placeholder="Search…"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+              <div className="sticky-toolbar-stack">
+                <div className="sticky-toolbar-top-row">
+                  <div className="item-search-row">
+                    <input
+                      type="text"
+                      className="item-search-input"
+                      placeholder="Search…"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  {activeSectionLabel && <h2 className="sticky-toolbar-section-label">{activeSectionLabel}</h2>}
                 </div>
-                {activeSectionLabel && <h2 className="sticky-toolbar-section-label">{activeSectionLabel}</h2>}
                 <div className="sticky-toolbar-table-actions" ref={setToolbarButtonSlot} />
               </div>
             </div>
@@ -907,93 +901,115 @@ export default function AllInventory() {
 
       {!hasItems && <p className="placeholder-note">No items across any active locations yet.</p>}
 
-      {uprightRows.length > 0 && (
-        <section className="item-section" ref={(el) => { sectionRefs.current['Uprights'] = el }}>
-          <h2>Uprights</h2>
-          <ReadOnlyItemTable<string, AllUprightRow>
-            storageKey={quoteId ? 'allInventoryUprightColumnsQuote' : 'allInventoryUprightColumns'}
-            title="Uprights Columns"
-            columns={uprightColumns}
-            defaultOrder={uprightOrder}
-            rows={displayedUprightRows}
-            filterOptions={uprightFilterOptions}
-            filters={uprightFilters}
-            onFilterChange={(key, values) => setUprightFilters((prev) => ({ ...prev, [key]: values }))}
-            emptyMessage="No uprights match your search or filters."
-            wrapColumnKeys={['notes']}
-            leftAlignColumnKeys={['location']}
-            active={activeSectionLabel === 'Uprights'}
-            toolbarButtonSlot={toolbarButtonSlot}
-            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('upright')]}
-          />
-        </section>
-      )}
+      {(() => {
+        const generateActionButtons = (
+          <>
+            <button type="button" onClick={handleGeneratePdf} disabled={pdfSelections.size === 0}>
+              Generate PDF{pdfSelections.size > 0 ? ` (${pdfSelections.size})` : ''}
+            </button>
+            {quoteId && (
+              <button type="button" onClick={handleGenerateQuote} disabled={selections.size === 0}>
+                Generate Quote ({selections.size})
+              </button>
+            )}
+          </>
+        )
+        return (
+          <>
+            {uprightRows.length > 0 && (
+              <section className="item-section" ref={(el) => { sectionRefs.current['Uprights'] = el }}>
+                <h2>Uprights</h2>
+                <ReadOnlyItemTable<string, AllUprightRow>
+                  storageKey={quoteId ? 'allInventoryUprightColumnsQuote' : 'allInventoryUprightColumns'}
+                  title="Uprights Columns"
+                  columns={uprightColumns}
+                  defaultOrder={uprightOrder}
+                  rows={displayedUprightRows}
+                  filterOptions={uprightFilterOptions}
+                  filters={uprightFilters}
+                  onFilterChange={(key, values) => setUprightFilters((prev) => ({ ...prev, [key]: values }))}
+                  emptyMessage="No uprights match your search or filters."
+                  wrapColumnKeys={['notes']}
+                  leftAlignColumnKeys={['location']}
+                  active={activeSectionLabel === 'Uprights'}
+                  toolbarButtonSlot={toolbarButtonSlot}
+                  leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('upright')]}
+                  extraActions={generateActionButtons}
+                />
+              </section>
+            )}
 
-      {beamRows.length > 0 && (
-        <section className="item-section" ref={(el) => { sectionRefs.current['Beams'] = el }}>
-          <h2>Beams</h2>
-          <ReadOnlyItemTable<string, AllBeamRow>
-            storageKey={quoteId ? 'allInventoryBeamColumnsQuote' : 'allInventoryBeamColumns'}
-            title="Beams Columns"
-            columns={beamColumns}
-            defaultOrder={beamOrder}
-            rows={displayedBeamRows}
-            filterOptions={beamFilterOptions}
-            filters={beamFilters}
-            onFilterChange={(key, values) => setBeamFilters((prev) => ({ ...prev, [key]: values }))}
-            emptyMessage="No beams match your search or filters."
-            wrapColumnKeys={['notes']}
-            leftAlignColumnKeys={['location']}
-            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('beam')]}
-            active={activeSectionLabel === 'Beams'}
-            toolbarButtonSlot={toolbarButtonSlot}
-          />
-        </section>
-      )}
+            {beamRows.length > 0 && (
+              <section className="item-section" ref={(el) => { sectionRefs.current['Beams'] = el }}>
+                <h2>Beams</h2>
+                <ReadOnlyItemTable<string, AllBeamRow>
+                  storageKey={quoteId ? 'allInventoryBeamColumnsQuote' : 'allInventoryBeamColumns'}
+                  title="Beams Columns"
+                  columns={beamColumns}
+                  defaultOrder={beamOrder}
+                  rows={displayedBeamRows}
+                  filterOptions={beamFilterOptions}
+                  filters={beamFilters}
+                  onFilterChange={(key, values) => setBeamFilters((prev) => ({ ...prev, [key]: values }))}
+                  emptyMessage="No beams match your search or filters."
+                  wrapColumnKeys={['notes']}
+                  leftAlignColumnKeys={['location']}
+                  leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('beam')]}
+                  active={activeSectionLabel === 'Beams'}
+                  toolbarButtonSlot={toolbarButtonSlot}
+                  extraActions={generateActionButtons}
+                />
+              </section>
+            )}
 
-      {wireDeckRows.length > 0 && (
-        <section className="item-section" ref={(el) => { sectionRefs.current['Wire Decks'] = el }}>
-          <h2>Wire Decks</h2>
-          <ReadOnlyItemTable<string, AllWireDeckRow>
-            storageKey={quoteId ? 'allInventoryWireDeckColumnsQuote' : 'allInventoryWireDeckColumns'}
-            title="Wire Decks Columns"
-            columns={wireDeckColumns}
-            defaultOrder={wireDeckOrder}
-            rows={displayedWireDeckRows}
-            filterOptions={wireDeckFilterOptions}
-            filters={wireDeckFilters}
-            onFilterChange={(key, values) => setWireDeckFilters((prev) => ({ ...prev, [key]: values }))}
-            emptyMessage="No wire decks match your search or filters."
-            wrapColumnKeys={['notes']}
-            leftAlignColumnKeys={['location']}
-            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('wireDeck')]}
-            active={activeSectionLabel === 'Wire Decks'}
-            toolbarButtonSlot={toolbarButtonSlot}
-          />
-        </section>
-      )}
+            {wireDeckRows.length > 0 && (
+              <section className="item-section" ref={(el) => { sectionRefs.current['Wire Decks'] = el }}>
+                <h2>Wire Decks</h2>
+                <ReadOnlyItemTable<string, AllWireDeckRow>
+                  storageKey={quoteId ? 'allInventoryWireDeckColumnsQuote' : 'allInventoryWireDeckColumns'}
+                  title="Wire Decks Columns"
+                  columns={wireDeckColumns}
+                  defaultOrder={wireDeckOrder}
+                  rows={displayedWireDeckRows}
+                  filterOptions={wireDeckFilterOptions}
+                  filters={wireDeckFilters}
+                  onFilterChange={(key, values) => setWireDeckFilters((prev) => ({ ...prev, [key]: values }))}
+                  emptyMessage="No wire decks match your search or filters."
+                  wrapColumnKeys={['notes']}
+                  leftAlignColumnKeys={['location']}
+                  leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('wireDeck')]}
+                  active={activeSectionLabel === 'Wire Decks'}
+                  toolbarButtonSlot={toolbarButtonSlot}
+                  extraActions={generateActionButtons}
+                />
+              </section>
+            )}
 
-      {miscRows.length > 0 && (
-        <section className="item-section" ref={(el) => { sectionRefs.current['Other'] = el }}>
-          <h2>Other</h2>
-          <ReadOnlyItemTable<string, AllMiscItemRow>
-            storageKey={quoteId ? 'allInventoryMiscColumnsQuote' : 'allInventoryMiscColumns'}
-            title="Other Items Columns"
-            columns={miscColumns}
-            defaultOrder={miscOrder}
-            rows={displayedMiscRows}
-            filterOptions={miscFilterOptions}
-            filters={miscFilters}
-            onFilterChange={(key, values) => setMiscFilters((prev) => ({ ...prev, [key]: values }))}
-            emptyMessage="No items match your search or filters."
-            wrapColumnKeys={['notes', 'itemDescription']}
-            leftAlignColumnKeys={['location']}
-            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('misc')]}
-            active={activeSectionLabel === 'Other'}
-            toolbarButtonSlot={toolbarButtonSlot}
-          />
-        </section>
-      )}
+            {miscRows.length > 0 && (
+              <section className="item-section" ref={(el) => { sectionRefs.current['Other'] = el }}>
+                <h2>Other</h2>
+                <ReadOnlyItemTable<string, AllMiscItemRow>
+                  storageKey={quoteId ? 'allInventoryMiscColumnsQuote' : 'allInventoryMiscColumns'}
+                  title="Other Items Columns"
+                  columns={miscColumns}
+                  defaultOrder={miscOrder}
+                  rows={displayedMiscRows}
+                  filterOptions={miscFilterOptions}
+                  filters={miscFilters}
+                  onFilterChange={(key, values) => setMiscFilters((prev) => ({ ...prev, [key]: values }))}
+                  emptyMessage="No items match your search or filters."
+                  wrapColumnKeys={['notes', 'itemDescription']}
+                  leftAlignColumnKeys={['location']}
+                  leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('misc')]}
+                  active={activeSectionLabel === 'Other'}
+                  toolbarButtonSlot={toolbarButtonSlot}
+                  extraActions={generateActionButtons}
+                />
+              </section>
+            )}
+          </>
+        )
+      })()}
     </main>
   )
 }

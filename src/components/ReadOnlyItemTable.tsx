@@ -51,6 +51,10 @@ interface ReadOnlyItemTableProps<TKey extends string, TRow extends { key: string
   // Columns/Sort buttons. Omit on a page with no sticky toolbar at all.
   active?: boolean
   toolbarButtonSlot?: HTMLDivElement | null
+  // Extra buttons (e.g. Generate PDF / Generate Quote) rendered on the same
+  // row as Filter Columns/Sort, right-aligned — travels through the same
+  // sticky-portal mechanism so it freezes together with them.
+  extraActions?: ReactNode
 }
 
 function compareValues(a: number | string, b: number | string): number {
@@ -75,6 +79,7 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   leadingColumns = [],
   active = false,
   toolbarButtonSlot = null,
+  extraActions,
 }: ReadOnlyItemTableProps<TKey, TRow>) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<TKey>(
     storageKey,
@@ -154,16 +159,21 @@ export default function ReadOnlyItemTable<TKey extends string, TRow extends { ke
   return (
     <>
       <StickyTableToolbarButtons wrapperRef={wrapperRef} active={active} portalTarget={toolbarButtonSlot}>
-        <button type="button" className="column-picker-button" onClick={() => setPickerOpen(true)}>
-          Filter Columns
-        </button>
-        <button
-          type="button"
-          className={`sort-toggle-button${sortEnabled ? ' sort-toggle-button--active' : ''}`}
-          onClick={handleToggleSort}
-        >
-          Sort
-        </button>
+        <div className="item-table-toolbar-actions">
+          <div className="item-table-toolbar-left-group">
+            <button type="button" className="column-picker-button" onClick={() => setPickerOpen(true)}>
+              Filter Columns
+            </button>
+            <button
+              type="button"
+              className={`sort-toggle-button${sortEnabled ? ' sort-toggle-button--active' : ''}`}
+              onClick={handleToggleSort}
+            >
+              Sort
+            </button>
+          </div>
+          {extraActions && <div className="item-table-toolbar-extra">{extraActions}</div>}
+        </div>
       </StickyTableToolbarButtons>
 
       <div className="item-table-wrap" ref={wrapperRef}>

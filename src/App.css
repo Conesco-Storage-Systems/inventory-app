@@ -395,6 +395,43 @@ button:disabled {
   margin-bottom: 0;
 }
 
+/* Wraps Filter Columns/Sort plus any extra per-section actions (e.g.
+   Generate PDF/Quote on All Offsite Inventory) so the extras land on the
+   right of the same row. Scoped to its own classes — .table-toolbar-row
+   itself stays untouched since WireDeckTable also uses it with its own
+   left-grouped buttons. */
+.item-table-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+
+.item-table-toolbar-left-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Filter Columns' own margin-bottom: 12px (needed where it sits alone
+   above a table elsewhere, e.g. BeamTable/UprightTable/MiscItemTable) is
+   normally zeroed by ".table-toolbar-row .column-picker-button" — but
+   that descendant selector stops matching once this row's buttons get
+   portaled into the sticky bar, since the portal moves them out of
+   .table-toolbar-row's DOM subtree entirely. Zero it here instead, since
+   .item-table-toolbar-left-group travels with the portal either way. */
+.item-table-toolbar-left-group .column-picker-button {
+  margin-bottom: 0;
+}
+
+.item-table-toolbar-extra {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .column-picker-button {
   font-size: 14px;
   padding: 8px 16px;
@@ -739,6 +776,23 @@ button:disabled {
   gap: 8px;
 }
 
+/* All Offsite Inventory's own sticky toolbar layout — kept separate from
+   .sticky-toolbar-left (LocationDetail's simpler version) since this one
+   needs two full-width stacked rows instead of one column of items. */
+.sticky-toolbar-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sticky-toolbar-top-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .sticky-toolbar-section-label {
   margin: 0;
 }
@@ -759,6 +813,16 @@ button:disabled {
   display: flex;
   gap: 12px;
   align-self: flex-start;
+}
+
+/* Once stuck, stretch the portal slot to the toolbar's full width so
+   Generate PDF/Quote (via .item-table-toolbar-actions' space-between)
+   land at the far right again, separated from Filter Columns/Sort —
+   same positioning as before these moved into the per-section buttons.
+   Left as shrink-to-fit otherwise since the slot sits empty unstuck. */
+.sticky-toolbar--stuck .sticky-toolbar-table-actions {
+  align-self: stretch;
+  width: 100%;
 }
 
 .item-section-header-actions {

@@ -26,13 +26,31 @@ interface QuoteSelection {
 }
 
 function describeBeamRow(row: BeamRow): string {
-  return [row.style, row.widthByLength, row.color, row.pinCount && `${row.pinCount} pin`, row.step && `${row.step} step`, row.condition]
+  return [
+    row.style,
+    row.widthByLength,
+    row.color,
+    row.pinCount && `${row.pinCount} pin`,
+    row.step && `${row.step} step`,
+    row.condition,
+    row.stamp,
+    row.stickers,
+  ]
     .filter(Boolean)
     .join(', ')
 }
 
 function describeUprightRow(row: UprightRow): string {
-  return [row.style, row.widthByHeight, row.color, row.gauge && `${row.gauge} ga`, row.condition]
+  const footplate =
+    row.footplateLength || row.footplateWidth ? `${row.footplateLength}"x${row.footplateWidth}" FP` : ''
+  return [
+    row.style,
+    `${row.widthByHeight} x ${row.columnSizeDisplay}`,
+    row.color,
+    footplate,
+    row.condition,
+    row.gauge && `${row.gauge} ga`,
+  ]
     .filter(Boolean)
     .join(', ')
 }

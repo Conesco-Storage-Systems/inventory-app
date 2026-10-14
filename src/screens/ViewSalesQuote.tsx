@@ -87,8 +87,8 @@ export default function ViewSalesQuote() {
             <thead>
               <tr>
                 <th>Location</th>
-                <th>Description</th>
                 <th>Quantity</th>
+                <th>Description</th>
                 {!quote.canceledAt && <th></th>}
               </tr>
             </thead>
@@ -96,8 +96,8 @@ export default function ViewSalesQuote() {
               {lineItems.map((li) => (
                 <tr key={li.id}>
                   <td>{li.siteName}</td>
-                  <td>{li.description}</td>
                   <td>{li.quantityHeld}</td>
+                  <td>{li.description}</td>
                   {!quote.canceledAt && (
                     <td>
                       <button type="button" className="delete-button" onClick={() => cancelSalesQuoteLineItem(li.id)}>

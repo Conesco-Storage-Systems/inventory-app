@@ -355,6 +355,12 @@ export interface SalesOrderLineItem {
   // this field existed — de-dup falls back to computing it from their own
   // (never-split) current fields.
   importSourceKey?: string
+  // Set at import time when this row's (soNumber, description,
+  // warehouseCode, quantity) signature already matched an existing line
+  // item — it still gets imported (so nothing from the report is ever
+  // silently dropped), just flagged for review in its own section instead
+  // of being mixed in with genuinely new rows.
+  flaggedDuplicate?: boolean
   status: SalesOrderLineItemStatus
   tiedSiteId: string
   tiedSiteName: string

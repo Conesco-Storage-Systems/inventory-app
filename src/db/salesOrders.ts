@@ -103,35 +103,53 @@ function effectiveImportSourceKey(li: SalesOrderLineItem): string {
   return li.importSourceKey ?? importKey(li)
 }
 
-export async function importSalesOrderLineItems(items: ParsedSoLineItem[]): Promise<{ imported: number; skippedDuplicates: number }> {
-  const existing = await db.salesOrderLineItems.toArray()
-  const existingKeys = new Set(existing.map(effectiveImportSourceKey))
-
-  const now = Date.now()
-  let imported = 0
-  let skippedDuplicates = 0
-  const toAdd: SalesOrderLineItem[] = []
-
-  for (const parsed of items) {
+// Flags rather than drops a match — every parsed row still gets imported,
+// so nothing from the report is ever silently lost, but a row whose
+// signature already exists (either already in the system, or repeated
+// earlier in this same file) is marked for review instead of blending in
+// with genuinely new rows.
+function classifyImportItems(
+  items: ParsedSoLineItem[],
+  existing: SalesOrderLineItem[],
+): { key: string; isDuplicate: boolean }[] {
+  const seenKeys = new Set(existing.map(effectiveImportSourceKey))
+  return items.map((parsed) => {
     const key = importKey({
       soNumber: parsed.soNumber,
       description: parsed.description,
       warehouseCode: parsed.warehouseCode,
       quantityOrdered: parsed.quantity,
     })
-    if (existingKeys.has(key)) {
-      skippedDuplicates++
-      continue
-    }
-    existingKeys.add(key)
-    imported++
-    toAdd.push({
+    const isDuplicate = seenKeys.has(key)
+    seenKeys.add(key)
+    return { key, isDuplicate }
+  })
+}
+
+// Used by the import preview to show which rows will land in the
+// "Duplicates" section, before anything is actually committed.
+export async function previewImportDuplicateFlags(items: ParsedSoLineItem[]): Promise<boolean[]> {
+  const existing = await db.salesOrderLineItems.toArray()
+  return classifyImportItems(items, existing).map((c) => c.isDuplicate)
+}
+
+export async function importSalesOrderLineItems(items: ParsedSoLineItem[]): Promise<{ imported: number; flaggedDuplicates: number }> {
+  const existing = await db.salesOrderLineItems.toArray()
+  const classified = classifyImportItems(items, existing)
+
+  const now = Date.now()
+  let flaggedDuplicates = 0
+  const toAdd: SalesOrderLineItem[] = items.map((parsed, i) => {
+    const { key, isDuplicate } = classified[i]
+    if (isDuplicate) flaggedDuplicates++
+    return {
       id: uuidv4(),
       soNumber: parsed.soNumber,
       description: parsed.description,
       warehouseCode: parsed.warehouseCode,
       quantityOrdered: parsed.quantity,
       importSourceKey: key,
+      flaggedDuplicate: isDuplicate,
       status: 'pending',
       tiedSiteId: '',
       tiedSiteName: '',
@@ -144,11 +162,11 @@ export async function importSalesOrderLineItems(items: ParsedSoLineItem[]): Prom
       createdAt: now,
       updatedAt: now,
       syncStatus: 'pending',
-    })
-  }
+    }
+  })
 
   if (toAdd.length > 0) await db.salesOrderLineItems.bulkAdd(toAdd)
-  return { imported, skippedDuplicates }
+  return { imported: toAdd.length, flaggedDuplicates }
 }
 
 export async function listPendingSalesOrderLineItems(): Promise<SalesOrderLineItem[]> {

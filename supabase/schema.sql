@@ -215,6 +215,7 @@ create table sales_order_line_items (
   tied_description text not null default '',
   tied_at bigint not null default 0,
   tied_by text not null default '',
+  flagged_duplicate boolean not null default false,
   imported_at bigint not null,
   created_at bigint not null,
   updated_at bigint not null
@@ -623,6 +624,7 @@ create table if not exists sales_order_line_items (
   tied_description text not null default '',
   tied_at bigint not null default 0,
   tied_by text not null default '',
+  flagged_duplicate boolean not null default false,
   imported_at bigint not null,
   created_at bigint not null,
   updated_at bigint not null
@@ -818,3 +820,11 @@ alter table uprights alter column width type text using width::text;
 alter table uprights alter column width set default '';
 alter table uprights alter column anchor_hole_count type text using anchor_hole_count::text;
 alter table uprights alter column anchor_hole_count set default '';
+
+-- Sales Order line item import no longer silently skips a row whose
+-- (so_number, description, warehouse_code, quantity) signature already
+-- matches one already in the system — it still gets imported, just
+-- flagged, so it shows in its own "Duplicates" section for review instead
+-- of being dropped. Run this against the live database (the create table
+-- above already reflects it for a fresh setup).
+alter table sales_order_line_items add column if not exists flagged_duplicate boolean not null default false;

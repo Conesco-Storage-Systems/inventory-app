@@ -7,10 +7,12 @@ import {
   deletePendingSalesOrderLineItem,
   importSalesOrderLineItems,
   listPendingSalesOrderLineItems,
+  previewImportDuplicateFlags,
   tieSalesOrderLineItem,
   type TieAllocation,
 } from '../db/salesOrders'
 import { getSoReportSheetNames, parseSoReportWorkbook, type SoReportParseResult } from '../import/parseSoReport'
+import type { SalesOrderLineItem } from '../models/types'
 import { useRole } from '../state/RoleContext'
 import { formatSoNumber } from '../utils/soNumber'
 
@@ -22,6 +24,7 @@ export default function Procurement() {
   const [importFileName, setImportFileName] = useState<string | null>(null)
   const [importSheetNames, setImportSheetNames] = useState<string[]>([])
   const [importPreview, setImportPreview] = useState<SoReportParseResult | null>(null)
+  const [importPreviewDuplicateFlags, setImportPreviewDuplicateFlags] = useState<boolean[]>([])
   const [importParsing, setImportParsing] = useState(false)
   const [importParseError, setImportParseError] = useState<string | null>(null)
   const [importCommitting, setImportCommitting] = useState(false)
@@ -55,6 +58,12 @@ export default function Procurement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tyRows, tyingLineItem?.quantityOrdered])
 
+  async function loadPreview(file: File, sheetName: string) {
+    const preview = await parseSoReportWorkbook(file, sheetName)
+    setImportPreview(preview)
+    setImportPreviewDuplicateFlags(await previewImportDuplicateFlags(preview.lineItems))
+  }
+
   async function handleImportFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -62,6 +71,7 @@ export default function Procurement() {
     setImportFile(file)
     setImportFileName(file.name)
     setImportPreview(null)
+    setImportPreviewDuplicateFlags([])
     setImportParseError(null)
     setImportResultMessage(null)
     setImportSheetNames([])
@@ -69,7 +79,7 @@ export default function Procurement() {
     try {
       const sheetNames = await getSoReportSheetNames(file)
       if (sheetNames.length === 1) {
-        setImportPreview(await parseSoReportWorkbook(file, sheetNames[0]))
+        await loadPreview(file, sheetNames[0])
       } else {
         setImportSheetNames(sheetNames)
       }
@@ -85,7 +95,7 @@ export default function Procurement() {
     setImportParseError(null)
     setImportParsing(true)
     try {
-      setImportPreview(await parseSoReportWorkbook(importFile, sheetName))
+      await loadPreview(importFile, sheetName)
     } catch (err) {
       setImportParseError(err instanceof Error ? err.message : 'Could not read that sheet.')
     } finally {
@@ -95,6 +105,7 @@ export default function Procurement() {
 
   function cancelImportPreview() {
     setImportPreview(null)
+    setImportPreviewDuplicateFlags([])
     setImportFile(null)
     setImportFileName(null)
     setImportSheetNames([])
@@ -105,10 +116,10 @@ export default function Procurement() {
     if (!importPreview) return
     setImportCommitting(true)
     try {
-      const { imported, skippedDuplicates } = await importSalesOrderLineItems(importPreview.lineItems)
+      const { imported, flaggedDuplicates } = await importSalesOrderLineItems(importPreview.lineItems)
       setImportResultMessage(
-        `Imported ${imported} new line item${imported === 1 ? '' : 's'}` +
-          (skippedDuplicates > 0 ? ` (${skippedDuplicates} already imported, skipped).` : '.'),
+        `Imported ${imported} line item${imported === 1 ? '' : 's'}` +
+          (flaggedDuplicates > 0 ? ` (${flaggedDuplicates} flagged as duplicates — see below).` : '.'),
       )
       cancelImportPreview()
     } finally {
@@ -160,6 +171,97 @@ export default function Procurement() {
     } finally {
       setTying(false)
     }
+  }
+
+  const previewNewItems = importPreview
+    ? importPreview.lineItems.filter((_, i) => !importPreviewDuplicateFlags[i])
+    : []
+  const previewDuplicateItems = importPreview
+    ? importPreview.lineItems.filter((_, i) => importPreviewDuplicateFlags[i])
+    : []
+  const normalPendingItems = pendingLineItems.filter((li) => !li.flaggedDuplicate)
+  const duplicatePendingItems = pendingLineItems.filter((li) => li.flaggedDuplicate)
+
+  // Shared by both the normal and "Duplicates" sections below — same
+  // columns, same tie/remove actions either way, since a flagged row still
+  // needs to be assignable or removable just like any other pending item.
+  function renderLineItemsTable(items: SalesOrderLineItem[]) {
+    return (
+      <div className="item-table-wrap">
+        <table className="item-table">
+          <thead>
+            <tr>
+              <th>SO #</th>
+              <th>Warehouse Code</th>
+              <th>Qty Ordered</th>
+              <th>Assign to Inventory</th>
+              <th>Description</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((li) => (
+              <Fragment key={li.id}>
+                <tr>
+                  <td>{formatSoNumber(li.soNumber)}</td>
+                  <td>{li.warehouseCode}</td>
+                  <td>{li.quantityOrdered}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={tyingId === li.id}
+                      onChange={(e) => (e.target.checked ? startTying(li.id) : cancelTying())}
+                    />
+                  </td>
+                  <td className="col-left">{li.description}</td>
+                  <td>
+                    <button type="button" className="delete-button" onClick={() => deletePendingSalesOrderLineItem(li.id)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+                {tyingId === li.id && (
+                  <tr>
+                    <td colSpan={6} className="col-left">
+                      <div className="tie-allocation-row">
+                        {tyRows.map((row, index) => {
+                          const othersTotal = tyRowsTotal - (Number(row.quantity) || 0)
+                          const maxQuantity = Math.max(0, li.quantityOrdered - othersTotal)
+                          return (
+                            <TieAllocationColumn
+                              key={index}
+                              activeSites={activeSites}
+                              value={row}
+                              maxQuantity={maxQuantity}
+                              onChange={(next) => updateTyRow(index, next)}
+                              onRemove={index > 0 ? () => removeTyRow(index) : undefined}
+                              isFirst={index === 0}
+                            />
+                          )
+                        })}
+                      </div>
+                      {tyRowsTotal > 0 && tyRowsTotal < li.quantityOrdered && (
+                        <p className="placeholder-note">
+                          {tyRowsTotal} of {li.quantityOrdered} accounted for so far — add another location to
+                          cover the rest, or confirm now and leave {li.quantityOrdered - tyRowsTotal} pending to
+                          tie later.
+                        </p>
+                      )}
+                      {tieError && <p className="field-error">{tieError}</p>}
+                      <p>
+                        <button type="button" onClick={handleConfirmTie} disabled={tying || tyRowsTotal === 0}>
+                          {tying ? 'Tying…' : 'Confirm Tie'}
+                        </button>
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
   }
 
   if (!permissions.viewProcurementDashboard) {
@@ -236,7 +338,65 @@ export default function Procurement() {
                 ? ` (${importPreview.skippedRows} row${importPreview.skippedRows === 1 ? '' : 's'} skipped — no quantity).`
                 : '.'}
             </p>
-            <div className="dialog-actions">
+
+            {previewNewItems.length > 0 && (
+              <div className="item-table-wrap">
+                <table className="item-table">
+                  <thead>
+                    <tr>
+                      <th>SO #</th>
+                      <th>Warehouse Code</th>
+                      <th>Qty Ordered</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewNewItems.map((li, i) => (
+                      <tr key={i}>
+                        <td>{formatSoNumber(li.soNumber)}</td>
+                        <td>{li.warehouseCode}</td>
+                        <td>{li.quantity}</td>
+                        <td className="col-left">{li.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {previewDuplicateItems.length > 0 && (
+              <>
+                <h3>Duplicates</h3>
+                <p className="placeholder-note">
+                  These match a line item already in the system — they'll still be imported, just flagged below for
+                  review.
+                </p>
+                <div className="item-table-wrap">
+                  <table className="item-table">
+                    <thead>
+                      <tr>
+                        <th>SO #</th>
+                        <th>Warehouse Code</th>
+                        <th>Qty Ordered</th>
+                        <th>Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewDuplicateItems.map((li, i) => (
+                        <tr key={i}>
+                          <td>{formatSoNumber(li.soNumber)}</td>
+                          <td>{li.warehouseCode}</td>
+                          <td>{li.quantity}</td>
+                          <td className="col-left">{li.description}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <div className="import-preview-actions">
               <button type="button" onClick={cancelImportPreview} disabled={importCommitting}>
                 Cancel
               </button>
@@ -250,80 +410,19 @@ export default function Procurement() {
         {pendingLineItems.length === 0 ? (
           <p className="placeholder-note">No pending Sales Order line items — import a report to bring some in.</p>
         ) : (
-          <div className="item-table-wrap">
-            <table className="item-table">
-              <thead>
-                <tr>
-                  <th>SO #</th>
-                  <th>Warehouse Code</th>
-                  <th>Qty Ordered</th>
-                  <th>Assign to Inventory</th>
-                  <th>Description</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingLineItems.map((li) => (
-                  <Fragment key={li.id}>
-                    <tr>
-                      <td>{formatSoNumber(li.soNumber)}</td>
-                      <td>{li.warehouseCode}</td>
-                      <td>{li.quantityOrdered}</td>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={tyingId === li.id}
-                          onChange={(e) => (e.target.checked ? startTying(li.id) : cancelTying())}
-                        />
-                      </td>
-                      <td className="col-left">{li.description}</td>
-                      <td>
-                        <button type="button" className="delete-button" onClick={() => deletePendingSalesOrderLineItem(li.id)}>
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                    {tyingId === li.id && (
-                      <tr>
-                        <td colSpan={6} className="col-left">
-                          <div className="tie-allocation-row">
-                            {tyRows.map((row, index) => {
-                              const othersTotal = tyRowsTotal - (Number(row.quantity) || 0)
-                              const maxQuantity = Math.max(0, li.quantityOrdered - othersTotal)
-                              return (
-                                <TieAllocationColumn
-                                  key={index}
-                                  activeSites={activeSites}
-                                  value={row}
-                                  maxQuantity={maxQuantity}
-                                  onChange={(next) => updateTyRow(index, next)}
-                                  onRemove={index > 0 ? () => removeTyRow(index) : undefined}
-                                  isFirst={index === 0}
-                                />
-                              )
-                            })}
-                          </div>
-                          {tyRowsTotal > 0 && tyRowsTotal < li.quantityOrdered && (
-                            <p className="placeholder-note">
-                              {tyRowsTotal} of {li.quantityOrdered} accounted for so far — add another location to
-                              cover the rest, or confirm now and leave {li.quantityOrdered - tyRowsTotal} pending to
-                              tie later.
-                            </p>
-                          )}
-                          {tieError && <p className="field-error">{tieError}</p>}
-                          <p>
-                            <button type="button" onClick={handleConfirmTie} disabled={tying || tyRowsTotal === 0}>
-                              {tying ? 'Tying…' : 'Confirm Tie'}
-                            </button>
-                          </p>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {normalPendingItems.length > 0 && renderLineItemsTable(normalPendingItems)}
+            {duplicatePendingItems.length > 0 && (
+              <>
+                <h3>Duplicates</h3>
+                <p className="placeholder-note">
+                  These matched a line item already in the system when imported — assign or remove them like any
+                  other pending item.
+                </p>
+                {renderLineItemsTable(duplicatePendingItems)}
+              </>
+            )}
+          </>
         )}
       </details>
     </main>

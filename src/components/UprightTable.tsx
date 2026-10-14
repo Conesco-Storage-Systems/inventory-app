@@ -5,9 +5,6 @@ import DraggableColumnHeader from './DraggableColumnHeader'
 import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { UprightRow } from '../db/groupUprights'
-import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
-import type { SalesQuoteLineItem } from '../models/types'
-import { formatDisplayName } from '../utils/displayName'
 
 type UprightColumnKey =
   | 'quantity'
@@ -50,20 +47,17 @@ const DEFAULT_UPRIGHT_COLUMN_ORDER: UprightColumnKey[] = [
   'photos',
 ]
 
-type HeldUprightRow = UprightRow & { heldByEmail?: string }
-
 interface UprightTableProps {
-  rows: HeldUprightRow[]
+  rows: UprightRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: UprightRow) => void
-  holds?: SalesQuoteLineItem[]
   // Whether the page is currently scrolled into this section — only then
   // does the header need to freeze in place as you scroll through it.
   active?: boolean
 }
 
-export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [], active = false }: UprightTableProps) {
+export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelect, active = false }: UprightTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<UprightColumnKey>(
     'uprightColumns',
     DEFAULT_UPRIGHT_COLUMN_ORDER,
@@ -72,15 +66,8 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
   const [pickerOpen, setPickerOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  const primaryRows = rows.filter((row) => !row.heldByEmail)
-  const heldRows = rows.filter((row) => row.heldByEmail)
-
-  const columns: Record<UprightColumnKey, { label: string; render: (row: HeldUprightRow) => ReactNode }> = {
-    quantity: {
-      label: 'Quantity',
-      render: (row) =>
-        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
-    },
+  const columns: Record<UprightColumnKey, { label: string; render: (row: UprightRow) => ReactNode }> = {
+    quantity: { label: 'Quantity', render: (row) => row.quantity },
     style: { label: 'Style', render: (row) => row.style },
     widthByHeight: { label: 'Width x Height', render: (row) => row.widthByHeight },
     color: { label: 'Color', render: (row) => row.color },
@@ -145,7 +132,7 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
                 <td colSpan={visibleOrder.length + 2}>No uprights match your search.</td>
               </tr>
             )}
-            {primaryRows.map((row) => (
+            {rows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -155,24 +142,6 @@ export default function UprightTable({ rows, siteId, selectedKeys, onToggleSelec
                   />
                 </td>
                 <td></td>
-                {visibleOrder.map((key) => (
-                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
-                    {columns[key].render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {heldRows.length > 0 && (
-              <tr className="item-table-group-row">
-                <td></td>
-                <td>On Hold</td>
-                <td colSpan={visibleOrder.length}></td>
-              </tr>
-            )}
-            {heldRows.map((row) => (
-              <tr key={row.key}>
-                <td></td>
-                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

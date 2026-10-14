@@ -1,8 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { db } from '../db/db'
-import { addSalesQuoteLineItem, computeHeldQuantity, getSalesQuote } from '../db/salesQuotes'
+import { addSalesQuoteLineItem, getSalesQuote } from '../db/salesQuotes'
 import type { ItemType } from '../models/types'
 import { useRole } from '../state/RoleContext'
 
@@ -24,7 +23,6 @@ export default function GenerateSalesQuote() {
   const selections = (location.state as { selections?: QuoteSelection[] } | null)?.selections ?? []
 
   const quote = useLiveQuery(() => (quoteId ? getSalesQuote(quoteId) : undefined), [quoteId])
-  const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -49,13 +47,6 @@ export default function GenerateSalesQuote() {
 
   const activeQuote = quote
 
-  // Re-checked here (not just the availability shown on the inventory
-  // page) since another sales person could have placed a hold in the time
-  // between selecting these items and saving quantities for them.
-  function currentlyAvailable(selection: QuoteSelection): number {
-    return Math.max(0, selection.rawQuantity - computeHeldQuantity(selection.itemIds, holds))
-  }
-
   async function handleSaveQuote() {
     setError(null)
     const toSave: { selection: QuoteSelection; qty: number }[] = []
@@ -66,10 +57,8 @@ export default function GenerateSalesQuote() {
       const qty = Number(raw)
       if (!Number.isFinite(qty) || qty <= 0) continue
 
-      if (qty > currentlyAvailable(selection)) {
-        setError(
-          `Only ${currentlyAvailable(selection)} of "${selection.description}" is available now — someone may have just held some of it.`,
-        )
+      if (qty > selection.rawQuantity) {
+        setError(`Only ${selection.rawQuantity} of "${selection.description}" is on hand.`)
         return
       }
       toSave.push({ selection, qty })
@@ -117,7 +106,7 @@ export default function GenerateSalesQuote() {
               <tr>
                 <th>Location</th>
                 <th>Description</th>
-                <th>Available</th>
+                <th>On Hand</th>
                 <th>Quantity for Quote</th>
               </tr>
             </thead>
@@ -126,13 +115,13 @@ export default function GenerateSalesQuote() {
                 <tr key={selection.key}>
                   <td>{selection.siteName}</td>
                   <td>{selection.description}</td>
-                  <td>{currentlyAvailable(selection)}</td>
+                  <td>{selection.rawQuantity}</td>
                   <td>
                     <input
                       type="number"
                       inputMode="numeric"
                       min={0}
-                      max={currentlyAvailable(selection)}
+                      max={selection.rawQuantity}
                       value={quantities[selection.key] ?? ''}
                       onChange={(e) => setQuantities((prev) => ({ ...prev, [selection.key]: e.target.value }))}
                     />

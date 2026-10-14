@@ -29,7 +29,6 @@ export default function Procurement() {
 
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
   const pendingLineItems = useLiveQuery(() => listPendingSalesOrderLineItems(), []) ?? []
-  const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const [tyingId, setTyingId] = useState<string | null>(null)
   const [tyRows, setTyRows] = useState<TieAllocationValue[]>([EMPTY_TIE_ALLOCATION])
@@ -295,7 +294,6 @@ export default function Procurement() {
                                 <TieAllocationColumn
                                   key={index}
                                   activeSites={activeSites}
-                                  holds={holds}
                                   value={row}
                                   maxQuantity={maxQuantity}
                                   onChange={(next) => updateTyRow(index, next)}

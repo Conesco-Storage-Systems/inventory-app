@@ -22,7 +22,7 @@ export interface Permissions {
   generateBillOfLading: boolean
   generateCustomerSheet: boolean
   manageSalesOrders: boolean
-  holdItemsForOrder: boolean
+  createSalesQuotes: boolean
   viewProcurementDashboard: boolean
   viewSalesDashboard: boolean
 }
@@ -39,7 +39,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateBillOfLading: true,
     generateCustomerSheet: true,
     manageSalesOrders: true,
-    holdItemsForOrder: true,
+    createSalesQuotes: true,
     viewProcurementDashboard: true,
     viewSalesDashboard: true,
   },
@@ -54,7 +54,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateBillOfLading: true,
     generateCustomerSheet: true,
     manageSalesOrders: false,
-    holdItemsForOrder: false,
+    createSalesQuotes: false,
     viewProcurementDashboard: false,
     viewSalesDashboard: false,
   },
@@ -69,7 +69,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateBillOfLading: false,
     generateCustomerSheet: true,
     manageSalesOrders: true,
-    holdItemsForOrder: true,
+    createSalesQuotes: true,
     viewProcurementDashboard: false,
     viewSalesDashboard: true,
   },
@@ -84,7 +84,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateBillOfLading: false,
     generateCustomerSheet: false,
     manageSalesOrders: false,
-    holdItemsForOrder: false,
+    createSalesQuotes: false,
     viewProcurementDashboard: false,
     viewSalesDashboard: false,
   },
@@ -102,7 +102,7 @@ const ROLE_PERMISSIONS: Record<Role, Permissions> = {
     generateBillOfLading: false,
     generateCustomerSheet: false,
     manageSalesOrders: false,
-    holdItemsForOrder: false,
+    createSalesQuotes: false,
     viewProcurementDashboard: true,
     viewSalesDashboard: false,
   },

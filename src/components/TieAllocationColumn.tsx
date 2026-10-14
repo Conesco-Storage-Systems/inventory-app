@@ -4,8 +4,7 @@ import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { listBeamsBySite, listMiscItemsBySite, listUprightsBySite, listWireDecksBySite } from '../db/items'
-import { computeAvailableQuantity } from '../db/salesQuotes'
-import type { ItemType, Site, SalesQuoteLineItem } from '../models/types'
+import type { ItemType, Site } from '../models/types'
 
 // Carries its own resolved selection (not just keys) so the parent can
 // build a tie allocation straight from this value without needing to
@@ -62,7 +61,6 @@ function describeMisc(row: MiscItemRow): string {
 
 interface TieAllocationColumnProps {
   activeSites: Site[]
-  holds: SalesQuoteLineItem[]
   value: TieAllocationValue
   // The most this column's quantity can be — whatever's still left on the
   // line item once every other column's own quantity is subtracted out.
@@ -81,7 +79,6 @@ interface TieAllocationColumnProps {
 // for every column.
 export default function TieAllocationColumn({
   activeSites,
-  holds,
   value,
   maxQuantity,
   onChange,
@@ -100,28 +97,28 @@ export default function TieAllocationColumn({
           itemType: 'beam' as ItemType,
           itemIds: row.ids,
           description: describeBeam(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
+          quantity: row.quantity,
         })),
         ...groupUprights(uprights).map((row) => ({
           key: `upright:${row.key}`,
           itemType: 'upright' as ItemType,
           itemIds: row.ids,
           description: describeUpright(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
+          quantity: row.quantity,
         })),
         ...groupWireDecks(wireDecks).map((row) => ({
           key: `wireDeck:${row.key}`,
           itemType: 'wireDeck' as ItemType,
           itemIds: row.ids,
           description: describeWireDeck(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
+          quantity: row.quantity,
         })),
         ...groupMiscItems(miscItems).map((row) => ({
           key: `misc:${row.key}`,
           itemType: 'misc' as ItemType,
           itemIds: row.ids,
           description: describeMisc(row),
-          quantity: computeAvailableQuantity(row.quantity, row.ids, holds),
+          quantity: row.quantity,
         })),
       ]
     : []

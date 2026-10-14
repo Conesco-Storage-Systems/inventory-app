@@ -5,9 +5,6 @@ import DraggableColumnHeader from './DraggableColumnHeader'
 import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { BeamRow } from '../db/groupBeams'
-import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
-import type { SalesQuoteLineItem } from '../models/types'
-import { formatDisplayName } from '../utils/displayName'
 
 type BeamColumnKey =
   | 'quantity'
@@ -44,18 +41,15 @@ const DEFAULT_BEAM_COLUMN_ORDER: BeamColumnKey[] = [
   'photos',
 ]
 
-type HeldBeamRow = BeamRow & { heldByEmail?: string }
-
 interface BeamTableProps {
-  rows: HeldBeamRow[]
+  rows: BeamRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: BeamRow) => void
-  holds?: SalesQuoteLineItem[]
   active?: boolean
 }
 
-export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, holds = [], active = false }: BeamTableProps) {
+export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, active = false }: BeamTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<BeamColumnKey>(
     'beamColumns',
     DEFAULT_BEAM_COLUMN_ORDER,
@@ -64,15 +58,8 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, 
   const [pickerOpen, setPickerOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  const primaryRows = rows.filter((row) => !row.heldByEmail)
-  const heldRows = rows.filter((row) => row.heldByEmail)
-
-  const columns: Record<BeamColumnKey, { label: string; render: (row: HeldBeamRow) => ReactNode }> = {
-    quantity: {
-      label: 'Quantity',
-      render: (row) =>
-        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
-    },
+  const columns: Record<BeamColumnKey, { label: string; render: (row: BeamRow) => ReactNode }> = {
+    quantity: { label: 'Quantity', render: (row) => row.quantity },
     style: { label: 'Style', render: (row) => row.style },
     widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
     color: { label: 'Color', render: (row) => row.color },
@@ -134,7 +121,7 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, 
                 <td colSpan={visibleOrder.length + 2}>No beams match your search.</td>
               </tr>
             )}
-            {primaryRows.map((row) => (
+            {rows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -144,24 +131,6 @@ export default function BeamTable({ rows, siteId, selectedKeys, onToggleSelect, 
                   />
                 </td>
                 <td></td>
-                {visibleOrder.map((key) => (
-                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
-                    {columns[key].render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {heldRows.length > 0 && (
-              <tr className="item-table-group-row">
-                <td></td>
-                <td>On Hold</td>
-                <td colSpan={visibleOrder.length}></td>
-              </tr>
-            )}
-            {heldRows.map((row) => (
-              <tr key={row.key}>
-                <td></td>
-                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

@@ -178,11 +178,10 @@ export default function GenerateCustomerSheetFlow({
   const allMiscItems = useLiveQuery(() => db.miscItems.toArray(), []) ?? []
 
   // Each seeded item's fields/photos are read from the *live* inventory row
-  // it overlaps with (by raw record id) — same matching the "On Hold"
-  // display uses — so the sheet always reflects the item's current
-  // details, not a stale snapshot from when it was seeded. Location joins
-  // the field list as just another checkable field, since seeds can span
-  // more than one site.
+  // it overlaps with (by raw record id) — so the sheet always reflects the
+  // item's current details, not a stale snapshot from when it was seeded.
+  // Location joins the field list as just another checkable field, since
+  // seeds can span more than one site.
   const sheetItems: SheetItem[] = seeds.map((seed): SheetItem => {
     const siteItems: SiteItemLists = {
       beams: allBeams.filter((row) => row.siteId === seed.siteId),

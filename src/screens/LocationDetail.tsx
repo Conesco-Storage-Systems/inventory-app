@@ -33,7 +33,6 @@ import {
 import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
 import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
-import { listHoldsBySite } from '../db/salesQuotes'
 import { getSiteHeroPhoto, removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { exportSitePhotosZip } from '../export/exportSitePhotosZip'
@@ -45,7 +44,6 @@ import {
 } from '../import/parseInventoryImport'
 import { useRole } from '../state/RoleContext'
 import { formatDisplayName } from '../utils/displayName'
-import { mergeRowsWithHolds } from '../utils/heldRows'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
 import { formatSoNumber } from '../utils/soNumber'
 
@@ -69,7 +67,6 @@ export default function LocationDetail() {
   const bols = useLiveQuery(() => (siteId ? listBolsBySite(siteId) : []), [siteId]) ?? []
   const customerSheets = useLiveQuery(() => (siteId ? listCustomerSheetsBySite(siteId) : []), [siteId]) ?? []
   const salesOrderLineItems = useLiveQuery(() => (siteId ? listTiedSalesOrderLineItemsBySite(siteId) : []), [siteId]) ?? []
-  const quoteHolds = useLiveQuery(() => (siteId ? listHoldsBySite(siteId) : []), [siteId]) ?? []
   const salesOrderGroups = (() => {
     const bySoNumber = new Map<string, { soNumber: string; count: number; latestTiedAt: number }>()
     for (const li of salesOrderLineItems) {
@@ -318,15 +315,6 @@ export default function LocationDetail() {
     ? miscRows.filter((row) => matchesSearch(row, normalizedSearch))
     : miscRows
   ).filter((row) => row.quantity > 0)
-
-  // Held rows are merged in as extra rows right alongside the ones they
-  // belong to, rather than a separate table — "On Hold" stays a visible
-  // distinction (via the Held By column and a disabled checkbox) but the
-  // section itself is one combined table.
-  const uprightMergedRows = mergeRowsWithHolds(displayedUprightRows, quoteHolds, 'upright')
-  const beamMergedRows = mergeRowsWithHolds(displayedBeamRows, quoteHolds, 'beam')
-  const wireDeckMergedRows = mergeRowsWithHolds(displayedWireDeckRows, quoteHolds, 'wireDeck')
-  const miscMergedRows = mergeRowsWithHolds(displayedMiscRows, quoteHolds, 'misc')
 
   const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null
   const selectedUprightKeys = new Set(
@@ -771,11 +759,10 @@ export default function LocationDetail() {
         <section className="item-section" ref={(el) => { sectionRefs.current['Uprights'] = el }}>
           <h2>Uprights</h2>
           <UprightTable
-            rows={uprightMergedRows}
+            rows={displayedUprightRows}
             siteId={site.id}
             selectedKeys={selectedUprightKeys}
             onToggleSelect={(row) => toggleSelect('upright', row)}
-            holds={quoteHolds}
             active={activeSectionLabel === 'Uprights'}
           />
         </section>
@@ -785,11 +772,10 @@ export default function LocationDetail() {
         <section className="item-section" ref={(el) => { sectionRefs.current['Beams'] = el }}>
           <h2>Beams</h2>
           <BeamTable
-            rows={beamMergedRows}
+            rows={displayedBeamRows}
             siteId={site.id}
             selectedKeys={selectedBeamKeys}
             onToggleSelect={(row) => toggleSelect('beam', row)}
-            holds={quoteHolds}
             active={activeSectionLabel === 'Beams'}
           />
         </section>
@@ -799,12 +785,11 @@ export default function LocationDetail() {
         <section className="item-section" ref={(el) => { sectionRefs.current['Wire Decks'] = el }}>
           <h2>Wire Decks</h2>
           <WireDeckTable
-            rows={wireDeckMergedRows}
+            rows={displayedWireDeckRows}
             siteId={site.id}
             selectedKeys={selectedWireDeckKeys}
             onToggleSelect={(row) => toggleSelect('wireDeck', row)}
             searchActive={!!normalizedSearch}
-            holds={quoteHolds}
             active={activeSectionLabel === 'Wire Decks'}
           />
         </section>
@@ -814,11 +799,10 @@ export default function LocationDetail() {
         <section className="item-section" ref={(el) => { sectionRefs.current['Other'] = el }}>
           <h2>Other</h2>
           <MiscItemTable
-            rows={miscMergedRows}
+            rows={displayedMiscRows}
             siteId={site.id}
             selectedKeys={selectedMiscKeys}
             onToggleSelect={(row) => toggleSelect('misc', row)}
-            holds={quoteHolds}
             active={activeSectionLabel === 'Other'}
           />
         </section>

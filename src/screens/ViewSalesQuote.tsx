@@ -64,7 +64,7 @@ export default function ViewSalesQuote() {
         </div>
       </div>
 
-      {quote.canceledAt && <p className="placeholder-note">This quote was canceled — all its holds have been released.</p>}
+      {quote.canceledAt && <p className="placeholder-note">This quote was canceled.</p>}
 
       <p>
         <strong>Customer:</strong> {quote.customerName || '—'}
@@ -78,9 +78,9 @@ export default function ViewSalesQuote() {
         </p>
       )}
 
-      <h2>Held Items</h2>
+      <h2>Items</h2>
       {lineItems.length === 0 ? (
-        <p className="placeholder-note">No items are being held on this quote.</p>
+        <p className="placeholder-note">No items have been added to this quote.</p>
       ) : (
         <div className="item-table-wrap">
           <table className="item-table">
@@ -88,7 +88,7 @@ export default function ViewSalesQuote() {
               <tr>
                 <th>Location</th>
                 <th>Description</th>
-                <th>Quantity Held</th>
+                <th>Quantity</th>
                 {!quote.canceledAt && <th></th>}
               </tr>
             </thead>
@@ -101,7 +101,7 @@ export default function ViewSalesQuote() {
                   {!quote.canceledAt && (
                     <td>
                       <button type="button" className="delete-button" onClick={() => cancelSalesQuoteLineItem(li.id)}>
-                        Release
+                        Remove
                       </button>
                     </td>
                   )}
@@ -114,7 +114,7 @@ export default function ViewSalesQuote() {
 
       {confirmingCancel && (
         <div className="delete-confirm">
-          <p>Cancel this whole quote? Every held item above will be released back to available inventory.</p>
+          <p>Cancel this whole quote? Every item above will be removed from it.</p>
           <div className="dialog-actions">
             <button type="button" onClick={() => setConfirmingCancel(false)} disabled={cancelingQuote}>
               Go Back

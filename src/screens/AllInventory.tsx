@@ -9,13 +9,10 @@ import { groupBeams, type BeamRow } from '../db/groupBeams'
 import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, uprightDimensionSortValue, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
-import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { beamExportRow, miscExportRow, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
 import type { ItemType } from '../models/types'
 import { applyColumnFilters, computeFilterOptions } from '../utils/columnFilters'
-import { formatDisplayName } from '../utils/displayName'
-import { mergeRowsWithHolds, withHoldAwareColumns } from '../utils/heldRows'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
 
 interface QuoteSelection {
@@ -25,9 +22,6 @@ interface QuoteSelection {
   siteName: string
   description: string
   itemIds: string[]
-  // The row's raw total quantity (not yet minus holds) — the quantity page
-  // recomputes "available" itself from live holds, since time passes
-  // between selecting here and saving quantities there.
   rawQuantity: number
 }
 
@@ -91,7 +85,6 @@ export default function AllInventory() {
   const uprights = useLiveQuery(() => db.uprights.toArray(), []) ?? []
   const wireDecks = useLiveQuery(() => db.wireDecks.toArray(), []) ?? []
   const miscItems = useLiveQuery(() => db.miscItems.toArray(), []) ?? []
-  const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const toolbarObserverRef = useRef<IntersectionObserver | null>(null)
   const [toolbarStuck, setToolbarStuck] = useState(false)
@@ -279,8 +272,7 @@ export default function AllInventory() {
           select: {
             label: '',
             render: (row: AllUprightRow) => {
-              const held = computeHeldQuantity(row.ids, holds)
-              const available = row.quantity - held
+              const available = row.quantity
               const key = `upright:${row.key}`
               return (
                 <input
@@ -314,7 +306,7 @@ export default function AllInventory() {
     },
     quantity: {
       label: 'Quantity',
-      render: (row) => quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+      render: (row) => row.quantity,
       getValue: (row) => String(row.quantity),
       filterable: false,
     },
@@ -435,8 +427,7 @@ export default function AllInventory() {
           select: {
             label: '',
             render: (row: AllBeamRow) => {
-              const held = computeHeldQuantity(row.ids, holds)
-              const available = row.quantity - held
+              const available = row.quantity
               const key = `beam:${row.key}`
               return (
                 <input
@@ -470,7 +461,7 @@ export default function AllInventory() {
     },
     quantity: {
       label: 'Quantity',
-      render: (row) => quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+      render: (row) => row.quantity,
       getValue: (row) => String(row.quantity),
       filterable: false,
     },
@@ -575,8 +566,7 @@ export default function AllInventory() {
           select: {
             label: '',
             render: (row: AllWireDeckRow) => {
-              const held = computeHeldQuantity(row.ids, holds)
-              const available = row.quantity - held
+              const available = row.quantity
               const key = `wireDeck:${row.key}`
               return (
                 <input
@@ -610,7 +600,7 @@ export default function AllInventory() {
     },
     quantity: {
       label: 'Quantity',
-      render: (row) => quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+      render: (row) => row.quantity,
       getValue: (row) => String(row.quantity),
       filterable: false,
     },
@@ -697,8 +687,7 @@ export default function AllInventory() {
           select: {
             label: '',
             render: (row: AllMiscItemRow) => {
-              const held = computeHeldQuantity(row.ids, holds)
-              const available = row.quantity - held
+              const available = row.quantity
               const key = `misc:${row.key}`
               return (
                 <input
@@ -732,7 +721,7 @@ export default function AllInventory() {
     },
     quantity: {
       label: 'Quantity',
-      render: (row) => quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
+      render: (row) => row.quantity,
       getValue: (row) => String(row.quantity),
       filterable: false,
     },
@@ -816,26 +805,6 @@ export default function AllInventory() {
   const nonZeroWireDeckRows = wireDeckRows.filter((row) => row.quantity > 0)
   const nonZeroMiscRows = miscRows.filter((row) => row.quantity > 0)
 
-  // Held rows are merged in as extra rows right alongside the ones they
-  // belong to, rather than a separate table — "On Hold" stays a visible
-  // distinction (via the Held By column) but the section itself is one
-  // combined, sortable/filterable table.
-  const uprightMergedRows = mergeRowsWithHolds(nonZeroUprightRows, holds, 'upright')
-  const beamMergedRows = mergeRowsWithHolds(nonZeroBeamRows, holds, 'beam')
-  const wireDeckMergedRows = mergeRowsWithHolds(nonZeroWireDeckRows, holds, 'wireDeck')
-  const miscMergedRows = mergeRowsWithHolds(nonZeroMiscRows, holds, 'misc')
-
-  const uprightMergedColumns = withHoldAwareColumns(uprightColumns)
-  const beamMergedColumns = withHoldAwareColumns(beamColumns)
-  const wireDeckMergedColumns = withHoldAwareColumns(wireDeckColumns)
-  const miscMergedColumns = withHoldAwareColumns(miscColumns)
-
-  const heldByLeadingColumn = {
-    label: 'Held By',
-    render: (row: { heldByEmail?: string }) => (row.heldByEmail ? formatDisplayName(row.heldByEmail) : '—'),
-    showOnSecondary: true,
-  }
-
   // A fixed leading checkbox for each item type — kept out of the
   // reorderable column set (like Held By above) so it can't end up buried
   // by a viewer's saved column order the way a brand-new column otherwise
@@ -853,10 +822,10 @@ export default function AllInventory() {
     }
   }
 
-  const uprightFilterOptions = computeFilterOptions(uprightMergedRows, uprightMergedColumns)
-  const beamFilterOptions = computeFilterOptions(beamMergedRows, beamMergedColumns)
-  const wireDeckFilterOptions = computeFilterOptions(wireDeckMergedRows, wireDeckMergedColumns)
-  const miscFilterOptions = computeFilterOptions(miscMergedRows, miscMergedColumns)
+  const uprightFilterOptions = computeFilterOptions(nonZeroUprightRows, uprightColumns)
+  const beamFilterOptions = computeFilterOptions(nonZeroBeamRows, beamColumns)
+  const wireDeckFilterOptions = computeFilterOptions(nonZeroWireDeckRows, wireDeckColumns)
+  const miscFilterOptions = computeFilterOptions(nonZeroMiscRows, miscColumns)
 
   const normalizedSearch = normalizeForSearch(searchTerm)
 
@@ -869,10 +838,10 @@ export default function AllInventory() {
     return applyColumnFilters(searched, columns, filters)
   }
 
-  const displayedUprightRows = displayRows(uprightMergedRows, uprightMergedColumns, uprightFilters)
-  const displayedBeamRows = displayRows(beamMergedRows, beamMergedColumns, beamFilters)
-  const displayedWireDeckRows = displayRows(wireDeckMergedRows, wireDeckMergedColumns, wireDeckFilters)
-  const displayedMiscRows = displayRows(miscMergedRows, miscMergedColumns, miscFilters)
+  const displayedUprightRows = displayRows(nonZeroUprightRows, uprightColumns, uprightFilters)
+  const displayedBeamRows = displayRows(nonZeroBeamRows, beamColumns, beamFilters)
+  const displayedWireDeckRows = displayRows(nonZeroWireDeckRows, wireDeckColumns, wireDeckFilters)
+  const displayedMiscRows = displayRows(nonZeroMiscRows, miscColumns, miscFilters)
 
   return (
     <main className="page page-wide">
@@ -923,10 +892,10 @@ export default function AllInventory() {
       {uprightRows.length > 0 && (
         <section className="item-section" ref={(el) => { sectionRefs.current['Uprights'] = el }}>
           <h2>Uprights</h2>
-          <ReadOnlyItemTable<string, AllUprightRow & { heldByEmail?: string }>
+          <ReadOnlyItemTable<string, AllUprightRow>
             storageKey={quoteId ? 'allInventoryUprightColumnsQuote' : 'allInventoryUprightColumns'}
             title="Uprights Columns"
-            columns={uprightMergedColumns}
+            columns={uprightColumns}
             defaultOrder={uprightOrder}
             rows={displayedUprightRows}
             filterOptions={uprightFilterOptions}
@@ -935,11 +904,9 @@ export default function AllInventory() {
             emptyMessage="No uprights match your search or filters."
             wrapColumnKeys={['notes']}
             leftAlignColumnKeys={['location']}
-            secondaryGroupLabel="On Hold"
-            isSecondaryRow={(row) => !!row.heldByEmail}
             active={activeSectionLabel === 'Uprights'}
             toolbarButtonSlot={toolbarButtonSlot}
-            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('upright'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('upright')]}
           />
         </section>
       )}
@@ -947,10 +914,10 @@ export default function AllInventory() {
       {beamRows.length > 0 && (
         <section className="item-section" ref={(el) => { sectionRefs.current['Beams'] = el }}>
           <h2>Beams</h2>
-          <ReadOnlyItemTable<string, AllBeamRow & { heldByEmail?: string }>
+          <ReadOnlyItemTable<string, AllBeamRow>
             storageKey={quoteId ? 'allInventoryBeamColumnsQuote' : 'allInventoryBeamColumns'}
             title="Beams Columns"
-            columns={beamMergedColumns}
+            columns={beamColumns}
             defaultOrder={beamOrder}
             rows={displayedBeamRows}
             filterOptions={beamFilterOptions}
@@ -959,9 +926,7 @@ export default function AllInventory() {
             emptyMessage="No beams match your search or filters."
             wrapColumnKeys={['notes']}
             leftAlignColumnKeys={['location']}
-            secondaryGroupLabel="On Hold"
-            isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('beam'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('beam')]}
             active={activeSectionLabel === 'Beams'}
             toolbarButtonSlot={toolbarButtonSlot}
           />
@@ -971,10 +936,10 @@ export default function AllInventory() {
       {wireDeckRows.length > 0 && (
         <section className="item-section" ref={(el) => { sectionRefs.current['Wire Decks'] = el }}>
           <h2>Wire Decks</h2>
-          <ReadOnlyItemTable<string, AllWireDeckRow & { heldByEmail?: string }>
+          <ReadOnlyItemTable<string, AllWireDeckRow>
             storageKey={quoteId ? 'allInventoryWireDeckColumnsQuote' : 'allInventoryWireDeckColumns'}
             title="Wire Decks Columns"
-            columns={wireDeckMergedColumns}
+            columns={wireDeckColumns}
             defaultOrder={wireDeckOrder}
             rows={displayedWireDeckRows}
             filterOptions={wireDeckFilterOptions}
@@ -983,9 +948,7 @@ export default function AllInventory() {
             emptyMessage="No wire decks match your search or filters."
             wrapColumnKeys={['notes']}
             leftAlignColumnKeys={['location']}
-            secondaryGroupLabel="On Hold"
-            isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('wireDeck'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('wireDeck')]}
             active={activeSectionLabel === 'Wire Decks'}
             toolbarButtonSlot={toolbarButtonSlot}
           />
@@ -995,10 +958,10 @@ export default function AllInventory() {
       {miscRows.length > 0 && (
         <section className="item-section" ref={(el) => { sectionRefs.current['Other'] = el }}>
           <h2>Other</h2>
-          <ReadOnlyItemTable<string, AllMiscItemRow & { heldByEmail?: string }>
+          <ReadOnlyItemTable<string, AllMiscItemRow>
             storageKey={quoteId ? 'allInventoryMiscColumnsQuote' : 'allInventoryMiscColumns'}
             title="Other Items Columns"
-            columns={miscMergedColumns}
+            columns={miscColumns}
             defaultOrder={miscOrder}
             rows={displayedMiscRows}
             filterOptions={miscFilterOptions}
@@ -1007,9 +970,7 @@ export default function AllInventory() {
             emptyMessage="No items match your search or filters."
             wrapColumnKeys={['notes', 'itemDescription']}
             leftAlignColumnKeys={['location']}
-            secondaryGroupLabel="On Hold"
-            isSecondaryRow={(row) => !!row.heldByEmail}
-            leadingColumns={quoteId ? [heldByLeadingColumn] : [pdfSelectLeadingColumn('misc'), heldByLeadingColumn]}
+            leadingColumns={quoteId ? [] : [pdfSelectLeadingColumn('misc')]}
             active={activeSectionLabel === 'Other'}
             toolbarButtonSlot={toolbarButtonSlot}
           />

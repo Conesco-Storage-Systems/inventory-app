@@ -5,9 +5,6 @@ import DraggableColumnHeader from './DraggableColumnHeader'
 import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { MiscItemRow } from '../db/groupMiscItems'
-import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
-import type { SalesQuoteLineItem } from '../models/types'
-import { formatDisplayName } from '../utils/displayName'
 
 type MiscItemColumnKey =
   | 'quantity'
@@ -34,14 +31,11 @@ const DEFAULT_MISC_ITEM_COLUMN_ORDER: MiscItemColumnKey[] = [
   'photos',
 ]
 
-type HeldMiscItemRow = MiscItemRow & { heldByEmail?: string }
-
 interface MiscItemTableProps {
-  rows: HeldMiscItemRow[]
+  rows: MiscItemRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: MiscItemRow) => void
-  holds?: SalesQuoteLineItem[]
   active?: boolean
 }
 
@@ -50,7 +44,6 @@ export default function MiscItemTable({
   siteId,
   selectedKeys,
   onToggleSelect,
-  holds = [],
   active = false,
 }: MiscItemTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } =
@@ -59,15 +52,8 @@ export default function MiscItemTable({
   const [pickerOpen, setPickerOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  const primaryRows = rows.filter((row) => !row.heldByEmail)
-  const heldRows = rows.filter((row) => row.heldByEmail)
-
-  const columns: Record<MiscItemColumnKey, { label: string; render: (row: HeldMiscItemRow) => ReactNode }> = {
-    quantity: {
-      label: 'Quantity',
-      render: (row) =>
-        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
-    },
+  const columns: Record<MiscItemColumnKey, { label: string; render: (row: MiscItemRow) => ReactNode }> = {
+    quantity: { label: 'Quantity', render: (row) => row.quantity },
     description: { label: 'Item', render: (row) => row.description || '—' },
     itemDescription: {
       label: 'Item Description',
@@ -127,7 +113,7 @@ export default function MiscItemTable({
                 <td colSpan={visibleOrder.length + 2}>No items match your search.</td>
               </tr>
             )}
-            {primaryRows.map((row) => (
+            {rows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -137,24 +123,6 @@ export default function MiscItemTable({
                   />
                 </td>
                 <td></td>
-                {visibleOrder.map((key) => (
-                  <td key={key} className={key === 'notes' || key === 'itemDescription' ? 'col-notes' : undefined}>
-                    {columns[key].render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {heldRows.length > 0 && (
-              <tr className="item-table-group-row">
-                <td></td>
-                <td>On Hold</td>
-                <td colSpan={visibleOrder.length}></td>
-              </tr>
-            )}
-            {heldRows.map((row) => (
-              <tr key={row.key}>
-                <td></td>
-                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' || key === 'itemDescription' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

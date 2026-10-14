@@ -8,7 +8,6 @@ import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { listBeamsBySite, listMiscItemsBySite, listUprightsBySite, listWireDecksBySite } from '../db/items'
-import { computeAvailableQuantity } from '../db/salesQuotes'
 import type { BolDirection, BolLineItem, PaymentTerm } from '../models/types'
 import { useRole } from '../state/RoleContext'
 
@@ -81,32 +80,31 @@ export default function NewBillOfLading() {
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
-  const holds = useLiveQuery(() => db.salesQuoteLineItems.toArray(), []) ?? []
 
   const availableRows: AvailableRow[] = [
     ...groupBeams(beams).map((row) => ({
       key: `beam:${row.key}`,
       itemLabel: 'Used Beams',
       description: describeBeam(row),
-      available: computeAvailableQuantity(row.quantity, row.ids, holds),
+      available: row.quantity,
     })),
     ...groupUprights(uprights).map((row) => ({
       key: `upright:${row.key}`,
       itemLabel: 'Used Uprights',
       description: describeUpright(row),
-      available: computeAvailableQuantity(row.quantity, row.ids, holds),
+      available: row.quantity,
     })),
     ...groupWireDecks(wireDecks).map((row) => ({
       key: `wireDeck:${row.key}`,
       itemLabel: 'Used Wire Decks',
       description: describeWireDeck(row),
-      available: computeAvailableQuantity(row.quantity, row.ids, holds),
+      available: row.quantity,
     })),
     ...groupMiscItems(miscItems).map((row) => ({
       key: `misc:${row.key}`,
       itemLabel: row.description || 'Other',
       description: describeMisc(row),
-      available: computeAvailableQuantity(row.quantity, row.ids, holds),
+      available: row.quantity,
     })),
   ]
 

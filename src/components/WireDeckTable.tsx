@@ -7,9 +7,6 @@ import FilterSection from './FilterSection'
 import StickyHeaderRow from './StickyHeaderRow'
 import { useColumnConfig } from '../hooks/useColumnConfig'
 import type { WireDeckRow } from '../db/groupWireDecks'
-import { computeHeldQuantity, quantityWithHold } from '../db/salesQuotes'
-import type { SalesQuoteLineItem } from '../models/types'
-import { formatDisplayName } from '../utils/displayName'
 
 type WireDeckColumnKey =
   | 'quantity'
@@ -38,15 +35,12 @@ const DEFAULT_WIRE_DECK_COLUMN_ORDER: WireDeckColumnKey[] = [
   'photos',
 ]
 
-type HeldWireDeckRow = WireDeckRow & { heldByEmail?: string }
-
 interface WireDeckTableProps {
-  rows: HeldWireDeckRow[]
+  rows: WireDeckRow[]
   siteId: string
   selectedKeys: Set<string>
   onToggleSelect: (row: WireDeckRow) => void
   searchActive: boolean
-  holds?: SalesQuoteLineItem[]
   active?: boolean
 }
 
@@ -56,7 +50,6 @@ export default function WireDeckTable({
   selectedKeys,
   onToggleSelect,
   searchActive,
-  holds = [],
   active = false,
 }: WireDeckTableProps) {
   const { order, hidden, visibleOrder, moveColumn, toggleHidden, setAllVisible } = useColumnConfig<WireDeckColumnKey>(
@@ -105,21 +98,14 @@ export default function WireDeckTable({
     )
   }
 
-  const primaryRows = displayedRows.filter((row) => !row.heldByEmail)
-  const heldRows = displayedRows.filter((row) => row.heldByEmail)
-
   function clearFilters() {
     setStyleFilter(new Set())
     setChannelFilter(new Set())
     setWidthLengthFilter(new Set())
   }
 
-  const columns: Record<WireDeckColumnKey, { label: string; render: (row: HeldWireDeckRow) => ReactNode }> = {
-    quantity: {
-      label: 'Quantity',
-      render: (row) =>
-        row.heldByEmail ? row.quantity : quantityWithHold(row.quantity, computeHeldQuantity(row.ids, holds)),
-    },
+  const columns: Record<WireDeckColumnKey, { label: string; render: (row: WireDeckRow) => ReactNode }> = {
+    quantity: { label: 'Quantity', render: (row) => row.quantity },
     style: { label: 'Style', render: (row) => row.style.join(', ') || '—' },
     widthByLength: { label: 'Width x Length', render: (row) => row.widthByLength },
     channelCount: { label: 'Number of Channels', render: (row) => row.channelCount },
@@ -251,7 +237,7 @@ export default function WireDeckTable({
                 </td>
               </tr>
             )}
-            {primaryRows.map((row) => (
+            {displayedRows.map((row) => (
               <tr key={row.key}>
                 <td>
                   <input
@@ -261,24 +247,6 @@ export default function WireDeckTable({
                   />
                 </td>
                 <td></td>
-                {visibleOrder.map((key) => (
-                  <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
-                    {columns[key].render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {heldRows.length > 0 && (
-              <tr className="item-table-group-row">
-                <td></td>
-                <td>On Hold</td>
-                <td colSpan={visibleOrder.length}></td>
-              </tr>
-            )}
-            {heldRows.map((row) => (
-              <tr key={row.key}>
-                <td></td>
-                <td>{formatDisplayName(row.heldByEmail ?? '')}</td>
                 {visibleOrder.map((key) => (
                   <td key={key} className={key === 'notes' ? 'col-notes' : undefined}>
                     {columns[key].render(row)}

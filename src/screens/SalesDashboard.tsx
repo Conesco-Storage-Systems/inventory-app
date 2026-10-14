@@ -37,7 +37,7 @@ export default function SalesDashboard() {
         </div>
       </nav>
 
-      {permissions.holdItemsForOrder && (
+      {permissions.createSalesQuotes && (
         <p>
           <CreateSalesQuoteDialog />
         </p>

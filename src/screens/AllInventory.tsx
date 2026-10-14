@@ -34,7 +34,7 @@ function describeBeamRow(row: BeamRow): string {
     row.step && `${row.step} step`,
     row.condition,
     row.stamp,
-    row.stickers,
+    row.stickers === 'Yes' && 'Stickers',
   ]
     .filter(Boolean)
     .join(', ')

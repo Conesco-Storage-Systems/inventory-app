@@ -87,22 +87,51 @@ function findMatchedRow(itemType: ItemType, itemIds: string[], siteItems: SiteIt
   }
 }
 
+// 'all' means every photo for the item is included without needing their
+// ids enumerated (used by the bulk "select for all items" panel, which
+// doesn't have each item's photo list loaded) — otherwise an explicit set
+// of selected photo ids, letting individual photos be left out (e.g. a
+// damaged-item photo that shouldn't reach the customer).
+export type PhotoSelection = 'all' | Set<string>
+
+export function isAnyPhotoSelected(selection: PhotoSelection | undefined): boolean {
+  if (!selection) return false
+  return selection === 'all' || selection.size > 0
+}
+
+function isPhotoSelected(selection: PhotoSelection | undefined, photoId: string): boolean {
+  if (!selection) return false
+  return selection === 'all' || selection.has(photoId)
+}
+
 function SelectedItemCard({
   item,
   fieldKeys,
-  includePhotos,
+  photoSelection,
   onToggleField,
-  onTogglePhotos,
+  onChangePhotoSelection,
   onRemove,
 }: {
   item: SheetItem
   fieldKeys: Set<string>
-  includePhotos: boolean
+  photoSelection: PhotoSelection | undefined
   onToggleField: (fieldKey: string) => void
-  onTogglePhotos: () => void
+  onChangePhotoSelection: (next: PhotoSelection) => void
   onRemove: () => void
 }) {
   const photos = useLiveQuery(() => getPhotosForItem(item.photoLookupIds), [item.photoLookupIds.join(',')]) ?? []
+  const anySelected = isAnyPhotoSelected(photoSelection)
+
+  function toggleMasterPhotos() {
+    onChangePhotoSelection(anySelected ? new Set<string>() : 'all')
+  }
+
+  function togglePhoto(photoId: string) {
+    const current = photoSelection === 'all' ? new Set(photos.map((p) => p.id)) : new Set(photoSelection ?? [])
+    if (current.has(photoId)) current.delete(photoId)
+    else current.add(photoId)
+    onChangePhotoSelection(current)
+  }
 
   return (
     <div className="customer-sheet-item-card">
@@ -131,12 +160,19 @@ function SelectedItemCard({
       {photos.length > 0 && (
         <div className="customer-sheet-photo-row">
           <label className="checkbox-option">
-            <input type="checkbox" checked={includePhotos} onChange={onTogglePhotos} />
-            Include Photos ({photos.length})
+            <input type="checkbox" checked={anySelected} onChange={toggleMasterPhotos} />
+            Include Photos
           </label>
           <div className="photo-thumbnails">
             {photos.map((photo) => (
               <div className="photo-thumb" key={photo.id}>
+                <label className="photo-select-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isPhotoSelected(photoSelection, photo.id)}
+                    onChange={() => togglePhoto(photo.id)}
+                  />
+                </label>
                 <BlobImage blob={photo.blob} />
               </div>
             ))}
@@ -216,7 +252,7 @@ export default function GenerateCustomerSheetFlow({
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [fieldSelections, setFieldSelections] = useState<Record<string, Set<string>>>({})
-  const [photoSelections, setPhotoSelections] = useState<Record<string, boolean>>({})
+  const [photoSelections, setPhotoSelections] = useState<Record<string, PhotoSelection>>({})
   const appliedInitialSelectionRef = useRef(false)
 
   const [date, setDate] = useState(todayIso())
@@ -238,7 +274,7 @@ export default function GenerateCustomerSheetFlow({
     // up by adding what they want the customer to see, rather than having
     // to strip out what they don't.
     setFieldSelections((prev) => ({ ...prev, [key]: new Set<string>() }))
-    setPhotoSelections((prev) => ({ ...prev, [key]: false }))
+    setPhotoSelections((prev) => ({ ...prev, [key]: new Set<string>() }))
   }
 
   function removeItem(key: string) {
@@ -254,8 +290,8 @@ export default function GenerateCustomerSheetFlow({
     })
   }
 
-  function togglePhotos(key: string) {
-    setPhotoSelections((prev) => ({ ...prev, [key]: !prev[key] }))
+  function changePhotoSelection(key: string, next: PhotoSelection) {
+    setPhotoSelections((prev) => ({ ...prev, [key]: next }))
   }
 
   // Every seeded item is included by default — this sheet isn't built by
@@ -285,9 +321,11 @@ export default function GenerateCustomerSheetFlow({
         const fields = item.fields.filter((f) => included.has(f.key)).map((f) => ({ label: f.label, value: f.value }))
 
         let photos: string[] = []
-        if (photoSelections[key] && item.photoLookupIds.length > 0) {
+        const selection = photoSelections[key]
+        if (isAnyPhotoSelected(selection) && item.photoLookupIds.length > 0) {
           const rawPhotos = await getPhotosForItem(item.photoLookupIds)
-          photos = await Promise.all(rawPhotos.map((p) => compressImageToDataUrl(p.blob)))
+          const selectedPhotos = selection === 'all' ? rawPhotos : rawPhotos.filter((p) => selection.has(p.id))
+          photos = await Promise.all(selectedPhotos.map((p) => compressImageToDataUrl(p.blob)))
         }
 
         lineItemsOut.push({ itemType: item.itemType, itemLabel: item.itemLabel, fields, photos })
@@ -354,9 +392,9 @@ export default function GenerateCustomerSheetFlow({
               key={item.key}
               item={item}
               fieldKeys={fieldSelections[item.key] ?? new Set()}
-              includePhotos={photoSelections[item.key] ?? false}
+              photoSelection={photoSelections[item.key]}
               onToggleField={(fieldKey) => toggleField(item.key, fieldKey)}
-              onTogglePhotos={() => togglePhotos(item.key)}
+              onChangePhotoSelection={(next) => changePhotoSelection(item.key, next)}
               onRemove={() => removeItem(item.key)}
             />
           ))}
@@ -392,7 +430,7 @@ export default function GenerateCustomerSheetFlow({
       {exportError && <p className="field-error">{exportError}</p>}
 
       <div className="save-item-row">
-        <div className="dialog-actions">
+        <div className="customer-sheet-generate-actions">
           <button type="button" onClick={handleGeneratePdf} disabled={generating || selectedItems.length === 0}>
             {generating ? 'Generating…' : previewDocument ? 'Regenerate Preview' : 'Generate PDF'}
           </button>

@@ -6,6 +6,7 @@ import { purgeExpiredDeletedSites } from './db/locations'
 import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
 import GenerateInventoryCustomerSheet from './screens/GenerateInventoryCustomerSheet'
+import GenerateLocationCustomerSheet from './screens/GenerateLocationCustomerSheet'
 import GenerateQuoteCustomerSheet from './screens/GenerateQuoteCustomerSheet'
 import GenerateSalesQuote from './screens/GenerateSalesQuote'
 import InactiveLocations from './screens/InactiveLocations'
@@ -14,7 +15,6 @@ import ItemPhotos from './screens/ItemPhotos'
 import LocationDetail from './screens/LocationDetail'
 import LocationsList from './screens/LocationsList'
 import NewBillOfLading from './screens/NewBillOfLading'
-import NewCustomerSheet from './screens/NewCustomerSheet'
 import NewItem from './screens/NewItem'
 import Procurement from './screens/Procurement'
 import ProjectDetail from './screens/ProjectDetail'
@@ -28,7 +28,6 @@ import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
 import ViewBillOfLading from './screens/ViewBillOfLading'
 import ViewSalesOrder from './screens/ViewSalesOrder'
 import ViewSalesQuote from './screens/ViewSalesQuote'
-import ViewCustomerSheet from './screens/ViewCustomerSheet'
 import './App.css'
 
 function App() {
@@ -74,8 +73,7 @@ function App() {
           <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
           <Route path="/locations/:siteId/bol/from-sales-orders" element={<SelectSoItemsForBol />} />
           <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />
-          <Route path="/locations/:siteId/customer-sheet/new" element={<NewCustomerSheet />} />
-          <Route path="/locations/:siteId/customer-sheet/:sheetId" element={<ViewCustomerSheet />} />
+          <Route path="/locations/:siteId/customer-sheet/new" element={<GenerateLocationCustomerSheet />} />
           <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />
           <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
           <Route path="/locations/:siteId/sales-orders/:soNumber" element={<ViewSalesOrder />} />

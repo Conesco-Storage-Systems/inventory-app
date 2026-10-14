@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import BeamTable from '../components/BeamTable'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import EditBeamDialog from '../components/EditBeamDialog'
 import EditMiscItemDialog from '../components/EditMiscItemDialog'
 import EditUprightDialog from '../components/EditUprightDialog'
 import EditWireDeckDialog from '../components/EditWireDeckDialog'
+import type { CustomerSheetSeed } from '../components/GenerateCustomerSheetFlow'
 import MiscItemTable from '../components/MiscItemTable'
 import SitePhotoPicker from '../components/SitePhotoPicker'
 import UprightTable from '../components/UprightTable'
@@ -16,6 +17,7 @@ import { groupBeams, type BeamRow } from '../db/groupBeams'
 import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
+import { getItemLabel } from '../db/itemFields'
 import {
   createBeam,
   createMiscItem,
@@ -31,7 +33,6 @@ import {
   listWireDecksBySite,
 } from '../db/items'
 import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
-import { deleteCustomerSheet, listCustomerSheetsBySite } from '../db/customerSheets'
 import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
 import { getSiteHeroPhoto, removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
 import { exportSheetsToExcel } from '../export/exportToExcel'
@@ -57,6 +58,7 @@ interface SelectedItem {
 
 export default function LocationDetail() {
   const { permissions } = useRole()
+  const navigate = useNavigate()
   const { siteId } = useParams<{ siteId: string }>()
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
   const siteHeroPhoto = useLiveQuery(() => (siteId ? getSiteHeroPhoto(siteId) : undefined), [siteId])
@@ -65,7 +67,6 @@ export default function LocationDetail() {
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
   const bols = useLiveQuery(() => (siteId ? listBolsBySite(siteId) : []), [siteId]) ?? []
-  const customerSheets = useLiveQuery(() => (siteId ? listCustomerSheetsBySite(siteId) : []), [siteId]) ?? []
   const salesOrderLineItems = useLiveQuery(() => (siteId ? listTiedSalesOrderLineItemsBySite(siteId) : []), [siteId]) ?? []
   const salesOrderGroups = (() => {
     const bySoNumber = new Map<string, { soNumber: string; count: number; latestTiedAt: number }>()
@@ -217,7 +218,6 @@ export default function LocationDetail() {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
   const [activeAction, setActiveAction] = useState<'edit' | 'duplicate' | 'delete' | null>(null)
   const [deletingBolId, setDeletingBolId] = useState<string | null>(null)
-  const [deletingCustomerSheetId, setDeletingCustomerSheetId] = useState<string | null>(null)
 
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -286,16 +286,24 @@ export default function LocationDetail() {
     setSelectedItems([])
   }
 
+  function handleGeneratePdf() {
+    if (!site) return
+    const seeds: CustomerSheetSeed[] = selectedItems.map((item) => ({
+      key: `${item.itemType}:${item.key}`,
+      itemType: item.itemType,
+      siteId: site.id,
+      siteName: site.name,
+      itemIds: item.row.ids,
+      quantity: item.row.quantity,
+      description: getItemLabel(item.itemType, item.row),
+    }))
+    navigate(`/locations/${site.id}/customer-sheet/new`, { state: { seeds, backTo: `/locations/${site.id}` } })
+  }
+
   async function handleConfirmDeleteBol() {
     if (!deletingBolId) return
     await deleteBillOfLading(deletingBolId)
     setDeletingBolId(null)
-  }
-
-  async function handleConfirmDeleteCustomerSheet() {
-    if (!deletingCustomerSheetId) return
-    await deleteCustomerSheet(deletingCustomerSheetId)
-    setDeletingCustomerSheetId(null)
   }
 
   async function handleConfirmDelete() {
@@ -613,34 +621,6 @@ export default function LocationDetail() {
         </ul>
       </details>
 
-      {customerSheets.length > 0 && (
-        <details className="item-section collapsible-section">
-          <summary className="collapsible-section-summary">Customer Sheets ({customerSheets.length})</summary>
-          <ul className="location-list location-list--compact">
-            {customerSheets.map((sheet) => (
-              <li key={sheet.id} className="location-list-row bol-list-row">
-                <div className="location-list-info">
-                  <Link to={`/locations/${site.id}/customer-sheet/${sheet.id}`}>
-                    {sheet.date || 'Undated'}
-                    {sheet.customerName ? ` — ${sheet.customerName}` : ''}
-                    {sheet.customerCompany ? ` (${sheet.customerCompany})` : ''}
-                  </Link>
-                </div>
-                {permissions.generateCustomerSheet && (
-                  <button
-                    type="button"
-                    className="delete-button"
-                    onClick={() => setDeletingCustomerSheetId(sheet.id)}
-                  >
-                    Delete
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
       {salesOrderGroups.length > 0 && (
         <details className="item-section collapsible-section">
           <summary className="collapsible-section-summary">Sales Orders ({salesOrderGroups.length})</summary>
@@ -707,18 +687,9 @@ export default function LocationDetail() {
                 </Link>
               )}
               {permissions.generateCustomerSheet && (
-                selectedItems.length > 0 ? (
-                  <Link
-                    to={`/locations/${site.id}/customer-sheet/new`}
-                    state={{ preselected: selectedItems.map((si) => `${si.itemType}:${si.key}`) }}
-                  >
-                    <button type="button">Generate PDF</button>
-                  </Link>
-                ) : (
-                  <button type="button" disabled>
-                    Generate PDF
-                  </button>
-                )
+                <button type="button" disabled={selectedItems.length === 0} onClick={handleGeneratePdf}>
+                  Generate PDF
+                </button>
               )}
               {permissions.editItems && (
                 <>
@@ -845,12 +816,6 @@ export default function LocationDetail() {
       )}
       {deletingBolId && (
         <ConfirmDeleteDialog onConfirm={handleConfirmDeleteBol} onClose={() => setDeletingBolId(null)} />
-      )}
-      {deletingCustomerSheetId && (
-        <ConfirmDeleteDialog
-          onConfirm={handleConfirmDeleteCustomerSheet}
-          onClose={() => setDeletingCustomerSheetId(null)}
-        />
       )}
     </main>
   )

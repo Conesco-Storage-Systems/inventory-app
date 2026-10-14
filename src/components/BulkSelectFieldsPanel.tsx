@@ -28,7 +28,7 @@ interface BulkSelectFieldsPanelProps {
   // Only the setters are needed — this panel only ever force-sets values,
   // it never reads the current per-item selection state.
   setFieldSelections: Dispatch<SetStateAction<Record<string, Set<string>>>>
-  setPhotoSelections: Dispatch<SetStateAction<Record<string, boolean>>>
+  setPhotoSelections: Dispatch<SetStateAction<Record<string, 'all' | Set<string>>>>
 }
 
 // Every field an item type can carry (plus Location and Photos when
@@ -88,7 +88,7 @@ export default function BulkSelectFieldsPanel({
       const next = { ...prev }
       for (const item of items) {
         if (item.itemType !== itemType) continue
-        next[item.key] = nextChecked
+        next[item.key] = nextChecked ? 'all' : new Set<string>()
       }
       return next
     })
@@ -127,7 +127,7 @@ export default function BulkSelectFieldsPanel({
       const next = { ...prev }
       for (const item of items) {
         if (item.itemType !== itemType) continue
-        next[item.key] = nextChecked
+        next[item.key] = nextChecked ? 'all' : new Set<string>()
       }
       return next
     })

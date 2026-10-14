@@ -960,6 +960,11 @@ button:disabled {
   margin-bottom: 40px;
 }
 
+.customer-sheet-generate-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .photo-gallery {
   margin-top: 16px;
 }
@@ -1481,6 +1486,20 @@ button:disabled {
   color: #fff;
   font-size: 16px;
   line-height: 1;
+  cursor: pointer;
+}
+
+.photo-select-checkbox {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+}
+
+.photo-select-checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
   cursor: pointer;
 }
 

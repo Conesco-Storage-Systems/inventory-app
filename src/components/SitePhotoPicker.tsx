@@ -92,6 +92,10 @@ export default function SitePhotoPicker({ photo, alt, onSelect, onRemove }: Site
           <span className="site-photo-placeholder">+ Add site photo</span>
         )}
       </button>
+      {/* TEMPORARY diagnostic for the photo-swap investigation — remove once root cause is found */}
+      {photo && (
+        <p style={{ fontSize: 10, margin: '2px 0 0', color: '#666' }}>{photo.size}b · {photo.type}</p>
+      )}
 
       {!photo && showMenu && (
         <div className="photo-add-menu">

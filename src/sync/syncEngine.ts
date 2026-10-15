@@ -522,33 +522,20 @@ async function pullSites(): Promise<void> {
     }
   }
   setCursor('sites', maxUpdatedAt)
-  await retryMissingSitePhotoDownloads()
 }
 
-// A site record above can save successfully with its sitePhotoPath set even
-// though the photo blob itself failed to download — and since the cursor
-// still advances past that site, the incremental gt(cursor) pull above won't
-// naturally revisit it. Find any local site whose photo path doesn't have a
-// matching downloaded blob yet and retry it directly, every pass, regardless
-// of cursor position (mirrors pushSites() doing the equivalent for photos
-// that failed to upload).
-async function retryMissingSitePhotoDownloads(): Promise<void> {
-  const sitesWithPhoto = await db.sites.filter((site) => !!site.sitePhotoPath).toArray()
-  for (const site of sitesWithPhoto) {
-    const existingBlob = await db.siteHeroPhotoBlobs.get(site.id)
-    if (existingBlob) continue
-    try {
-      const { data: blob, error } = await supabase.storage.from(STORAGE_BUCKET).download(site.sitePhotoPath!)
-      if (blob) {
-        await db.siteHeroPhotoBlobs.put({ id: site.id, blob })
-      } else {
-        reportSyncError(`[sync] site photo download for ${site.id} failed:`, error?.message, error)
-      }
-    } catch (err) {
-      reportSyncError(`[sync] site photo download for ${site.id} threw:`, err)
-    }
-  }
-}
+// A retryMissingSitePhotoDownloads() helper used to run here, scanning every
+// local site with a photo path and no local blob and re-downloading it, on
+// every sync pass. Pulled back out: on a device whose local storage had just
+// been wiped (e.g. a Safari "Clear Website Data"), that meant a large,
+// repeating, every-30-seconds bulk re-download of every established site's
+// photo at once, on a flaky mobile connection, at the same time brand-new
+// sites were going through their own rapid push/pull cycles — and new
+// sites' photos started getting replaced by other jobs' photos shortly
+// after being taken. Root cause wasn't fully isolated before this was
+// pulled; re-introduce only with a narrower scope (e.g. a single site at a
+// time, not a full-table scan every pass) and only after confirming it
+// can't run concurrently with itself across overlapping sync passes.
 
 // ---------- projects ----------
 

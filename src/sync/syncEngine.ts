@@ -1614,6 +1614,14 @@ async function pullTombstones(): Promise<void> {
 // ---------- orchestration ----------
 
 let syncing = false
+let syncStartedAt = 0
+// If a pass gets stuck mid-request (e.g. connectivity drops right as a
+// fetch is in flight, and it never rejects/times out on its own), this
+// flag used to stay true forever — silently blocking every later sync
+// attempt until the page was reloaded. Treating a pass that's been
+// "running" this long as stuck instead lets a new attempt through; the
+// old one, if it ever does resolve, just harmlessly resets the flag again.
+const STUCK_SYNC_TIMEOUT_MS = 2 * 60 * 1000
 
 export async function runSync(): Promise<void> {
   if (!supabaseConfigured) {
@@ -1621,8 +1629,11 @@ export async function runSync(): Promise<void> {
     return
   }
   if (syncing) {
-    console.log('[sync] skipped — a sync is already in progress')
-    return
+    if (Date.now() - syncStartedAt < STUCK_SYNC_TIMEOUT_MS) {
+      console.log('[sync] skipped — a sync is already in progress')
+      return
+    }
+    console.warn('[sync] previous sync pass has been running for over 2 minutes — treating it as stuck and starting a new one')
   }
   if (!navigator.onLine) {
     console.log('[sync] skipped — browser reports offline')
@@ -1630,6 +1641,7 @@ export async function runSync(): Promise<void> {
   }
   console.log('[sync] starting…')
   syncing = true
+  syncStartedAt = Date.now()
   try {
     await pushPendingDeletes()
     await pushProjects()

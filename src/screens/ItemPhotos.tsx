@@ -35,6 +35,10 @@ export default function ItemPhotos() {
               onClick={() => setSelectedId(photo.id)}
             >
               <BlobImage blob={photo.blob} />
+              {/* TEMPORARY diagnostic for the photo-swap investigation — remove once root cause is found */}
+              <p style={{ fontSize: 10, margin: '2px 0 0', wordBreak: 'break-all', color: '#666' }}>
+                {photo.id.slice(0, 8)} · {new Date(photo.createdAt).toLocaleTimeString()} · {photo.blob.size}b
+              </p>
             </button>
           ))}
         </div>

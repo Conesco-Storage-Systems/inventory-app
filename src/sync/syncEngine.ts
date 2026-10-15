@@ -1706,10 +1706,15 @@ export function startAutoSync(): void {
     'sales_quote_line_items',
     'tombstones',
   ]
+  // One shared channel/connection for every table instead of one each —
+  // 16 separate realtime subscriptions per connected device adds up fast
+  // across multiple devices, each holding its own connection open for the
+  // entire session, which eats into the project's connection pool for no
+  // real benefit (the callback is identical regardless of which table
+  // fired it).
+  let channel = supabase.channel('realtime:all')
   for (const table of remoteTables) {
-    supabase
-      .channel(`realtime:${table}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, () => runSync())
-      .subscribe()
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => runSync())
   }
+  channel.subscribe()
 }

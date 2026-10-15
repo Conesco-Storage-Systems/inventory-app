@@ -138,7 +138,13 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
       }
 
       const mapped = config.fromRemote(remoteRow)
-      const photoIds = local?.photoIds ?? []
+      // Recompute from the photos table itself rather than trusting
+      // local?.photoIds — if this item's photos already synced to this
+      // device before the item row did (e.g. the item's own push lagged a
+      // cycle behind its photos), carrying forward local/empty photoIds
+      // here would permanently strand them: pullPhotos() only re-links an
+      // already-downloaded photo to its item once, on first download.
+      const photoIds = (await db.photos.where('itemId').equals(remoteRow.id as string).toArray()).map((p) => p.id)
       await table.put({ ...mapped, photoIds, syncStatus: 'synced' })
       // Only advance the cursor past rows that actually applied — advancing
       // unconditionally (even on a row whose put() throws) would mean the
@@ -1510,8 +1516,8 @@ export async function runSync(): Promise<void> {
   try {
     await pushPendingDeletes()
     await pushProjects()
-    for (const config of ITEM_CONFIGS) await pushItemTable(config)
     await pushSites()
+    for (const config of ITEM_CONFIGS) await pushItemTable(config)
     await pushPhotos()
     await pushProjectPhotos()
     await pushBolPhotos()
@@ -1524,8 +1530,8 @@ export async function runSync(): Promise<void> {
 
     await pullTombstones()
     await pullProjects()
-    for (const config of ITEM_CONFIGS) await pullItemTable(config)
     await pullSites()
+    for (const config of ITEM_CONFIGS) await pullItemTable(config)
     await pullPhotos()
     await pullProjectPhotos()
     await pullBolPhotos()

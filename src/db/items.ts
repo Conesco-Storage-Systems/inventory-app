@@ -156,9 +156,7 @@ export async function updateBeamGroup(input: BeamEditInput): Promise<void> {
   await touchSiteUpdated(existing.siteId)
 }
 
-export async function getPhotosForItem(
-  itemIds: string[],
-): Promise<{ id: string; blob: Blob; createdAt: number }[]> {
+export async function getPhotosForItem(itemIds: string[]): Promise<{ id: string; blob: Blob }[]> {
   if (itemIds.length === 0) return []
   const photos = await db.photos.where('itemId').anyOf(itemIds).toArray()
   if (photos.length === 0) return []
@@ -166,8 +164,8 @@ export async function getPhotosForItem(
   // A blob missing or corrupted to 0 bytes (see PhotoBlob in models/types.ts)
   // can't be displayed either way — leave it out rather than render broken.
   return photos
-    .map((p, i) => ({ id: p.id, blob: blobRows[i]?.blob, createdAt: p.createdAt }))
-    .filter((p): p is { id: string; blob: Blob; createdAt: number } => p.blob instanceof Blob && p.blob.size > 0)
+    .map((p, i) => ({ id: p.id, blob: blobRows[i]?.blob }))
+    .filter((p): p is { id: string; blob: Blob } => p.blob instanceof Blob && p.blob.size > 0)
 }
 
 async function deletePhotosForItems(itemIds: string[]): Promise<void> {

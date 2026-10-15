@@ -3,6 +3,7 @@ import { db } from './db'
 import { enqueuePendingDelete, enqueuePendingDeletes } from './pendingDeletes'
 import type { AreaStatus } from '../models/types'
 import { getEditorName } from '../state/editor'
+import { compressImageToFile } from '../export/compressImage'
 
 export async function createSite(
   name: string,
@@ -177,9 +178,17 @@ export async function purgeExpiredDeletedSites(): Promise<void> {
 }
 
 export async function setSitePhoto(siteId: string, file: File): Promise<void> {
+  // Run through the same decode/re-encode as every other photo type before
+  // it's ever stored — on iOS, a camera capture's File can be a lazy
+  // reference to a transient OS buffer that a later photo capture reuses;
+  // storing that raw reference risked a later camera shot silently
+  // overwriting what this record reads back. compressImageToFile() decodes
+  // onto a canvas and re-encodes into a brand-new, fully in-memory Blob,
+  // which severs that tie.
+  const blob = await compressImageToFile(file).catch(() => file)
   // Blob written first, under its own key — see siteHeroPhotoBlobs in db.ts
   // for why it's kept out of the site record itself.
-  await db.siteHeroPhotoBlobs.put({ id: siteId, blob: file })
+  await db.siteHeroPhotoBlobs.put({ id: siteId, blob })
   await db.sites.update(siteId, {
     sitePhotoDirty: true,
     lastUpdatedBy: getEditorName(),

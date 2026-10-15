@@ -69,9 +69,9 @@ function compressBlobToFile(blob: Blob, maxWidth: number, quality: number, name:
 
 /**
  * Same idea as compressImageToDataUrl, but produces a File — for photos
- * that get stored and synced as-is (item/BOL/project photos), rather than
- * baked into a generated document. A phone's camera photo can be a large,
- * multi-megabyte file and, depending on the phone's settings, isn't
+ * that get stored and synced as-is (item/BOL/project/site photos), rather
+ * than baked into a generated document. A phone's camera photo can be a
+ * large, multi-megabyte file and, depending on the phone's settings, isn't
  * necessarily even a JPEG (e.g. HEIC on iPhones) — decoding it through
  * <img>/canvas once here and re-encoding to JPEG normalizes both the size
  * and the format before it's ever stored, so every synced photo is small
@@ -85,14 +85,28 @@ function compressBlobToFile(blob: Blob, maxWidth: number, quality: number, name:
  * the record fine but never render it. Only on that failure do we convert
  * through heic-to (WASM, independent of the browser's own image codecs)
  * and retry, so browsers that already handle HEIC never pay for it.
+ *
+ * This never throws, and never falls back to the original File reference
+ * either: a <input capture> File on iOS can be a lazy handle onto a
+ * transient OS capture buffer, and a later camera shot can reuse that same
+ * buffer — storing it as-is risks a subsequent photo silently overwriting
+ * what an earlier record reads back. Every path here ends in a freshly
+ * read, fully in-memory copy instead.
  */
 export async function compressImageToFile(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
   try {
     return await compressBlobToFile(file, maxWidth, quality, file.name)
-  } catch (err) {
-    const { isHeic, heicTo } = await import('heic-to')
-    if (!(await isHeic(file).catch(() => false))) throw err
-    const converted = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.9 })
-    return compressBlobToFile(converted, maxWidth, quality, file.name)
+  } catch {
+    try {
+      const { isHeic, heicTo } = await import('heic-to')
+      if (await isHeic(file).catch(() => false)) {
+        const converted = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.9 })
+        return await compressBlobToFile(converted, maxWidth, quality, file.name)
+      }
+    } catch {
+      // Falls through to the detached-copy fallback below.
+    }
+    const buffer = await file.arrayBuffer()
+    return new File([buffer], file.name, { type: file.type || 'image/jpeg' })
   }
 }

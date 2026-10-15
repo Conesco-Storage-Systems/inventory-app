@@ -464,17 +464,27 @@ async function pullSites(): Promise<void> {
       }
 
       const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
-      if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
-        const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
-        if (blob) {
-          await db.siteHeroPhotoBlobs.put({ id: remoteRow.id as string, blob })
-        } else {
-          reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+      // A transient failure here (network drop mid-download, same class as
+      // any other "Load failed"/"Failed to fetch" blip) used to throw out of
+      // this whole iteration before the site's own name/address/etc. below
+      // ever got written locally — needlessly blocking a site's basic data
+      // behind its hero photo. Isolate it so the photo can retry on its own
+      // next pass without holding up the site record itself.
+      try {
+        if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
+          const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
+          if (blob) {
+            await db.siteHeroPhotoBlobs.put({ id: remoteRow.id as string, blob })
+          } else {
+            reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+          }
+        } else if (!sitePhotoPath) {
+          // Remote has no photo (removed elsewhere) — don't keep showing
+          // whatever this device happened to have downloaded before.
+          await db.siteHeroPhotoBlobs.delete(remoteRow.id as string)
         }
-      } else if (!sitePhotoPath) {
-        // Remote has no photo (removed elsewhere) — don't keep showing
-        // whatever this device happened to have downloaded before.
-        await db.siteHeroPhotoBlobs.delete(remoteRow.id as string)
+      } catch (photoErr) {
+        reportSyncError(`[sync] site photo download for ${remoteRow.id} threw:`, photoErr)
       }
 
       await db.sites.put({
@@ -498,6 +508,32 @@ async function pullSites(): Promise<void> {
     }
   }
   setCursor('sites', maxUpdatedAt)
+  await retryMissingSitePhotoDownloads()
+}
+
+// A site record above can save successfully with its sitePhotoPath set even
+// though the photo blob itself failed to download — and since the cursor
+// still advances past that site, the incremental gt(cursor) pull above won't
+// naturally revisit it. Find any local site whose photo path doesn't have a
+// matching downloaded blob yet and retry it directly, every pass, regardless
+// of cursor position (mirrors pushSites() doing the equivalent for photos
+// that failed to upload).
+async function retryMissingSitePhotoDownloads(): Promise<void> {
+  const sitesWithPhoto = await db.sites.filter((site) => !!site.sitePhotoPath).toArray()
+  for (const site of sitesWithPhoto) {
+    const existingBlob = await db.siteHeroPhotoBlobs.get(site.id)
+    if (existingBlob) continue
+    try {
+      const { data: blob, error } = await supabase.storage.from(STORAGE_BUCKET).download(site.sitePhotoPath!)
+      if (blob) {
+        await db.siteHeroPhotoBlobs.put({ id: site.id, blob })
+      } else {
+        reportSyncError(`[sync] site photo download for ${site.id} failed:`, error?.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] site photo download for ${site.id} threw:`, err)
+    }
+  }
 }
 
 // ---------- projects ----------

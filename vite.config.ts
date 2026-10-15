@@ -10,6 +10,12 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Not wired into any screen right now, so there's no app-usage reason
+        // for every device's service worker install to depend on fetching
+        // this one 4MB+ file — on a weak mobile connection that single
+        // request failing aborts the whole precache step, leaving the phone
+        // stuck on the previous deploy's (now-missing) asset filenames.
+        globIgnores: ['automann-ga-site-map.png'],
         navigateFallback: '/index.html',
         // Site map images and similar reference photos can be several MB; still worth
         // precaching so they're available offline in the field, not just on WiFi.

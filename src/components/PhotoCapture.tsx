@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import BlobImage from './BlobImage'
 import CameraCapture from './CameraCapture'
+import { compressImageToFile } from '../export/compressImage'
 import { isMobileDevice } from '../utils/isMobileDevice'
 
 interface PhotoCaptureProps {
@@ -26,10 +27,24 @@ export default function PhotoCapture({ files, onChange }: PhotoCaptureProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showMenu])
 
+  // These files can sit in memory for a while — the whole rest of however
+  // long an item form stays open, across however many more photos get
+  // taken — before savePhotos() ever compresses them. On iOS, a camera
+  // capture's raw File can be a lazy handle onto a reusable OS buffer, so
+  // the longer an uncompressed File sits around while more photos get
+  // taken, the more likely a later capture silently overwrites an earlier
+  // one's data. Compressing right here, the moment each file arrives,
+  // keeps that window as close to zero as possible instead of leaving it
+  // open for the rest of the form session.
+  async function addFiles(newFiles: File[]) {
+    const compressed = await Promise.all(newFiles.map((file) => compressImageToFile(file).catch(() => file)))
+    onChange([...files, ...compressed])
+  }
+
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const newFiles = Array.from(e.target.files ?? [])
-    if (newFiles.length > 0) onChange([...files, ...newFiles])
     e.target.value = ''
+    if (newFiles.length > 0) void addFiles(newFiles)
   }
 
   function removeAt(index: number) {
@@ -108,7 +123,7 @@ export default function PhotoCapture({ files, onChange }: PhotoCaptureProps) {
       )}
       {showCamera && (
         <CameraCapture
-          onCapture={(file) => onChange([...files, file])}
+          onCapture={(file) => void addFiles([file])}
           onClose={() => setShowCamera(false)}
         />
       )}

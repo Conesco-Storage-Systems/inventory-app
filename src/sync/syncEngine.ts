@@ -114,7 +114,7 @@ async function pushItemTable(config: ItemTableConfig): Promise<void> {
 
 async function pullItemTable(config: ItemTableConfig): Promise<void> {
   const cursor = getCursors()[config.remoteTable] ?? 0
-  const { data, error } = await supabase.from(config.remoteTable).select('*').gt('updated_at', cursor)
+  const { data, error } = await supabase.from(config.remoteTable).select('*').gt('updated_at', cursor).order('updated_at', { ascending: true })
   if (error) {
     reportSyncError(`[sync] pull ${config.remoteTable} failed:`, error.message, error)
     return
@@ -123,6 +123,12 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
 
   const table = db.table(config.localTable)
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.updated_at)
 
@@ -133,7 +139,7 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
       // it), keep the local version and just note it for now.
       if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
         console.warn(`[sync] keeping local ${config.localTable}/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -150,9 +156,10 @@ async function pullItemTable(config: ItemTableConfig): Promise<void> {
       // unconditionally (even on a row whose put() throws) would mean the
       // next pull's gt(cursor) never fetches that row again, permanently
       // losing it instead of retrying on the next sync pass.
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull ${config.remoteTable}/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor(config.remoteTable, maxUpdatedAt)
@@ -444,7 +451,7 @@ async function pushSites(): Promise<void> {
 
 async function pullSites(): Promise<void> {
   const cursor = getCursors().sites ?? 0
-  const { data, error } = await supabase.from('sites').select('*').gt('last_updated_at', cursor)
+  const { data, error } = await supabase.from('sites').select('*').gt('last_updated_at', cursor).order('last_updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull sites failed:', error.message, error)
     return
@@ -452,6 +459,12 @@ async function pullSites(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
 
@@ -459,7 +472,7 @@ async function pullSites(): Promise<void> {
       const local = await db.sites.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local site/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -502,9 +515,10 @@ async function pullSites(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull site/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('sites', maxUpdatedAt)
@@ -571,7 +585,7 @@ async function pushProjects(): Promise<void> {
 
 async function pullProjects(): Promise<void> {
   const cursor = getCursors().projects ?? 0
-  const { data, error } = await supabase.from('projects').select('*').gt('last_updated_at', cursor)
+  const { data, error } = await supabase.from('projects').select('*').gt('last_updated_at', cursor).order('last_updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull projects failed:', error.message, error)
     return
@@ -579,6 +593,12 @@ async function pullProjects(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
 
@@ -586,7 +606,7 @@ async function pullProjects(): Promise<void> {
       const local = await db.projects.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local project/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -603,9 +623,10 @@ async function pullProjects(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull project/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('projects', maxUpdatedAt)
@@ -665,7 +686,7 @@ async function pushBolsOfLading(): Promise<void> {
 
 async function pullBolsOfLading(): Promise<void> {
   const cursor = getCursors().bills_of_lading ?? 0
-  const { data, error } = await supabase.from('bills_of_lading').select('*').gt('last_updated_at', cursor)
+  const { data, error } = await supabase.from('bills_of_lading').select('*').gt('last_updated_at', cursor).order('last_updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull bills_of_lading failed:', error.message, error)
     return
@@ -673,6 +694,12 @@ async function pullBolsOfLading(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
 
@@ -680,7 +707,7 @@ async function pullBolsOfLading(): Promise<void> {
       const local = await db.billsOfLading.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local billsOfLading/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -716,9 +743,10 @@ async function pullBolsOfLading(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull billsOfLading/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('bills_of_lading', maxUpdatedAt)
@@ -759,7 +787,7 @@ async function pushCustomerSheets(): Promise<void> {
 
 async function pullCustomerSheets(): Promise<void> {
   const cursor = getCursors().customer_sheets ?? 0
-  const { data, error } = await supabase.from('customer_sheets').select('*').gt('last_updated_at', cursor)
+  const { data, error } = await supabase.from('customer_sheets').select('*').gt('last_updated_at', cursor).order('last_updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull customer_sheets failed:', error.message, error)
     return
@@ -767,6 +795,12 @@ async function pullCustomerSheets(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
 
@@ -774,7 +808,7 @@ async function pullCustomerSheets(): Promise<void> {
       const local = await db.customerSheets.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local customerSheets/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -793,9 +827,10 @@ async function pullCustomerSheets(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull customerSheets/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('customer_sheets', maxUpdatedAt)
@@ -841,7 +876,7 @@ async function pushSalesOrderLineItems(): Promise<void> {
 
 async function pullSalesOrderLineItems(): Promise<void> {
   const cursor = getCursors().sales_order_line_items ?? 0
-  const { data, error } = await supabase.from('sales_order_line_items').select('*').gt('updated_at', cursor)
+  const { data, error } = await supabase.from('sales_order_line_items').select('*').gt('updated_at', cursor).order('updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull sales_order_line_items failed:', error.message, error)
     return
@@ -849,6 +884,12 @@ async function pullSalesOrderLineItems(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.updated_at)
 
@@ -856,7 +897,7 @@ async function pullSalesOrderLineItems(): Promise<void> {
       const local = await db.salesOrderLineItems.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
         console.warn(`[sync] keeping local salesOrderLineItems/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -880,9 +921,10 @@ async function pullSalesOrderLineItems(): Promise<void> {
         updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesOrderLineItems/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('sales_order_line_items', maxUpdatedAt)
@@ -929,7 +971,7 @@ async function pushSalesOrderSchedules(): Promise<void> {
 
 async function pullSalesOrderSchedules(): Promise<void> {
   const cursor = getCursors().sales_order_schedules ?? 0
-  const { data, error } = await supabase.from('sales_order_schedules').select('*').gt('last_updated_at', cursor)
+  const { data, error } = await supabase.from('sales_order_schedules').select('*').gt('last_updated_at', cursor).order('last_updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull sales_order_schedules failed:', error.message, error)
     return
@@ -937,6 +979,12 @@ async function pullSalesOrderSchedules(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
 
@@ -944,7 +992,7 @@ async function pullSalesOrderSchedules(): Promise<void> {
       const local = await db.salesOrderSchedules.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local salesOrderSchedules/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -960,9 +1008,10 @@ async function pullSalesOrderSchedules(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesOrderSchedules/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('sales_order_schedules', maxUpdatedAt)
@@ -1003,7 +1052,7 @@ async function pushSalesQuotes(): Promise<void> {
 
 async function pullSalesQuotes(): Promise<void> {
   const cursor = getCursors().sales_quotes ?? 0
-  const { data, error } = await supabase.from('sales_quotes').select('*').gt('last_updated_at', cursor)
+  const { data, error } = await supabase.from('sales_quotes').select('*').gt('last_updated_at', cursor).order('last_updated_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull sales_quotes failed:', error.message, error)
     return
@@ -1011,6 +1060,12 @@ async function pullSalesQuotes(): Promise<void> {
   if (!data) return
 
   let maxUpdatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const updatedAt = Number(remoteRow.last_updated_at)
 
@@ -1018,7 +1073,7 @@ async function pullSalesQuotes(): Promise<void> {
       const local = await db.salesQuotes.get(remoteRow.id as string)
       if (local && local.syncStatus === 'pending' && local.lastUpdatedAt >= updatedAt) {
         console.warn(`[sync] keeping local salesQuotes/${remoteRow.id} over an older/equal remote change`)
-        maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
         continue
       }
 
@@ -1035,9 +1090,10 @@ async function pullSalesQuotes(): Promise<void> {
         lastUpdatedAt: updatedAt,
         syncStatus: 'synced',
       })
-      maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesQuotes/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('sales_quotes', maxUpdatedAt)
@@ -1077,7 +1133,7 @@ async function pushSalesQuoteLineItems(): Promise<void> {
 
 async function pullSalesQuoteLineItems(): Promise<void> {
   const cursor = getCursors().sales_quote_line_items ?? 0
-  const { data, error } = await supabase.from('sales_quote_line_items').select('*').gt('created_at', cursor)
+  const { data, error } = await supabase.from('sales_quote_line_items').select('*').gt('created_at', cursor).order('created_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull sales_quote_line_items failed:', error.message, error)
     return
@@ -1085,12 +1141,18 @@ async function pullSalesQuoteLineItems(): Promise<void> {
   if (!data) return
 
   let maxCreatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.salesQuoteLineItems.get(remoteRow.id as string)
       if (existing) {
-        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
         continue
       }
 
@@ -1108,9 +1170,10 @@ async function pullSalesQuoteLineItems(): Promise<void> {
         createdAt,
         syncStatus: 'synced',
       })
-      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull salesQuoteLineItems/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('sales_quote_line_items', maxCreatedAt)
@@ -1194,7 +1257,7 @@ async function pushPhotos(): Promise<void> {
 
 async function pullPhotos(): Promise<void> {
   const cursor = getCursors().photos ?? 0
-  const { data, error } = await supabase.from('photos').select('*').gt('created_at', cursor)
+  const { data, error } = await supabase.from('photos').select('*').gt('created_at', cursor).order('created_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull photos failed:', error.message, error)
     return
@@ -1202,6 +1265,12 @@ async function pullPhotos(): Promise<void> {
   if (!data) return
 
   let maxCreatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   const touchedItemIds = new Set<string>()
   for (const remoteRow of data) {
     const createdAt = Number(remoteRow.created_at)
@@ -1219,7 +1288,7 @@ async function pullPhotos(): Promise<void> {
           touchedItemIds.add(existing.itemId)
           touchedItemIds.add(remoteItemId)
         }
-        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
         continue
       }
 
@@ -1227,6 +1296,7 @@ async function pullPhotos(): Promise<void> {
       const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
       if (!blob) {
         reportSyncError(`[sync] photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        pullFailed = true
         continue
       }
 
@@ -1241,9 +1311,10 @@ async function pullPhotos(): Promise<void> {
       await db.photoBlobs.put({ id: photo.id, blob })
       await db.photos.put(photo)
       touchedItemIds.add(photo.itemId)
-      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull photos/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('photos', maxCreatedAt)
@@ -1309,7 +1380,7 @@ async function pushProjectPhotos(): Promise<void> {
 
 async function pullProjectPhotos(): Promise<void> {
   const cursor = getCursors().project_photos ?? 0
-  const { data, error } = await supabase.from('project_photos').select('*').gt('created_at', cursor)
+  const { data, error } = await supabase.from('project_photos').select('*').gt('created_at', cursor).order('created_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull project_photos failed:', error.message, error)
     return
@@ -1317,12 +1388,18 @@ async function pullProjectPhotos(): Promise<void> {
   if (!data) return
 
   let maxCreatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.projectPhotos.get(remoteRow.id as string)
       if (existing) {
-        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
         continue
       }
 
@@ -1330,6 +1407,7 @@ async function pullProjectPhotos(): Promise<void> {
       const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
       if (!blob) {
         reportSyncError(`[sync] project photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        pullFailed = true
         continue
       }
 
@@ -1342,9 +1420,10 @@ async function pullProjectPhotos(): Promise<void> {
       }
       await db.projectPhotoBlobs.put({ id: photo.id, blob })
       await db.projectPhotos.put(photo)
-      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull project_photos/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('project_photos', maxCreatedAt)
@@ -1397,7 +1476,7 @@ async function pushBolPhotos(): Promise<void> {
 
 async function pullBolPhotos(): Promise<void> {
   const cursor = getCursors().bol_photos ?? 0
-  const { data, error } = await supabase.from('bol_photos').select('*').gt('created_at', cursor)
+  const { data, error } = await supabase.from('bol_photos').select('*').gt('created_at', cursor).order('created_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull bol_photos failed:', error.message, error)
     return
@@ -1405,12 +1484,18 @@ async function pullBolPhotos(): Promise<void> {
   if (!data) return
 
   let maxCreatedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const createdAt = Number(remoteRow.created_at)
     try {
       const existing = await db.bolPhotos.get(remoteRow.id as string)
       if (existing) {
-        maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
         continue
       }
 
@@ -1418,6 +1503,7 @@ async function pullBolPhotos(): Promise<void> {
       const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
       if (!blob) {
         reportSyncError(`[sync] bol photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        pullFailed = true
         continue
       }
 
@@ -1430,9 +1516,10 @@ async function pullBolPhotos(): Promise<void> {
       }
       await db.bolPhotoBlobs.put({ id: photo.id, blob })
       await db.bolPhotos.put(photo)
-      maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull bol_photos/${remoteRow.id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('bol_photos', maxCreatedAt)
@@ -1505,7 +1592,7 @@ const LOCAL_TABLE_NAMES = new Set([
 
 async function pullTombstones(): Promise<void> {
   const cursor = getCursors().tombstones ?? 0
-  const { data, error } = await supabase.from('tombstones').select('*').gt('deleted_at', cursor)
+  const { data, error } = await supabase.from('tombstones').select('*').gt('deleted_at', cursor).order('deleted_at', { ascending: true })
   if (error) {
     reportSyncError('[sync] pull tombstones failed:', error.message, error)
     return
@@ -1513,18 +1600,25 @@ async function pullTombstones(): Promise<void> {
   if (!data) return
 
   let maxDeletedAt = cursor
+  // Rows are now fetched in ascending timestamp order, so once any row in
+  // this batch fails to fully apply, the cursor must stop advancing right
+  // there — otherwise a later row's higher timestamp would silently push
+  // the cursor past the failed row, and gt(cursor) would never surface it
+  // again on a future pass.
+  let pullFailed = false
   for (const remoteRow of data) {
     const deletedAt = Number(remoteRow.deleted_at)
     const tableName = remoteRow.table_name as string
     if (!LOCAL_TABLE_NAMES.has(tableName)) {
-      maxDeletedAt = Math.max(maxDeletedAt, deletedAt)
+      if (!pullFailed) maxDeletedAt = Math.max(maxDeletedAt, deletedAt)
       continue
     }
     try {
       await db.table(tableName).delete(remoteRow.record_id as string)
-      maxDeletedAt = Math.max(maxDeletedAt, deletedAt)
+      if (!pullFailed) maxDeletedAt = Math.max(maxDeletedAt, deletedAt)
     } catch (err) {
       reportSyncError(`[sync] applying tombstone for ${tableName}/${remoteRow.record_id} threw:`, err)
+      pullFailed = true
     }
   }
   setCursor('tombstones', maxDeletedAt)

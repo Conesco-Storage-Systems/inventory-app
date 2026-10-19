@@ -1,7 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import TieAllocationColumn, { EMPTY_TIE_ALLOCATION, type TieAllocationValue } from '../components/TieAllocationColumn'
+import TieAllocationColumn, {
+  EMPTY_TIE_ALLOCATION,
+  type TieAllocationSelection,
+  type TieAllocationValue,
+} from '../components/TieAllocationColumn'
 import { db } from '../db/db'
 import {
   deletePendingSalesOrderLineItem,
@@ -227,12 +231,17 @@ export default function Procurement() {
                         {tyRows.map((row, index) => {
                           const othersTotal = tyRowsTotal - (Number(row.quantity) || 0)
                           const maxQuantity = Math.max(0, li.quantityOrdered - othersTotal)
+                          const otherSelections: TieAllocationSelection[] = tyRows
+                            .filter((_, i) => i !== index)
+                            .filter((r) => r.siteId && r.rowKey)
+                            .map((r) => ({ siteId: r.siteId, rowKey: r.rowKey, quantity: Number(r.quantity) || 0 }))
                           return (
                             <TieAllocationColumn
                               key={index}
                               activeSites={activeSites}
                               value={row}
                               maxQuantity={maxQuantity}
+                              otherSelections={otherSelections}
                               onChange={(next) => updateTyRow(index, next)}
                               onRemove={index > 0 ? () => removeTyRow(index) : undefined}
                               isFirst={index === 0}

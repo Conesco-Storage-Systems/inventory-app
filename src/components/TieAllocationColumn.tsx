@@ -59,12 +59,24 @@ function describeMisc(row: MiscItemRow): string {
   return [row.description, row.itemDescription, row.condition].filter(Boolean).join(', ')
 }
 
+// What another column in this same tie has already claimed — used to
+// shrink (or hide) a shared inventory row here so the same physical stock
+// can't be double-counted across columns.
+export interface TieAllocationSelection {
+  siteId: string
+  rowKey: string
+  quantity: number
+}
+
 interface TieAllocationColumnProps {
   activeSites: Site[]
   value: TieAllocationValue
   // The most this column's quantity can be — whatever's still left on the
   // line item once every other column's own quantity is subtracted out.
   maxQuantity: number
+  // Every other column's current (siteId, rowKey, quantity) selection —
+  // this column's own value is never in here, only the others.
+  otherSelections: TieAllocationSelection[]
   onChange: (next: TieAllocationValue) => void
   onRemove?: () => void
   // The first column keeps the original look (separate full-size boxes,
@@ -81,6 +93,7 @@ export default function TieAllocationColumn({
   activeSites,
   value,
   maxQuantity,
+  otherSelections,
   onChange,
   onRemove,
   isFirst = false,
@@ -123,7 +136,18 @@ export default function TieAllocationColumn({
       ]
     : []
 
-  const eligibleRows = availableRows.filter((row) => row.quantity > 0)
+  // Shrink each row by however much of it other columns have already
+  // claimed, so the same physical stock can't be allocated twice — it
+  // only drops off the list once nothing's left of it.
+  function reservedElsewhere(rowKey: string): number {
+    return otherSelections
+      .filter((sel) => sel.siteId === value.siteId && sel.rowKey === rowKey)
+      .reduce((sum, sel) => sum + sel.quantity, 0)
+  }
+
+  const eligibleRows = availableRows
+    .map((row) => ({ ...row, quantity: row.quantity - reservedElsewhere(row.key) }))
+    .filter((row) => row.quantity > 0)
   const selectedRow = eligibleRows.find((row) => row.key === value.rowKey)
 
   function handleSiteChange(siteId: string) {

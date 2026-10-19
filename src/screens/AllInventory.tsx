@@ -5,6 +5,7 @@ import type { CustomerSheetSeed } from '../components/GenerateCustomerSheetFlow'
 import ReadOnlyItemTable, { type ColumnDef } from '../components/ReadOnlyItemTable'
 import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
+import { describeBeamRow, describeMiscRow, describeUprightRow, describeWireDeckRow } from '../db/describeItemRow'
 import { groupBeams, type BeamRow } from '../db/groupBeams'
 import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, uprightDimensionSortValue, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
@@ -23,46 +24,6 @@ interface QuoteSelection {
   description: string
   itemIds: string[]
   rawQuantity: number
-}
-
-function describeBeamRow(row: BeamRow): string {
-  return [
-    row.style,
-    row.widthByLength,
-    row.color,
-    row.pinCount && `${row.pinCount} pin`,
-    row.step && `${row.step} step`,
-    row.condition,
-    row.stamp,
-    row.stickers === 'Yes' && 'Stickers',
-  ]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeUprightRow(row: UprightRow): string {
-  const footplate =
-    row.footplateLength || row.footplateWidth ? `${row.footplateLength}"x${row.footplateWidth}" FP` : ''
-  return [
-    row.style,
-    `${row.widthByHeight} x ${row.columnSizeDisplay}`,
-    row.color,
-    footplate,
-    row.condition,
-    row.gauge && `${row.gauge} ga`,
-  ]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeWireDeckRow(row: WireDeckRow): string {
-  return [row.style.join('/'), row.widthByLength, row.channelCount && `${row.channelCount} channel`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeMiscRow(row: MiscItemRow): string {
-  return [row.description, row.itemDescription, row.condition].filter(Boolean).join(', ')
 }
 
 type AllBeamRow = BeamRow & WithSite

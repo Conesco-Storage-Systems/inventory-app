@@ -1,10 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { groupBeams, type BeamRow } from '../db/groupBeams'
-import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
-import { groupUprights, type UprightRow } from '../db/groupUprights'
-import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
+import { describeBeamRow, describeMiscRow, describeUprightRow, describeWireDeckRow } from '../db/describeItemRow'
+import { groupBeams } from '../db/groupBeams'
+import { groupMiscItems } from '../db/groupMiscItems'
+import { groupUprights } from '../db/groupUprights'
+import { groupWireDecks } from '../db/groupWireDecks'
 import { listBeamsBySite, listMiscItemsBySite, listUprightsBySite, listWireDecksBySite } from '../db/items'
 import type { ItemType, Site } from '../models/types'
+import { rankTieRecommendations } from '../utils/tieRecommendation'
 
 // Carries its own resolved selection (not just keys) so the parent can
 // build a tie allocation straight from this value without needing to
@@ -37,28 +39,6 @@ export interface TieAllocationRow {
   quantity: number
 }
 
-function describeBeam(row: BeamRow): string {
-  return [row.style, row.widthByLength, row.color, row.pinCount && `${row.pinCount} pin`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeUpright(row: UprightRow): string {
-  return [row.style, row.widthByHeight, row.color, row.gauge && `${row.gauge} ga`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeWireDeck(row: WireDeckRow): string {
-  return [row.style.join('/'), row.widthByLength, row.channelCount && `${row.channelCount} channel`, row.condition]
-    .filter(Boolean)
-    .join(', ')
-}
-
-function describeMisc(row: MiscItemRow): string {
-  return [row.description, row.itemDescription, row.condition].filter(Boolean).join(', ')
-}
-
 // What another column in this same tie has already claimed — used to
 // shrink (or hide) a shared inventory row here so the same physical stock
 // can't be double-counted across columns.
@@ -77,6 +57,10 @@ interface TieAllocationColumnProps {
   // Every other column's current (siteId, rowKey, quantity) selection —
   // this column's own value is never in here, only the others.
   otherSelections: TieAllocationSelection[]
+  // The imported Sales Order line's own free-text description — used to
+  // recommend a likely match. Empty when there's nothing to compare
+  // against (or nothing worth recommending).
+  importedDescription: string
   onChange: (next: TieAllocationValue) => void
   onRemove?: () => void
   // The first column keeps the original look (separate full-size boxes,
@@ -94,6 +78,7 @@ export default function TieAllocationColumn({
   value,
   maxQuantity,
   otherSelections,
+  importedDescription,
   onChange,
   onRemove,
   isFirst = false,
@@ -109,28 +94,28 @@ export default function TieAllocationColumn({
           key: `beam:${row.key}`,
           itemType: 'beam' as ItemType,
           itemIds: row.ids,
-          description: describeBeam(row),
+          description: describeBeamRow(row),
           quantity: row.quantity,
         })),
         ...groupUprights(uprights).map((row) => ({
           key: `upright:${row.key}`,
           itemType: 'upright' as ItemType,
           itemIds: row.ids,
-          description: describeUpright(row),
+          description: describeUprightRow(row),
           quantity: row.quantity,
         })),
         ...groupWireDecks(wireDecks).map((row) => ({
           key: `wireDeck:${row.key}`,
           itemType: 'wireDeck' as ItemType,
           itemIds: row.ids,
-          description: describeWireDeck(row),
+          description: describeWireDeckRow(row),
           quantity: row.quantity,
         })),
         ...groupMiscItems(miscItems).map((row) => ({
           key: `misc:${row.key}`,
           itemType: 'misc' as ItemType,
           itemIds: row.ids,
-          description: describeMisc(row),
+          description: describeMiscRow(row),
           quantity: row.quantity,
         })),
       ]
@@ -149,6 +134,15 @@ export default function TieAllocationColumn({
     .map((row) => ({ ...row, quantity: row.quantity - reservedElsewhere(row.key) }))
     .filter((row) => row.quantity > 0)
   const selectedRow = eligibleRows.find((row) => row.key === value.rowKey)
+
+  // Best-matching row(s) for the imported line's own description, best
+  // first — empty when nothing scores well enough to recommend.
+  const recommendedKeys = rankTieRecommendations(importedDescription, eligibleRows)
+  const recommendedSet = new Set(recommendedKeys)
+  const recommendedRows = recommendedKeys
+    .map((key) => eligibleRows.find((row) => row.key === key))
+    .filter((row): row is TieAllocationRow => Boolean(row))
+  const otherRows = eligibleRows.filter((row) => !recommendedSet.has(row.key))
 
   function handleSiteChange(siteId: string) {
     const site = activeSites.find((s) => s.id === siteId)
@@ -191,11 +185,30 @@ export default function TieAllocationColumn({
       Inventory Item
       <select value={value.rowKey} onChange={(e) => handleRowChange(e.target.value)}>
         <option value="">Select an item…</option>
-        {eligibleRows.map((row) => (
-          <option key={row.key} value={row.key}>
-            {row.description} ({row.quantity} available)
-          </option>
-        ))}
+        {recommendedRows.length > 0 && (
+          <optgroup label="Recommended">
+            {recommendedRows.map((row) => (
+              <option key={row.key} value={row.key}>
+                {row.description} ({row.quantity} available)
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {recommendedRows.length > 0 ? (
+          <optgroup label="All Items">
+            {otherRows.map((row) => (
+              <option key={row.key} value={row.key}>
+                {row.description} ({row.quantity} available)
+              </option>
+            ))}
+          </optgroup>
+        ) : (
+          otherRows.map((row) => (
+            <option key={row.key} value={row.key}>
+              {row.description} ({row.quantity} available)
+            </option>
+          ))
+        )}
       </select>
     </label>
   )

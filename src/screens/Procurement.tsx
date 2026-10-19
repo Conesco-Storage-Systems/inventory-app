@@ -242,6 +242,7 @@ export default function Procurement() {
                               value={row}
                               maxQuantity={maxQuantity}
                               otherSelections={otherSelections}
+                              importedDescription={li.description}
                               onChange={(next) => updateTyRow(index, next)}
                               onRemove={index > 0 ? () => removeTyRow(index) : undefined}
                               isFirst={index === 0}

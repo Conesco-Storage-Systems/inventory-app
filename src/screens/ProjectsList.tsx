@@ -23,7 +23,9 @@ export default function ProjectsList() {
   return (
     <main className="page">
       <p>
-        <Link to="/">← Back</Link>
+        <button type="button" className="link-button" onClick={() => navigate(-1)}>
+          ← Back
+        </button>
       </p>
 
       {canEditProjects && (

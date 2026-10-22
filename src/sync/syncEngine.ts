@@ -6,10 +6,14 @@ import type {
   BillOfLading,
   BolPhoto,
   CustomerSheet,
+  InventoryTransfer,
   ItemType,
+  MaterialNeed,
+  MaterialNeedAllocation,
   MiscItem,
   Photo,
   Project,
+  ProjectJobSite,
   ProjectPhoto,
   SalesOrderLineItem,
   SalesOrderSchedule,
@@ -548,6 +552,7 @@ function projectToRemote(project: Project): Record<string, unknown> {
     owner_id: project.ownerId ?? null,
     owner_email: project.ownerEmail ?? '',
     shared_with: project.sharedWith ?? [],
+    sourcing_site_ids: project.sourcingSiteIds ?? [],
     created_at: project.createdAt,
     last_updated_by: project.lastUpdatedBy,
     last_updated_at: project.lastUpdatedAt,
@@ -605,6 +610,7 @@ async function pullProjects(): Promise<void> {
         ownerId: (remoteRow.owner_id as string | null) ?? '',
         ownerEmail: (remoteRow.owner_email as string) ?? '',
         sharedWith: (remoteRow.shared_with as Project['sharedWith']) ?? [],
+        sourcingSiteIds: (remoteRow.sourcing_site_ids as string[]) ?? [],
         createdAt: remoteRow.created_at as number,
         lastUpdatedBy: remoteRow.last_updated_by as string,
         lastUpdatedAt: updatedAt,
@@ -1166,6 +1172,373 @@ async function pullSalesQuoteLineItems(): Promise<void> {
   setCursor('sales_quote_line_items', maxCreatedAt)
 }
 
+// ---------- inventory transfers ----------
+
+function inventoryTransferToRemote(transfer: InventoryTransfer): Record<string, unknown> {
+  return {
+    id: transfer.id,
+    from_site_id: transfer.fromSiteId,
+    from_site_name: transfer.fromSiteName,
+    to_site_id: transfer.toSiteId,
+    to_site_name: transfer.toSiteName,
+    scheduled_date: transfer.scheduledDate,
+    line_items: transfer.lineItems,
+    created_by: transfer.createdBy,
+    created_at: transfer.createdAt,
+  }
+}
+
+async function pushInventoryTransfers(): Promise<void> {
+  const pending = await db.inventoryTransfers.where('syncStatus').equals('pending').toArray()
+  for (const transfer of pending) {
+    try {
+      const { error } = await supabase.from('inventory_transfers').upsert(inventoryTransferToRemote(transfer))
+      if (!error) {
+        await db.inventoryTransfers.update(transfer.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push inventory_transfers/${transfer.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push inventory_transfers/${transfer.id} threw:`, err)
+    }
+  }
+}
+
+async function pullInventoryTransfers(): Promise<void> {
+  const cursor = getCursors().inventory_transfers ?? 0
+  const { data, error } = await supabase
+    .from('inventory_transfers')
+    .select('*')
+    .gt('created_at', cursor)
+    .order('created_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull inventory_transfers failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxCreatedAt = cursor
+  // Rows are frozen once created (never edited) — a row already present
+  // locally has nothing to reconcile, same as sales quote line items.
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const createdAt = Number(remoteRow.created_at)
+    try {
+      const existing = await db.inventoryTransfers.get(remoteRow.id as string)
+      if (existing) {
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
+
+      await db.inventoryTransfers.put({
+        id: remoteRow.id as string,
+        fromSiteId: remoteRow.from_site_id as string,
+        fromSiteName: remoteRow.from_site_name as string,
+        toSiteId: remoteRow.to_site_id as string,
+        toSiteName: remoteRow.to_site_name as string,
+        scheduledDate: remoteRow.scheduled_date as string,
+        lineItems: (remoteRow.line_items as InventoryTransfer['lineItems']) ?? [],
+        createdBy: remoteRow.created_by as string,
+        createdAt,
+        syncStatus: 'synced',
+      })
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull inventoryTransfers/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('inventory_transfers', maxCreatedAt)
+}
+
+// ---------- project job sites ----------
+
+function projectJobSiteToRemote(jobSite: ProjectJobSite): Record<string, unknown> {
+  return {
+    id: jobSite.id,
+    project_id: jobSite.projectId,
+    name: jobSite.name,
+    target_date: jobSite.targetDate,
+    linked_site_id: jobSite.linkedSiteId || null,
+    notes: jobSite.notes,
+    created_at: jobSite.createdAt,
+    updated_at: jobSite.updatedAt,
+  }
+}
+
+async function pushProjectJobSites(): Promise<void> {
+  const pending = await db.projectJobSites.where('syncStatus').equals('pending').toArray()
+  for (const jobSite of pending) {
+    try {
+      const { error } = await supabase.from('project_job_sites').upsert(projectJobSiteToRemote(jobSite))
+      if (!error) {
+        await db.projectJobSites.update(jobSite.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push project_job_sites/${jobSite.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push project_job_sites/${jobSite.id} threw:`, err)
+    }
+  }
+}
+
+async function pullProjectJobSites(): Promise<void> {
+  const cursor = getCursors().project_job_sites ?? 0
+  const { data, error } = await supabase
+    .from('project_job_sites')
+    .select('*')
+    .gt('updated_at', cursor)
+    .order('updated_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull project_job_sites failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.updated_at)
+    try {
+      const local = await db.projectJobSites.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local projectJobSites/${remoteRow.id} over an older/equal remote change`)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        continue
+      }
+
+      await db.projectJobSites.put({
+        id: remoteRow.id as string,
+        projectId: remoteRow.project_id as string,
+        name: remoteRow.name as string,
+        targetDate: (remoteRow.target_date as string) ?? '',
+        linkedSiteId: (remoteRow.linked_site_id as string) ?? '',
+        notes: (remoteRow.notes as string) ?? '',
+        createdAt: remoteRow.created_at as number,
+        updatedAt,
+        syncStatus: 'synced',
+      })
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull projectJobSites/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('project_job_sites', maxUpdatedAt)
+}
+
+// ---------- material needs ----------
+
+function materialNeedToRemote(need: MaterialNeed): Record<string, unknown> {
+  return {
+    id: need.id,
+    project_id: need.projectId,
+    job_site_id: need.jobSiteId,
+    item_type: need.itemType,
+    quantity_needed: need.quantityNeeded,
+    notes: need.notes,
+    condition: need.condition,
+    bundle_size: need.bundleSize,
+    zone: need.zone,
+    cost_per: need.costPer,
+    sell_per: need.sellPer,
+    color: need.color,
+    style: need.style,
+    stamp: need.stamp,
+    length: need.length,
+    width: need.width,
+    pin_count: need.pinCount,
+    stickers: need.stickers,
+    step: need.step,
+    height: need.height,
+    column_length: need.columnLength,
+    column_width: need.columnWidth,
+    footplate_length: need.footplateLength,
+    footplate_width: need.footplateWidth,
+    footplate_thickness: need.footplateThickness,
+    anchor_hole_count: need.anchorHoleCount,
+    hole_size: need.holeSize,
+    gauge: need.gauge,
+    channel_count: need.channelCount,
+    wire_deck_style: need.wireDeckStyle,
+    description: need.description,
+    item_description: need.itemDescription,
+    created_at: need.createdAt,
+    updated_at: need.updatedAt,
+  }
+}
+
+async function pushMaterialNeeds(): Promise<void> {
+  const pending = await db.materialNeeds.where('syncStatus').equals('pending').toArray()
+  for (const need of pending) {
+    try {
+      const { error } = await supabase.from('material_needs').upsert(materialNeedToRemote(need))
+      if (!error) {
+        await db.materialNeeds.update(need.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push material_needs/${need.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push material_needs/${need.id} threw:`, err)
+    }
+  }
+}
+
+async function pullMaterialNeeds(): Promise<void> {
+  const cursor = getCursors().material_needs ?? 0
+  const { data, error } = await supabase
+    .from('material_needs')
+    .select('*')
+    .gt('updated_at', cursor)
+    .order('updated_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull material_needs failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.updated_at)
+    try {
+      const local = await db.materialNeeds.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local materialNeeds/${remoteRow.id} over an older/equal remote change`)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        continue
+      }
+
+      await db.materialNeeds.put({
+        id: remoteRow.id as string,
+        projectId: remoteRow.project_id as string,
+        jobSiteId: remoteRow.job_site_id as string,
+        itemType: remoteRow.item_type as ItemType,
+        quantityNeeded: remoteRow.quantity_needed as number,
+        notes: (remoteRow.notes as string) ?? '',
+        condition: (remoteRow.condition as string) ?? '',
+        bundleSize: (remoteRow.bundle_size as string) ?? '',
+        zone: (remoteRow.zone as string) ?? '',
+        costPer: (remoteRow.cost_per as number) ?? 0,
+        sellPer: (remoteRow.sell_per as number) ?? 0,
+        color: (remoteRow.color as string) ?? '',
+        style: (remoteRow.style as string) ?? '',
+        stamp: (remoteRow.stamp as string) ?? '',
+        length: (remoteRow.length as string) ?? '',
+        width: (remoteRow.width as string) ?? '',
+        pinCount: (remoteRow.pin_count as string) ?? '',
+        stickers: (remoteRow.stickers as string) ?? '',
+        step: (remoteRow.step as string) ?? '',
+        height: (remoteRow.height as string) ?? '',
+        columnLength: (remoteRow.column_length as string) ?? '',
+        columnWidth: (remoteRow.column_width as string) ?? '',
+        footplateLength: (remoteRow.footplate_length as string) ?? '',
+        footplateWidth: (remoteRow.footplate_width as string) ?? '',
+        footplateThickness: (remoteRow.footplate_thickness as string) ?? '',
+        anchorHoleCount: (remoteRow.anchor_hole_count as string) ?? '',
+        holeSize: (remoteRow.hole_size as string) ?? '',
+        gauge: (remoteRow.gauge as string) ?? '',
+        channelCount: (remoteRow.channel_count as string) ?? '',
+        wireDeckStyle: (remoteRow.wire_deck_style as string[]) ?? [],
+        description: (remoteRow.description as string) ?? '',
+        itemDescription: (remoteRow.item_description as string) ?? '',
+        createdAt: remoteRow.created_at as number,
+        updatedAt,
+        syncStatus: 'synced',
+      })
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull materialNeeds/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('material_needs', maxUpdatedAt)
+}
+
+// ---------- material need allocations ----------
+
+function materialNeedAllocationToRemote(allocation: MaterialNeedAllocation): Record<string, unknown> {
+  return {
+    id: allocation.id,
+    material_need_id: allocation.materialNeedId,
+    project_id: allocation.projectId,
+    site_id: allocation.siteId,
+    site_name: allocation.siteName,
+    item_type: allocation.itemType,
+    item_ids: allocation.itemIds,
+    description: allocation.description,
+    quantity: allocation.quantity,
+    tied_at: allocation.tiedAt,
+    tied_by: allocation.tiedBy,
+  }
+}
+
+async function pushMaterialNeedAllocations(): Promise<void> {
+  const pending = await db.materialNeedAllocations.where('syncStatus').equals('pending').toArray()
+  for (const allocation of pending) {
+    try {
+      const { error } = await supabase.from('material_need_allocations').upsert(materialNeedAllocationToRemote(allocation))
+      if (!error) {
+        await db.materialNeedAllocations.update(allocation.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push material_need_allocations/${allocation.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push material_need_allocations/${allocation.id} threw:`, err)
+    }
+  }
+}
+
+// Allocations are created once and never edited (only deleted, via untie),
+// so a row already present locally has nothing to reconcile — same as
+// sales quote line items.
+async function pullMaterialNeedAllocations(): Promise<void> {
+  const cursor = getCursors().material_need_allocations ?? 0
+  const { data, error } = await supabase
+    .from('material_need_allocations')
+    .select('*')
+    .gt('tied_at', cursor)
+    .order('tied_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull material_need_allocations failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxTiedAt = cursor
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const tiedAt = Number(remoteRow.tied_at)
+    try {
+      const existing = await db.materialNeedAllocations.get(remoteRow.id as string)
+      if (existing) {
+        if (!pullFailed) maxTiedAt = Math.max(maxTiedAt, tiedAt)
+        continue
+      }
+
+      await db.materialNeedAllocations.put({
+        id: remoteRow.id as string,
+        materialNeedId: remoteRow.material_need_id as string,
+        projectId: remoteRow.project_id as string,
+        siteId: remoteRow.site_id as string,
+        siteName: (remoteRow.site_name as string) ?? '',
+        itemType: remoteRow.item_type as ItemType,
+        itemIds: (remoteRow.item_ids as string[]) ?? [],
+        description: (remoteRow.description as string) ?? '',
+        quantity: remoteRow.quantity as number,
+        tiedAt,
+        tiedBy: (remoteRow.tied_by as string) ?? '',
+        syncStatus: 'synced',
+      })
+      if (!pullFailed) maxTiedAt = Math.max(maxTiedAt, tiedAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull materialNeedAllocations/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('material_need_allocations', maxTiedAt)
+}
+
 // ---------- item photos ----------
 
 // iOS Safari's IndexedDB can hand back a Blob whose `.size` property still
@@ -1656,6 +2029,10 @@ export async function runSync(): Promise<void> {
     await pushSalesOrderSchedules()
     await pushSalesQuotes()
     await pushSalesQuoteLineItems()
+    await pushInventoryTransfers()
+    await pushProjectJobSites()
+    await pushMaterialNeeds()
+    await pushMaterialNeedAllocations()
 
     await pullTombstones()
     await pullProjects()
@@ -1670,6 +2047,10 @@ export async function runSync(): Promise<void> {
     await pullSalesOrderSchedules()
     await pullSalesQuotes()
     await pullSalesQuoteLineItems()
+    await pullInventoryTransfers()
+    await pullProjectJobSites()
+    await pullMaterialNeeds()
+    await pullMaterialNeedAllocations()
     console.log('[sync] finished')
   } catch (err) {
     reportSyncError('[sync] sync run failed', err)
@@ -1704,6 +2085,10 @@ export function startAutoSync(): void {
     'sales_order_schedules',
     'sales_quotes',
     'sales_quote_line_items',
+    'inventory_transfers',
+    'project_job_sites',
+    'material_needs',
+    'material_need_allocations',
     'tombstones',
   ]
   // One shared channel/connection for every table instead of one each —

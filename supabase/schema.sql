@@ -828,3 +828,129 @@ alter table uprights alter column anchor_hole_count set default '';
 -- of being dropped. Run this against the live database (the create table
 -- above already reflects it for a fresh setup).
 alter table sales_order_line_items add column if not exists flagged_duplicate boolean not null default false;
+
+-- Migration: Inventory Transfers — moves one or more whole inventory groups
+-- from one location to another in a single confirmed action, from the
+-- "Create Inventory Transfer" link on the Sales Orders page. Each row here
+-- is a frozen receipt of a move that already happened (the moved items'
+-- own site_id was already updated through the normal item sync) — never
+-- edited after creation, same as a Sales Quote line item.
+create table if not exists inventory_transfers (
+  id text primary key,
+  from_site_id text references sites(id) on delete set null,
+  from_site_name text not null default '',
+  to_site_id text references sites(id) on delete set null,
+  to_site_name text not null default '',
+  scheduled_date text not null default '',
+  line_items jsonb not null default '[]',
+  created_by text not null default '',
+  created_at bigint not null
+);
+
+alter table inventory_transfers enable row level security;
+
+create policy "Authenticated users can do anything" on inventory_transfers
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Migration: Project Management dashboard, Phase 1 — a project-wide list
+-- of real offsite Locations to check material needs against.
+alter table projects add column if not exists sourcing_site_ids jsonb not null default '[]';
+
+-- Planning destinations within a project's build-out (e.g. "Caledon,
+-- Canada" for Automann) — distinct from a real Location: it may not exist
+-- as a site, or have any inventory yet, until linked_site_id is set.
+create table if not exists project_job_sites (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  name text not null default '',
+  target_date text not null default '',
+  linked_site_id text references sites(id) on delete set null,
+  notes text not null default '',
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
+alter table project_job_sites enable row level security;
+
+create policy "Authenticated users can do anything" on project_job_sites
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create trigger project_job_sites_reject_stale_update before update on project_job_sites
+  for each row execute function reject_stale_update_at();
+
+-- One line of planned material for a project job site, tracked by exact
+-- spec (not color/condition) so it can be matched against live on-hand
+-- inventory at the project's sourcing_site_ids.
+create table if not exists material_needs (
+  id text primary key,
+  project_id text not null references projects(id) on delete cascade,
+  job_site_id text not null references project_job_sites(id) on delete cascade,
+  item_type text not null default '',
+  quantity_needed numeric not null default 0,
+  notes text not null default '',
+  -- Every field below mirrors the real Add Item forms (minus photos) so a
+  -- Material Need captures everything those forms do for permitting/
+  -- engineering purposes. Live sourcing only matches on the dimension
+  -- fields (width/length/height/column_length/column_width/description) —
+  -- see the comment on MaterialNeed in src/models/types.ts.
+  condition text not null default '',
+  bundle_size text not null default '',
+  zone text not null default '',
+  cost_per numeric not null default 0,
+  sell_per numeric not null default 0,
+  color text not null default '',
+  style text not null default '',
+  stamp text not null default '',
+  length text not null default '',
+  width text not null default '',
+  pin_count text not null default '',
+  stickers text not null default '',
+  step text not null default '',
+  height text not null default '',
+  column_length text not null default '',
+  column_width text not null default '',
+  footplate_length text not null default '',
+  footplate_width text not null default '',
+  footplate_thickness text not null default '',
+  anchor_hole_count text not null default '',
+  hole_size text not null default '',
+  gauge text not null default '',
+  channel_count text not null default '',
+  wire_deck_style jsonb not null default '[]',
+  description text not null default '',
+  item_description text not null default '',
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
+alter table material_needs enable row level security;
+
+create policy "Authenticated users can do anything" on material_needs
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- A tracking record of real, on-hand inventory earmarked toward one
+-- Material Need (see src/db/materialNeedAllocations.ts) — does NOT
+-- deduct from that inventory; the actual reservation happens later, when
+-- it's tied to a Sales Order. Created once and never edited, same as
+-- sales_quote_line_items.
+create table if not exists material_need_allocations (
+  id text primary key,
+  material_need_id text not null references material_needs(id) on delete cascade,
+  project_id text not null references projects(id) on delete cascade,
+  site_id text references sites(id) on delete set null,
+  site_name text not null default '',
+  item_type text not null default '',
+  item_ids jsonb not null default '[]',
+  description text not null default '',
+  quantity numeric not null default 0,
+  tied_at bigint not null,
+  tied_by text not null default ''
+);
+
+alter table material_need_allocations enable row level security;
+
+create policy "Authenticated users can do anything" on material_need_allocations
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create trigger material_needs_reject_stale_update before update on material_needs
+  for each row execute function reject_stale_update_at();

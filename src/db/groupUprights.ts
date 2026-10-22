@@ -64,6 +64,11 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
   const rows = new Map<string, UprightRow>()
 
   for (const upright of uprights) {
+    // IndexedDB doesn't actually enforce the model's types — a record left
+    // in a stale state can genuinely have a non-array here at runtime
+    // despite what the TS type claims, and spreading that crashes this
+    // function (and, with it, the whole page's render).
+    const photoIds = Array.isArray(upright.photoIds) ? upright.photoIds : []
     const key = [
       upright.color,
       upright.style,
@@ -88,7 +93,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
     if (existing) {
       existing.quantity += upright.quantity
       existing.ids.push(upright.id)
-      existing.photoIds.push(...upright.photoIds)
+      existing.photoIds.push(...photoIds)
       continue
     }
 
@@ -119,7 +124,7 @@ export function groupUprights(uprights: Upright[]): UprightRow[] {
       bundleSize: upright.bundleSize,
       zone: upright.zone,
       notes: upright.notes,
-      photoIds: [...upright.photoIds],
+      photoIds: [...photoIds],
       costPer: upright.costPer,
       sellPer: upright.sellPer,
     })

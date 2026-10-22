@@ -78,6 +78,115 @@ export interface Project {
   ownerId?: string
   ownerEmail?: string
   sharedWith?: ProjectShare[]
+  // The real offsite Locations material for this project is sourced from
+  // (e.g. Denver/Arizona/Georgia for Automann) — shared across every
+  // Material Need on the project, used to compute how much of a needed
+  // spec is actually on hand without re-picking sources every time.
+  sourcingSiteIds?: string[]
+  syncStatus: SyncStatus
+}
+
+// A planning destination within a project's build-out — e.g. "Caledon,
+// Canada" for Automann — distinct from a real Location/Site: it may not
+// have any actual inventory yet, or even exist as a Site at all, until
+// someone physically starts moving material there. Once it does, linking
+// it to that real Site (linkedSiteId) is what turns on live movement
+// tracking (via Inventory Transfers into that Site) for this job site.
+export interface ProjectJobSite {
+  id: string
+  projectId: string
+  name: string
+  targetDate: string
+  linkedSiteId: string
+  notes: string
+  createdAt: number
+  updatedAt: number
+  syncStatus: SyncStatus
+}
+
+// One line of planned material for a project job site — e.g. "1200
+// Uprights, 42"x25' column 3"x3"" for Caledon. Carries the exact same
+// fields as the real Add Item forms (so nothing gets missed for
+// permitting/engineering purposes), with field names mirroring the real
+// item records directly (Beam.width/length, Upright.width/height/
+// columnLength/columnWidth, WireDeck.width/length, MiscItem.description)
+// — only the fields relevant to itemType are ever set; the rest stay
+// blank. "Sourced" is never computed from these — it's the sum of this
+// need's real, explicitly tied MaterialNeedAllocation rows (see
+// db/materialNeedAllocations.ts), created one at a time from the need's
+// own screen.
+export interface MaterialNeed {
+  id: string
+  projectId: string
+  jobSiteId: string
+  itemType: ItemType
+  quantityNeeded: number
+  notes: string
+  createdAt: number
+  updatedAt: number
+  syncStatus: SyncStatus
+
+  // Common to every item type, same as the real Add Item forms.
+  condition: string
+  bundleSize: string
+  zone: string
+  costPer: number
+  sellPer: number
+
+  // Beam + Upright
+  color: string
+  style: string
+  stamp: string
+
+  // Beam (also shares width/length with Wire Deck)
+  length: string
+  width: string
+  pinCount: string
+  stickers: string
+  step: string
+
+  // Upright (also shares width with Beam/Wire Deck)
+  height: string
+  columnLength: string
+  columnWidth: string
+  footplateLength: string
+  footplateWidth: string
+  footplateThickness: string
+  anchorHoleCount: string
+  holeSize: string
+  gauge: string
+
+  // Wire Deck (also shares width/length with Beam)
+  channelCount: string
+  wireDeckStyle: string[]
+
+  // Misc ("Other")
+  description: string
+  itemDescription: string
+}
+
+// A tracking record of real, on-hand inventory earmarked toward one
+// Material Need — created by "tying" from that need's own screen. This
+// is purely for measuring/tracking where material for a project is
+// sitting; it does NOT deduct from the source item's real quantity —
+// the actual reservation happens later, when that inventory is tied to
+// a Sales Order. "Sourced" for a need is the sum of its allocations, not
+// a live guess — deleting an allocation (untying) just removes the record.
+export interface MaterialNeedAllocation {
+  id: string
+  materialNeedId: string
+  projectId: string
+  siteId: string
+  siteName: string
+  itemType: ItemType
+  // The underlying raw inventory record ids this tie points at — a
+  // grouped row can span several raw records, same convention as
+  // SalesOrderLineItem.tiedItemIds.
+  itemIds: string[]
+  description: string
+  quantity: number
+  tiedAt: number
+  tiedBy: string
   syncStatus: SyncStatus
 }
 
@@ -438,6 +547,41 @@ export interface SalesOrderSchedule {
   syncStatus: SyncStatus
 }
 
+// One grouped inventory row moved in full as part of an Inventory Transfer
+// — never a partial quantity, so there's nothing here to reconcile against
+// what's left behind at the source.
+export interface InventoryTransferLineItem {
+  itemType: ItemType
+  itemIds: string[]
+  quantity: number
+  // A frozen snapshot of every data point this item carried at the moment
+  // of transfer — the same unified column set "Export to Excel" uses (see
+  // EXPORT_ROW_COLUMNS in src/export/inventoryExportRows.ts), with blank
+  // entries for whatever doesn't apply to this item's type — so the
+  // confirmation step and the saved record can show the full line item,
+  // not just a collapsed description.
+  fields: Record<string, string | number>
+}
+
+// Moves one or more whole inventory groups from one location to another in
+// a single confirmed action — created only at the moment of confirmation
+// (see createInventoryTransfer in src/db/inventoryTransfers.ts), so unlike
+// a Sales Order tie there's no 'pending' state for this to sit in: a row
+// here always means the move already happened. A frozen record, same as a
+// Bill of Lading or Customer Sheet — never edited after creation.
+export interface InventoryTransfer {
+  id: string
+  fromSiteId: string
+  fromSiteName: string
+  toSiteId: string
+  toSiteName: string
+  scheduledDate: string
+  lineItems: InventoryTransferLineItem[]
+  createdBy: string
+  createdAt: number
+  syncStatus: SyncStatus
+}
+
 // Records a delete that happened locally so it can be replayed against
 // Supabase once back online — the deleted row itself no longer exists
 // locally to carry a syncStatus of its own.
@@ -457,6 +601,10 @@ export type SyncTable =
   | 'salesOrderSchedules'
   | 'salesQuotes'
   | 'salesQuoteLineItems'
+  | 'inventoryTransfers'
+  | 'projectJobSites'
+  | 'materialNeeds'
+  | 'materialNeedAllocations'
 
 export interface PendingDelete {
   id: string

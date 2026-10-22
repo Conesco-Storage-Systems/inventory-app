@@ -1,5 +1,20 @@
 import type { Beam } from '../models/types'
 
+// Beam width/length is free text (e.g. "144" or a range like "101.5-102"),
+// so this pulls out the leading number for sorting rather than treating it
+// as text — used by any screen sorting a Beams table by size. IndexedDB
+// doesn't actually enforce the model's types, so a record left in a stale
+// state can genuinely have a plain number (or null) here at runtime
+// despite what the TS type claims — coerce defensively rather than
+// trusting it, same fix already applied to the Upright sort helpers
+// (uprightDimensionSortValue/uprightHeightSortValue) for the same reason.
+export function leadingNumber(value: unknown): number {
+  if (!value) return 0
+  const text = typeof value === 'string' ? value : String(value)
+  const match = text.match(/-?\d+(\.\d+)?/)
+  return match ? parseFloat(match[0]) : 0
+}
+
 export interface BeamRow {
   key: string
   ids: string[]
@@ -26,6 +41,11 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
   const rows = new Map<string, BeamRow>()
 
   for (const beam of beams) {
+    // IndexedDB doesn't actually enforce the model's types — a record left
+    // in a stale state can genuinely have a non-array here at runtime
+    // despite what the TS type claims, and spreading that crashes this
+    // function (and, with it, the whole page's render).
+    const photoIds = Array.isArray(beam.photoIds) ? beam.photoIds : []
     const key = [
       beam.length,
       beam.width,
@@ -45,7 +65,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
     if (existing) {
       existing.quantity += beam.quantity
       existing.ids.push(beam.id)
-      existing.photoIds.push(...beam.photoIds)
+      existing.photoIds.push(...photoIds)
       continue
     }
 
@@ -66,7 +86,7 @@ export function groupBeams(beams: Beam[]): BeamRow[] {
       bundleSize: beam.bundleSize,
       zone: beam.zone,
       notes: beam.notes,
-      photoIds: [...beam.photoIds],
+      photoIds: [...photoIds],
       costPer: beam.costPer,
       sellPer: beam.sellPer,
     })

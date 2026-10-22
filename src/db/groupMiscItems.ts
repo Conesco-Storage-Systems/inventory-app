@@ -19,6 +19,11 @@ export function groupMiscItems(miscItems: MiscItem[]): MiscItemRow[] {
   const rows = new Map<string, MiscItemRow>()
 
   for (const item of miscItems) {
+    // IndexedDB doesn't actually enforce the model's types — a record left
+    // in a stale state can genuinely have a non-array here at runtime
+    // despite what the TS type claims, and spreading that crashes this
+    // function (and, with it, the whole page's render).
+    const photoIds = Array.isArray(item.photoIds) ? item.photoIds : []
     const key = [
       item.description,
       item.itemDescription,
@@ -32,7 +37,7 @@ export function groupMiscItems(miscItems: MiscItem[]): MiscItemRow[] {
     if (existing) {
       existing.quantity += item.quantity
       existing.ids.push(item.id)
-      existing.photoIds.push(...item.photoIds)
+      existing.photoIds.push(...photoIds)
       continue
     }
 
@@ -46,7 +51,7 @@ export function groupMiscItems(miscItems: MiscItem[]): MiscItemRow[] {
       bundleSize: item.bundleSize,
       zone: item.zone,
       notes: item.notes,
-      photoIds: [...item.photoIds],
+      photoIds: [...photoIds],
       costPer: item.costPer,
       sellPer: item.sellPer,
     })

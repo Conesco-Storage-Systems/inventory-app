@@ -4,9 +4,19 @@ import { createSite } from '../db/locations'
 interface AddLocationDialogProps {
   onCreated?: (siteId: string) => void
   projectId?: string
+  // Defaults match the original Offsite Locations page usage — a plain
+  // button reading "+ Add location". The project page instead wants this
+  // to read as a link, so both are overridable per call site.
+  label?: string
+  linkStyle?: boolean
 }
 
-export default function AddLocationDialog({ onCreated, projectId }: AddLocationDialogProps) {
+export default function AddLocationDialog({
+  onCreated,
+  projectId,
+  label = '+ Add location',
+  linkStyle = false,
+}: AddLocationDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
@@ -39,8 +49,8 @@ export default function AddLocationDialog({ onCreated, projectId }: AddLocationD
 
   return (
     <>
-      <button type="button" onClick={open}>
-        + Add location
+      <button type="button" className={linkStyle ? 'link-button' : undefined} onClick={open}>
+        {label}
       </button>
       <dialog ref={dialogRef} className="location-dialog">
         <form onSubmit={handleSubmit}>

@@ -1,10 +1,38 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
+import { listInventoryTransfers } from '../db/inventoryTransfers'
 import { sumShippedQuantity } from '../db/salesOrders'
-import type { BillOfLading, SalesOrderLineItem, SalesOrderSchedule } from '../models/types'
+import type { BillOfLading, InventoryTransfer, SalesOrderLineItem, SalesOrderSchedule } from '../models/types'
 import { useRole } from '../state/RoleContext'
 import { formatSoNumber } from '../utils/soNumber'
+
+function InventoryTransfersSection({ transfers }: { transfers: InventoryTransfer[] }) {
+  return (
+    <section className="item-section">
+      <h1>Inventory Transfers</h1>
+      <p>
+        <Link to="/inventory-transfers/new">Create Inventory Transfer</Link>
+      </p>
+      {transfers.length === 0 ? (
+        <p className="placeholder-note">None yet.</p>
+      ) : (
+        <ul className="sales-order-list">
+          {transfers.map((transfer) => (
+            <li key={transfer.id} className="sales-order-row">
+              <Link to={`/inventory-transfers/${transfer.id}`}>
+                {transfer.fromSiteName} → {transfer.toSiteName}
+              </Link>
+              <span className="sales-order-row-date">
+                {new Date(`${transfer.scheduledDate}T00:00:00`).toLocaleDateString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
 
 interface SalesOrderGroup {
   soNumber: string
@@ -120,6 +148,7 @@ export default function SalesOrdersList() {
     )
   const bols = useLiveQuery(() => db.billsOfLading.toArray(), []) ?? []
   const schedules = useLiveQuery(() => db.salesOrderSchedules.toArray(), []) ?? []
+  const transfers = useLiveQuery(() => listInventoryTransfers(), []) ?? []
 
   const classified = groupBySoAndSite(tiedLineItems).map((group) => classify(group, bols, schedules))
   const shipped = classified.filter((g) => g.bucket === 'shipped')
@@ -155,6 +184,8 @@ export default function SalesOrdersList() {
           <SalesOrderSection title="Shipped" groups={shipped} />
         </>
       )}
+
+      <InventoryTransfersSection transfers={transfers} />
     </main>
   )
 }

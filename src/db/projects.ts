@@ -61,6 +61,18 @@ export async function unshareProject(projectId: string, userId: string): Promise
   })
 }
 
+// The real offsite Locations this project's Material Needs are sourced
+// from (e.g. Denver/Arizona/Georgia for Automann) — one shared list for
+// the whole project, same as how the scenario sheet tracks it today.
+export async function setProjectSourcingSites(projectId: string, siteIds: string[]): Promise<void> {
+  await db.projects.update(projectId, {
+    sourcingSiteIds: siteIds,
+    lastUpdatedBy: getEditorName(),
+    lastUpdatedAt: Date.now(),
+    syncStatus: 'pending',
+  })
+}
+
 export async function listProjects() {
   return db.projects.orderBy('name').toArray()
 }

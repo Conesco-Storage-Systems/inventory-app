@@ -5,12 +5,16 @@ import type {
   BillOfLading,
   BolPhoto,
   CustomerSheet,
+  InventoryTransfer,
+  MaterialNeed,
+  MaterialNeedAllocation,
   MiscItem,
   PendingDelete,
   PickerOption,
   Photo,
   PhotoBlob,
   Project,
+  ProjectJobSite,
   ProjectPhoto,
   SalesOrderLineItem,
   SalesOrderSchedule,
@@ -44,6 +48,10 @@ class InventoryDB extends Dexie {
   salesOrderSchedules!: Table<SalesOrderSchedule, string>
   salesQuotes!: Table<SalesQuote, string>
   salesQuoteLineItems!: Table<SalesQuoteLineItem, string>
+  inventoryTransfers!: Table<InventoryTransfer, string>
+  projectJobSites!: Table<ProjectJobSite, string>
+  materialNeeds!: Table<MaterialNeed, string>
+  materialNeedAllocations!: Table<MaterialNeedAllocation, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -676,6 +684,108 @@ class InventoryDB extends Dexie {
             upright.updatedAt = Date.now()
           }
         })
+    })
+    // Adds Inventory Transfers — moves one or more whole inventory groups
+    // from one location to another in a single confirmed action. Each
+    // record here is a frozen receipt of a move that already happened
+    // (siteId was already reassigned on the underlying item records at
+    // confirm time) — there's nothing to migrate for existing data.
+    this.version(21).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+    })
+    // Adds the Project Management dashboard's Phase 1: planning "job
+    // sites" within a project (destinations that may not be real Locations
+    // yet) and the material needed at each one, tracked by exact spec so
+    // it can be matched against live inventory at the project's chosen
+    // sourcing Locations.
+    this.version(22).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+    })
+    // Adds Material Need Allocations — a real, confirmed tie of actual
+    // on-hand inventory to one Material Need (deducts immediately,
+    // restored on untie), replacing the Phase 1 live cross-pool match.
+    this.version(23).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
     })
   }
 }

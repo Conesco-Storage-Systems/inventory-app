@@ -38,6 +38,109 @@ export interface InventoryExportRow {
   Photos: number
 }
 
+// The full ordered set of column labels this unified row shape carries —
+// reused wherever something needs to render every data point in a fixed,
+// consistent order without hardcoding the list a second time (e.g. the
+// Inventory Transfer screens' full line-item tables).
+export const EXPORT_ROW_COLUMNS: string[] = [
+  'Quantity',
+  'Item',
+  'Size',
+  'Style',
+  'Color',
+  'Pin Count',
+  'Step',
+  'Column Size',
+  'Footplate Size',
+  'Footplate Thickness',
+  'Anchor Hole Count',
+  'Hole Size',
+  'Gauge',
+  'Number of Channels',
+  'Item Description',
+  'Condition',
+  'Stamp',
+  'Stickers',
+  'Bundle Size',
+  'Zone',
+  'Notes',
+  'Cost Per',
+  'Sell Per',
+  'Photos',
+]
+
+// Per-item-type subsets of EXPORT_ROW_COLUMNS, matching exactly the fields
+// each *ExportRow function below actually populates — used wherever line
+// items are broken out into their own item-type section (so, e.g., an
+// Uprights section doesn't show a blank "Pin Count" column that only Beams
+// ever fill in). "Item" is left out of each since the section heading
+// already says the type.
+export const BEAM_EXPORT_COLUMNS: string[] = [
+  'Quantity',
+  'Size',
+  'Style',
+  'Color',
+  'Pin Count',
+  'Step',
+  'Condition',
+  'Stamp',
+  'Stickers',
+  'Bundle Size',
+  'Zone',
+  'Notes',
+  'Cost Per',
+  'Sell Per',
+  'Photos',
+]
+
+export const UPRIGHT_EXPORT_COLUMNS: string[] = [
+  'Quantity',
+  'Size',
+  'Style',
+  'Color',
+  'Column Size',
+  'Footplate Size',
+  'Footplate Thickness',
+  'Anchor Hole Count',
+  'Hole Size',
+  'Gauge',
+  'Condition',
+  'Stamp',
+  'Bundle Size',
+  'Zone',
+  'Notes',
+  'Cost Per',
+  'Sell Per',
+  'Photos',
+]
+
+export const WIRE_DECK_EXPORT_COLUMNS: string[] = [
+  'Quantity',
+  'Size',
+  'Style',
+  'Number of Channels',
+  'Condition',
+  'Bundle Size',
+  'Zone',
+  'Notes',
+  'Cost Per',
+  'Sell Per',
+  'Photos',
+]
+
+export const MISC_EXPORT_COLUMNS: string[] = [
+  'Quantity',
+  'Style',
+  'Item Description',
+  'Condition',
+  'Bundle Size',
+  'Zone',
+  'Notes',
+  'Cost Per',
+  'Sell Per',
+  'Photos',
+]
+
 const blankRow: InventoryExportRow = {
   Quantity: 0,
   Item: '',

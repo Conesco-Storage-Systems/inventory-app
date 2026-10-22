@@ -870,6 +870,14 @@ button:disabled {
   border-bottom: none;
 }
 
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover td {
+  background: var(--accent-bg);
+}
+
 /* Notes wraps at 40 characters, but only at a space — a word longer than
    that stays intact rather than splitting mid-word. Width (not just
    max-width) is set so the column actually renders at ~40 characters wide
@@ -2205,4 +2213,188 @@ button.bol-signature-signed {
   .cs-item-box {
     break-inside: avoid;
   }
+}
+
+/* Project Management Dashboard — the project page's back link/header/
+   locations list sit in a fixed-width left column, with the new dashboard
+   content filling the remaining space on the right. */
+.project-dashboard-title {
+  text-align: center;
+}
+
+.project-dashboard-layout {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.project-dashboard-left {
+  flex: 0 0 280px;
+  min-width: 0;
+}
+
+.project-dashboard-right {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A bordered, slightly-darker-tinted card around a section — grows and
+   shrinks naturally with its content since nothing here sets a fixed
+   height. Used for Locations, the bar-graph column, and Sites Needing
+   Material. */
+.dashboard-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 32px;
+}
+
+/* The two dashboard-card columns already align with each other (and with
+   the page title above) via the flex row itself — an extra top margin
+   here would only push them down unevenly relative to that. */
+.project-dashboard-layout .dashboard-card {
+  margin-top: 0;
+}
+
+/* Both columns should start flush at the same height — the left column's
+   own h1 (project name) otherwise carries the global h1's 32px top
+   margin, and the right column's first chart otherwise carries
+   .item-section's own 32px top margin. Zeroing both (rather than relying
+   on one happening to offset the other) keeps this robust regardless of
+   how margins collapse in this particular layout. */
+.project-dashboard-left > .page-header h1 {
+  margin-top: 0;
+  /* Matches the chart section headings' own size (24px) — at the global
+     h1 size (56px) the two looked mismatched in scale even once their
+     boxes lined up on the same row. */
+  font-size: 24px;
+}
+
+.project-dashboard-right > .item-section:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .project-dashboard-layout {
+    flex-direction: column;
+  }
+
+  .project-dashboard-left {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+/* 20% smaller than the default h2 (24px) */
+.job-site-name {
+  font-size: 19.2px;
+}
+
+/* Sits right above the Material Needs table — tighter than the default
+   .page-header gap (16px) so it reads as directly attached to the table. */
+.job-site-header {
+  margin-bottom: 8px;
+}
+
+/* Material Needs by Job Site chart */
+/* Keeps the item type header and its "What's Needed" row pinned to the
+   top of the screen while the rest of the page (tied allocations,
+   available inventory) scrolls underneath — so what you're looking for
+   never scrolls out of view. */
+.sticky-need-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tie-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tie-cell input {
+  width: 70px;
+}
+
+.needs-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.needs-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.needs-chart-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.need-bar-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 240px) 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.need-bar-label {
+  font-size: 13px;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.need-bar-track {
+  display: flex;
+  gap: 2px;
+  height: 20px;
+  background: #e1e0d9;
+  border-radius: 0 4px 4px 0;
+  /* No overflow:hidden here — it would clip each segment's own hover
+     tooltip (positioned just above it via ::after), since a clipped
+     ancestor hides an absolutely-positioned descendant's content even
+     when that descendant is the one being hovered. */
+}
+
+.need-bar-segment {
+  position: relative;
+  height: 100%;
+}
+
+.need-bar-segment:hover::after,
+.need-bar-segment:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  background: var(--text-h);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.need-bar-value {
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

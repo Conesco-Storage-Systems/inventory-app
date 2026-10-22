@@ -633,3 +633,30 @@ export async function restoreGroupQuantity(
     }
   }
 }
+
+// Used by an Inventory Transfer to move a whole grouped row's underlying
+// raw records to a new site — unlike deductGroupQuantity/restoreGroupQuantity,
+// nothing about quantity changes here, just which site each record belongs
+// to. areaId is cleared since an area is specific to the site it came from.
+// Bumps both the source and destination site's "last updated" so neither
+// location's dashboard looks stale after the move.
+export async function moveItemGroupToSite(itemType: ItemType, ids: string[], toSiteId: string): Promise<void> {
+  const table = db.table(ITEM_TABLE_NAMES[itemType])
+  const records = await table.bulkGet(ids)
+  const now = Date.now()
+  const fromSiteIds = new Set<string>()
+
+  for (const record of records) {
+    if (!record) continue
+    fromSiteIds.add(record.siteId)
+    await table.update(record.id, {
+      siteId: toSiteId,
+      areaId: '',
+      updatedAt: now,
+      syncStatus: 'pending',
+    })
+  }
+
+  for (const siteId of fromSiteIds) await touchSiteUpdated(siteId)
+  await touchSiteUpdated(toSiteId)
+}

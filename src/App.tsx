@@ -4,6 +4,7 @@ import LoginGate from './components/LoginGate'
 import { purgeExpiredDeletedSites } from './db/locations'
 import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
+import CreateInventoryTransfer from './screens/CreateInventoryTransfer'
 import GenerateInventoryCustomerSheet from './screens/GenerateInventoryCustomerSheet'
 import GenerateLocationCustomerSheet from './screens/GenerateLocationCustomerSheet'
 import GenerateQuoteCustomerSheet from './screens/GenerateQuoteCustomerSheet'
@@ -25,6 +26,8 @@ import SalesDashboard from './screens/SalesDashboard'
 import SalesOrdersList from './screens/SalesOrdersList'
 import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
 import ViewBillOfLading from './screens/ViewBillOfLading'
+import ViewInventoryTransfer from './screens/ViewInventoryTransfer'
+import ViewMaterialNeed from './screens/ViewMaterialNeed'
 import ViewSalesOrder from './screens/ViewSalesOrder'
 import ViewSalesQuote from './screens/ViewSalesQuote'
 import './App.css'
@@ -55,6 +58,8 @@ function App() {
           <Route path="/all-inventory/customer-sheet" element={<GenerateInventoryCustomerSheet />} />
           <Route path="/procurement" element={<Procurement />} />
           <Route path="/sales-orders" element={<SalesOrdersList />} />
+          <Route path="/inventory-transfers/new" element={<CreateInventoryTransfer />} />
+          <Route path="/inventory-transfers/:transferId" element={<ViewInventoryTransfer />} />
           <Route path="/sales-dashboard" element={<SalesDashboard />} />
           <Route path="/projects" element={<ProjectsList />} />
           <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />
@@ -65,6 +70,7 @@ function App() {
           <Route path="/inactive-projects" element={<InactiveProjects />} />
           <Route path="/recently-deleted-projects" element={<RecentlyDeletedProjects />} />
           <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/material-needs/:needId" element={<ViewMaterialNeed />} />
           <Route path="/projects/:projectId/inventory" element={<AllInventory />} />
           <Route path="/locations/:siteId" element={<LocationDetail />} />
           <Route path="/locations/:siteId/items/new" element={<NewItem />} />

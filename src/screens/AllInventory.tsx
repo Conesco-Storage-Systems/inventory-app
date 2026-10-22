@@ -6,7 +6,7 @@ import ReadOnlyItemTable, { type ColumnDef } from '../components/ReadOnlyItemTab
 import { combineRowsAcrossSites, type WithSite } from '../db/combineAcrossSites'
 import { db } from '../db/db'
 import { describeBeamRow, describeMiscRow, describeUprightRow, describeWireDeckRow } from '../db/describeItemRow'
-import { groupBeams, type BeamRow } from '../db/groupBeams'
+import { groupBeams, leadingNumber, type BeamRow } from '../db/groupBeams'
 import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, uprightDimensionSortValue, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
@@ -41,13 +41,6 @@ function photosLink(siteId: string, ids: string[], photoIds: string[]) {
   ) : (
     '—'
   )
-}
-
-// Beam width can be a free-form string ("4" or a range like "3.5-4.5"), so
-// pull out the leading number for sorting rather than treating it as text.
-function leadingNumber(text: string): number {
-  const match = text.match(/-?\d+(\.\d+)?/)
-  return match ? parseFloat(match[0]) : 0
 }
 
 type FilterMap = Partial<Record<string, Set<string>>>

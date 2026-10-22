@@ -1,14 +1,24 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import BlobImage from '../components/BlobImage'
 import { getPhotosForItem } from '../db/items'
+import { fetchPhotosForItemNow } from '../sync/syncEngine'
 
 export default function ItemPhotos() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const idsParam = searchParams.get('ids') ?? ''
   const ids = idsParam.split(',').filter(Boolean)
+
+  // A device that hasn't caught up on the normal background photo sync
+  // yet (e.g. just logged in for the first time) would otherwise show
+  // "No photos attached" until that catches up, which can take a while —
+  // this fetches straight from Supabase for exactly these items instead
+  // of waiting.
+  useEffect(() => {
+    fetchPhotosForItemNow(idsParam.split(',').filter(Boolean))
+  }, [idsParam])
 
   const photos = useLiveQuery(() => getPhotosForItem(ids), [idsParam]) ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)

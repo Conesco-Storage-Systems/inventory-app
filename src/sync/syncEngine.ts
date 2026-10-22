@@ -1615,6 +1615,30 @@ async function pushPhotos(): Promise<void> {
   }
 }
 
+// Downloads one remote photos row's blob and writes it (plus its
+// metadata) locally — assumes the caller already knows it isn't local
+// yet. Shared by the ordered backfill below and the targeted fetch a
+// device can do for one specific item, so both apply a row identically.
+async function downloadAndStorePhoto(remoteRow: Record<string, unknown>): Promise<boolean> {
+  const path = remoteRow.storage_path as string
+  const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+  if (!blob) {
+    reportSyncError(`[sync] photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+    return false
+  }
+  const photo: Photo = {
+    id: remoteRow.id as string,
+    itemType: remoteRow.item_type as ItemType,
+    itemId: remoteRow.item_id as string,
+    createdAt: Number(remoteRow.created_at),
+    uploadStatus: 'synced',
+    remoteUrl: path,
+  }
+  await db.photoBlobs.put({ id: photo.id, blob })
+  await db.photos.put(photo)
+  return true
+}
+
 async function pullPhotos(): Promise<void> {
   const cursor = getCursors().photos ?? 0
   const { data, error } = await supabase.from('photos').select('*').gt('created_at', cursor).order('created_at', { ascending: true })
@@ -1652,25 +1676,12 @@ async function pullPhotos(): Promise<void> {
         continue
       }
 
-      const path = remoteRow.storage_path as string
-      const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
-      if (!blob) {
-        reportSyncError(`[sync] photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+      const ok = await downloadAndStorePhoto(remoteRow)
+      if (!ok) {
         pullFailed = true
         continue
       }
-
-      const photo: Photo = {
-        id: remoteRow.id as string,
-        itemType: remoteRow.item_type as ItemType,
-        itemId: remoteRow.item_id as string,
-        createdAt,
-        uploadStatus: 'synced',
-        remoteUrl: path,
-      }
-      await db.photoBlobs.put({ id: photo.id, blob })
-      await db.photos.put(photo)
-      touchedItemIds.add(photo.itemId)
+      touchedItemIds.add(remoteRow.item_id as string)
       if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
     } catch (err) {
       reportSyncError(`[sync] pull photos/${remoteRow.id} threw:`, err)
@@ -1679,6 +1690,39 @@ async function pullPhotos(): Promise<void> {
   }
   setCursor('photos', maxCreatedAt)
 
+  for (const itemId of touchedItemIds) {
+    await refreshPhotoIds(itemId)
+  }
+}
+
+// On-demand fetch for one specific item's photos, bypassing the normal
+// ascending-by-created_at backfill entirely. A brand-new device's
+// pullPhotos otherwise has to walk the ENTIRE system's photo history,
+// oldest first, before it ever reaches whichever item someone actually
+// opens — which can take many sync cycles if there's a large company-wide
+// backlog. Called directly from the Photos screen so a photo shows up
+// immediately regardless of backfill progress; doesn't touch the
+// pullPhotos cursor, so it never interferes with that separate walk.
+export async function fetchPhotosForItemNow(itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0 || !supabaseConfigured) return
+  const { data, error } = await supabase.from('photos').select('*').in('item_id', itemIds)
+  if (error) {
+    reportSyncError('[sync] fetch photos for item failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  const touchedItemIds = new Set<string>()
+  for (const remoteRow of data) {
+    try {
+      const existingBlob = await db.photoBlobs.get(remoteRow.id as string)
+      if (existingBlob) continue
+      const ok = await downloadAndStorePhoto(remoteRow)
+      if (ok) touchedItemIds.add(remoteRow.item_id as string)
+    } catch (err) {
+      reportSyncError(`[sync] fetch photo ${remoteRow.id} threw:`, err)
+    }
+  }
   for (const itemId of touchedItemIds) {
     await refreshPhotoIds(itemId)
   }

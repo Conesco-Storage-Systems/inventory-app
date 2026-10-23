@@ -486,6 +486,12 @@ export interface SalesOrderLineItem {
   // warehouse codes don't necessarily match a Site's name exactly.
   warehouseCode: string
   quantityOrdered: number
+  // Epoch ms the order was created in SalesPad ("Created On" in the SO
+  // report), and the SalesPad user id who created it ("Sales Person ID") —
+  // 0 / '' on rows imported before these were captured, or from a report
+  // whose sheet omits one of these columns.
+  createdOn: number
+  salespersonId: string
   // The (soNumber, description, warehouseCode, quantity) signature of the
   // original row this came from on import — set once and never touched
   // again, even when a partial tie splits this line into two rows (one

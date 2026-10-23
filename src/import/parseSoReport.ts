@@ -5,6 +5,10 @@ export interface ParsedSoLineItem {
   description: string
   warehouseCode: string
   quantity: number
+  // Epoch ms the order was created in SalesPad, or 0 if the report has no
+  // "Created On" column (older export format, or a sheet that omits it).
+  createdOn: number
+  salespersonId: string
 }
 
 export interface SoReportParseResult {
@@ -52,9 +56,21 @@ export async function getSoReportSheetNames(file: File): Promise<string[]> {
   return workbook.SheetNames
 }
 
+// A "Created On" cell comes through as a native Date (since the workbook
+// is read with cellDates: true below) when Excel recognizes it as a real
+// date cell, but falls back to whatever text/serial value is actually
+// there otherwise — never throws, just yields 0 so one odd cell can't
+// break the whole import.
+function parseCreatedOn(value: unknown): number {
+  if (value instanceof Date) return value.getTime()
+  if (!value) return 0
+  const parsed = Date.parse(String(value))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 export async function parseSoReportWorkbook(file: File, sheetName: string): Promise<SoReportParseResult> {
   const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
   const sheet = workbook.Sheets[sheetName]
   if (!sheet) throw new Error(`Sheet "${sheetName}" was not found in this file.`)
 
@@ -71,6 +87,8 @@ export async function parseSoReportWorkbook(file: File, sheetName: string): Prom
   const descriptionCol = columnMap.get('extended description')
   const warehouseCodeCol = columnMap.get('warehouse code')
   const quantityCol = columnMap.get('quantity')
+  const createdOnCol = columnMap.get('created on')
+  const salespersonIdCol = columnMap.get('sales person id')
 
   if (soNumberCol === undefined || warehouseCodeCol === undefined || quantityCol === undefined) {
     throw new Error('Could not find the expected columns in this sheet.')
@@ -95,6 +113,8 @@ export async function parseSoReportWorkbook(file: File, sheetName: string): Prom
       description: descriptionCol !== undefined ? String(row[descriptionCol] ?? '').trim() : '',
       warehouseCode: String(row[warehouseCodeCol] ?? '').trim(),
       quantity,
+      createdOn: createdOnCol !== undefined ? parseCreatedOn(row[createdOnCol]) : 0,
+      salespersonId: salespersonIdCol !== undefined ? String(row[salespersonIdCol] ?? '').trim() : '',
     })
   }
 

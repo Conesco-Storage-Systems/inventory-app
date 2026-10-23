@@ -955,6 +955,13 @@ create policy "Authenticated users can do anything" on material_need_allocations
 create trigger material_needs_reject_stale_update before update on material_needs
   for each row execute function reject_stale_update_at();
 
+-- Migration: capture the SO report's "Created On" and "Sales Person ID"
+-- columns on import (see src/import/parseSoReport.ts) — groundwork for
+-- being able to scan a trailing window of orders for changes, not just
+-- flag exact-duplicate rows. Run this against the live database.
+alter table sales_order_line_items add column if not exists created_on bigint not null default 0;
+alter table sales_order_line_items add column if not exists salesperson_id text not null default '';
+
 -- Migration: Bulletin Board — an admin-only joint space for notes, ideas,
 -- and plans, with comments and optional photos on each post. Editable
 -- like a Material Need (reject_stale_update_at resolves a same-row

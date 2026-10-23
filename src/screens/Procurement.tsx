@@ -198,6 +198,8 @@ export default function Procurement() {
               <th>SO #</th>
               <th>Warehouse Code</th>
               <th>Qty Ordered</th>
+              <th>Created On</th>
+              <th>Salesperson ID</th>
               <th>Assign to Inventory</th>
               <th>Description</th>
               <th></th>
@@ -210,6 +212,8 @@ export default function Procurement() {
                   <td>{formatSoNumber(li.soNumber)}</td>
                   <td>{li.warehouseCode}</td>
                   <td>{li.quantityOrdered}</td>
+                  <td>{li.createdOn ? new Date(li.createdOn).toLocaleDateString() : '—'}</td>
+                  <td>{li.salespersonId || '—'}</td>
                   <td>
                     <input
                       type="checkbox"
@@ -226,7 +230,7 @@ export default function Procurement() {
                 </tr>
                 {tyingId === li.id && (
                   <tr>
-                    <td colSpan={6} className="col-left">
+                    <td colSpan={8} className="col-left">
                       <div className="tie-allocation-row">
                         {tyRows.map((row, index) => {
                           const othersTotal = tyRowsTotal - (Number(row.quantity) || 0)
@@ -357,6 +361,8 @@ export default function Procurement() {
                       <th>SO #</th>
                       <th>Warehouse Code</th>
                       <th>Qty Ordered</th>
+                      <th>Created On</th>
+                      <th>Salesperson ID</th>
                       <th>Description</th>
                     </tr>
                   </thead>
@@ -366,6 +372,8 @@ export default function Procurement() {
                         <td>{formatSoNumber(li.soNumber)}</td>
                         <td>{li.warehouseCode}</td>
                         <td>{li.quantity}</td>
+                        <td>{li.createdOn ? new Date(li.createdOn).toLocaleDateString() : '—'}</td>
+                        <td>{li.salespersonId || '—'}</td>
                         <td className="col-left">{li.description}</td>
                       </tr>
                     ))}
@@ -388,6 +396,8 @@ export default function Procurement() {
                         <th>SO #</th>
                         <th>Warehouse Code</th>
                         <th>Qty Ordered</th>
+                        <th>Created On</th>
+                        <th>Salesperson ID</th>
                         <th>Description</th>
                       </tr>
                     </thead>
@@ -397,6 +407,8 @@ export default function Procurement() {
                           <td>{formatSoNumber(li.soNumber)}</td>
                           <td>{li.warehouseCode}</td>
                           <td>{li.quantity}</td>
+                          <td>{li.createdOn ? new Date(li.createdOn).toLocaleDateString() : '—'}</td>
+                          <td>{li.salespersonId || '—'}</td>
                           <td className="col-left">{li.description}</td>
                         </tr>
                       ))}

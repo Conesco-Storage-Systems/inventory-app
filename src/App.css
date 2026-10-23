@@ -2401,3 +2401,55 @@ button.bol-signature-signed {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+.bulletin-post-meta,
+.bulletin-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.bulletin-post-meta .delete-button,
+.bulletin-comment-meta .link-button {
+  margin-left: auto;
+}
+
+/* Preserves the line breaks someone actually typed, unlike .notes-text
+   (used for single-line table cells elsewhere), since a bulletin post is
+   meant to hold multi-paragraph notes/plans. */
+.bulletin-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bulletin-comments {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.bulletin-comment {
+  margin-bottom: 12px;
+}
+
+.bulletin-comment-form {
+  display: flex;
+  gap: 8px;
+}
+
+.bulletin-comment-form input {
+  flex: 1;
+}
+
+.bulletin-new-post textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 16px;
+  font-family: inherit;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  resize: vertical;
+  margin-bottom: 12px;
+}

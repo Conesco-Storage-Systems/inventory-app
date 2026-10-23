@@ -4,6 +4,9 @@ import type {
   Beam,
   BillOfLading,
   BolPhoto,
+  BulletinComment,
+  BulletinPost,
+  BulletinPostPhoto,
   CustomerSheet,
   InventoryTransfer,
   MaterialNeed,
@@ -52,6 +55,10 @@ class InventoryDB extends Dexie {
   projectJobSites!: Table<ProjectJobSite, string>
   materialNeeds!: Table<MaterialNeed, string>
   materialNeedAllocations!: Table<MaterialNeedAllocation, string>
+  bulletinPosts!: Table<BulletinPost, string>
+  bulletinComments!: Table<BulletinComment, string>
+  bulletinPostPhotos!: Table<BulletinPostPhoto, string>
+  bulletinPostPhotoBlobs!: Table<PhotoBlob, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -786,6 +793,43 @@ class InventoryDB extends Dexie {
       projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
       materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
       materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+    })
+    // Adds the Bulletin Board — an admin-only joint space for notes/ideas,
+    // with comments and optional photos on each post.
+    this.version(24).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+      bulletinPosts: 'id, authorEmail, syncStatus, createdAt',
+      bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
+      bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
+      bulletinPostPhotoBlobs: 'id',
     })
   }
 }

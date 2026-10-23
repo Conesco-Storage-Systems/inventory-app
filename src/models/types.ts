@@ -190,6 +190,38 @@ export interface MaterialNeedAllocation {
   syncStatus: SyncStatus
 }
 
+// A note/idea posted to the admin-only Bulletin Board — editable by its
+// author, same reasoning as MaterialNeed (conflict-resolved by updatedAt
+// on the server, see reject_stale_update_at).
+export interface BulletinPost {
+  id: string
+  authorEmail: string
+  body: string
+  createdAt: number
+  updatedAt: number
+  syncStatus: SyncStatus
+}
+
+// A reply to a BulletinPost — unlike the post itself, never edited after
+// creation (same reasoning as MaterialNeedAllocation), so there's nothing
+// to resolve conflicts on: a comment either exists or has been deleted.
+export interface BulletinComment {
+  id: string
+  postId: string
+  authorEmail: string
+  body: string
+  createdAt: number
+  syncStatus: SyncStatus
+}
+
+export interface BulletinPostPhoto {
+  id: string
+  postId: string
+  createdAt: number
+  uploadStatus: 'pending' | 'uploading' | 'synced' | 'failed'
+  remoteUrl?: string
+}
+
 export interface Area {
   id: string
   siteId: string
@@ -605,6 +637,9 @@ export type SyncTable =
   | 'projectJobSites'
   | 'materialNeeds'
   | 'materialNeedAllocations'
+  | 'bulletinPosts'
+  | 'bulletinComments'
+  | 'bulletinPostPhotos'
 
 export interface PendingDelete {
   id: string

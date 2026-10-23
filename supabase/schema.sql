@@ -954,3 +954,49 @@ create policy "Authenticated users can do anything" on material_need_allocations
 
 create trigger material_needs_reject_stale_update before update on material_needs
   for each row execute function reject_stale_update_at();
+
+-- Migration: Bulletin Board — an admin-only joint space for notes, ideas,
+-- and plans, with comments and optional photos on each post. Editable
+-- like a Material Need (reject_stale_update_at resolves a same-row
+-- conflict); comments and photos are create/delete-only, same as
+-- Material Need Allocations.
+create table if not exists bulletin_posts (
+  id text primary key,
+  author_email text not null default '',
+  body text not null default '',
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
+alter table bulletin_posts enable row level security;
+
+create policy "Authenticated users can do anything" on bulletin_posts
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create trigger bulletin_posts_reject_stale_update before update on bulletin_posts
+  for each row execute function reject_stale_update_at();
+
+create table if not exists bulletin_comments (
+  id text primary key,
+  post_id text not null references bulletin_posts(id) on delete cascade,
+  author_email text not null default '',
+  body text not null default '',
+  created_at bigint not null
+);
+
+alter table bulletin_comments enable row level security;
+
+create policy "Authenticated users can do anything" on bulletin_comments
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists bulletin_post_photos (
+  id text primary key,
+  post_id text not null references bulletin_posts(id) on delete cascade,
+  storage_path text not null default '',
+  created_at bigint not null
+);
+
+alter table bulletin_post_photos enable row level security;
+
+create policy "Authenticated users can do anything" on bulletin_post_photos
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);

@@ -30,7 +30,13 @@ export default function ProjectsList() {
 
       {canEditProjects && (
         <nav className="tab-nav">
-          <div className="tab-nav-tabs"></div>
+          <div className="tab-nav-tabs">
+            {permissions.viewBulletinBoard && (
+              <Link className="tab-nav-link" to="/bulletin-board">
+                Bulletin Board
+              </Link>
+            )}
+          </div>
           <button
             type="button"
             className={`tab-nav-link${editingProjects ? ' tab-nav-link--active' : ''}`}

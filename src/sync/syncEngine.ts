@@ -5,6 +5,8 @@ import type {
   Beam,
   BillOfLading,
   BolPhoto,
+  BulletinPost,
+  BulletinPostPhoto,
   CustomerSheet,
   InventoryTransfer,
   ItemType,
@@ -1539,6 +1541,236 @@ async function pullMaterialNeedAllocations(): Promise<void> {
   setCursor('material_need_allocations', maxTiedAt)
 }
 
+// ---------- bulletin board ----------
+
+function bulletinPostToRemote(post: BulletinPost): Record<string, unknown> {
+  return {
+    id: post.id,
+    author_email: post.authorEmail,
+    body: post.body,
+    created_at: post.createdAt,
+    updated_at: post.updatedAt,
+  }
+}
+
+async function pushBulletinPosts(): Promise<void> {
+  const pending = await db.bulletinPosts.where('syncStatus').equals('pending').toArray()
+  for (const post of pending) {
+    try {
+      const { error } = await supabase.from('bulletin_posts').upsert(bulletinPostToRemote(post))
+      if (!error) {
+        await db.bulletinPosts.update(post.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push bulletin_posts/${post.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push bulletin_posts/${post.id} threw:`, err)
+    }
+  }
+}
+
+// Editable (an author can fix a typo later), so this follows the same
+// updatedAt-cursor, local-wins-on-conflict pattern as material needs.
+async function pullBulletinPosts(): Promise<void> {
+  const cursor = getCursors().bulletin_posts ?? 0
+  const { data, error } = await supabase
+    .from('bulletin_posts')
+    .select('*')
+    .gt('updated_at', cursor)
+    .order('updated_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull bulletin_posts failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxUpdatedAt = cursor
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const updatedAt = Number(remoteRow.updated_at)
+    try {
+      const local = await db.bulletinPosts.get(remoteRow.id as string)
+      if (local && local.syncStatus === 'pending' && local.updatedAt >= updatedAt) {
+        console.warn(`[sync] keeping local bulletinPosts/${remoteRow.id} over an older/equal remote change`)
+        if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+        continue
+      }
+
+      await db.bulletinPosts.put({
+        id: remoteRow.id as string,
+        authorEmail: (remoteRow.author_email as string) ?? '',
+        body: (remoteRow.body as string) ?? '',
+        createdAt: remoteRow.created_at as number,
+        updatedAt,
+        syncStatus: 'synced',
+      })
+      if (!pullFailed) maxUpdatedAt = Math.max(maxUpdatedAt, updatedAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull bulletinPosts/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('bulletin_posts', maxUpdatedAt)
+}
+
+async function pushBulletinComments(): Promise<void> {
+  const pending = await db.bulletinComments.where('syncStatus').equals('pending').toArray()
+  for (const comment of pending) {
+    try {
+      const { error } = await supabase.from('bulletin_comments').upsert({
+        id: comment.id,
+        post_id: comment.postId,
+        author_email: comment.authorEmail,
+        body: comment.body,
+        created_at: comment.createdAt,
+      })
+      if (!error) {
+        await db.bulletinComments.update(comment.id, { syncStatus: 'synced' })
+      } else {
+        reportSyncError(`[sync] push bulletin_comments/${comment.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push bulletin_comments/${comment.id} threw:`, err)
+    }
+  }
+}
+
+// Created once and never edited (only deleted) — same reasoning as
+// material need allocations.
+async function pullBulletinComments(): Promise<void> {
+  const cursor = getCursors().bulletin_comments ?? 0
+  const { data, error } = await supabase
+    .from('bulletin_comments')
+    .select('*')
+    .gt('created_at', cursor)
+    .order('created_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull bulletin_comments failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxCreatedAt = cursor
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const createdAt = Number(remoteRow.created_at)
+    try {
+      const existing = await db.bulletinComments.get(remoteRow.id as string)
+      if (existing) {
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
+
+      await db.bulletinComments.put({
+        id: remoteRow.id as string,
+        postId: remoteRow.post_id as string,
+        authorEmail: (remoteRow.author_email as string) ?? '',
+        body: (remoteRow.body as string) ?? '',
+        createdAt,
+        syncStatus: 'synced',
+      })
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull bulletinComments/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('bulletin_comments', maxCreatedAt)
+}
+
+async function pushBulletinPostPhotos(): Promise<void> {
+  const pending = await db.bulletinPostPhotos.where('uploadStatus').equals('pending').toArray()
+  for (const photo of pending) {
+    try {
+      const blobRow = await db.bulletinPostPhotoBlobs.get(photo.id)
+      const bytes = blobRow ? await readBlobBytes(blobRow.blob) : null
+      if (!bytes) {
+        reportSyncError(`[sync] bulletin post photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+        await db.bulletinPostPhotos.update(photo.id, { uploadStatus: 'failed' })
+        continue
+      }
+
+      const path = `${photo.postId}/bulletin/${photo.id}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(path, bytes, { upsert: true, contentType: blobRow!.blob.type || 'image/jpeg' })
+      if (uploadError) {
+        if (isEmptyContentError(uploadError)) {
+          reportSyncError(`[sync] bulletin post photo ${photo.id} has no recoverable image data (corrupted local storage) — it needs to be re-added`)
+          await db.bulletinPostPhotos.update(photo.id, { uploadStatus: 'failed' })
+        } else {
+          reportSyncError(`[sync] bulletin post photo upload for ${photo.id} failed:`, uploadError.message, JSON.stringify(uploadError))
+        }
+        continue
+      }
+
+      const { error } = await supabase.from('bulletin_post_photos').upsert({
+        id: photo.id,
+        post_id: photo.postId,
+        storage_path: path,
+        created_at: photo.createdAt,
+      })
+      if (!error) {
+        await db.bulletinPostPhotos.update(photo.id, { uploadStatus: 'synced', remoteUrl: path })
+      } else {
+        reportSyncError(`[sync] push bulletin_post_photos/${photo.id} failed:`, error.message, error)
+      }
+    } catch (err) {
+      reportSyncError(`[sync] push bulletin_post_photos/${photo.id} threw:`, err)
+    }
+  }
+}
+
+async function pullBulletinPostPhotos(): Promise<void> {
+  const cursor = getCursors().bulletin_post_photos ?? 0
+  const { data, error } = await supabase
+    .from('bulletin_post_photos')
+    .select('*')
+    .gt('created_at', cursor)
+    .order('created_at', { ascending: true })
+  if (error) {
+    reportSyncError('[sync] pull bulletin_post_photos failed:', error.message, error)
+    return
+  }
+  if (!data) return
+
+  let maxCreatedAt = cursor
+  let pullFailed = false
+  for (const remoteRow of data) {
+    const createdAt = Number(remoteRow.created_at)
+    try {
+      const existing = await db.bulletinPostPhotos.get(remoteRow.id as string)
+      if (existing) {
+        if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+        continue
+      }
+
+      const path = remoteRow.storage_path as string
+      const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(path)
+      if (!blob) {
+        reportSyncError(`[sync] bulletin post photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        pullFailed = true
+        continue
+      }
+
+      const photo: BulletinPostPhoto = {
+        id: remoteRow.id as string,
+        postId: remoteRow.post_id as string,
+        createdAt,
+        uploadStatus: 'synced',
+        remoteUrl: path,
+      }
+      await db.bulletinPostPhotoBlobs.put({ id: photo.id, blob })
+      await db.bulletinPostPhotos.put(photo)
+      if (!pullFailed) maxCreatedAt = Math.max(maxCreatedAt, createdAt)
+    } catch (err) {
+      reportSyncError(`[sync] pull bulletin_post_photos/${remoteRow.id} threw:`, err)
+      pullFailed = true
+    }
+  }
+  setCursor('bulletin_post_photos', maxCreatedAt)
+}
+
 // ---------- item photos ----------
 
 // iOS Safari's IndexedDB can hand back a Blob whose `.size` property still
@@ -1941,6 +2173,9 @@ const REMOTE_TABLE_NAMES: Record<string, string> = {
   salesOrderLineItems: 'sales_order_line_items',
   salesOrderSchedules: 'sales_order_schedules',
   salesQuoteLineItems: 'sales_quote_line_items',
+  bulletinPosts: 'bulletin_posts',
+  bulletinComments: 'bulletin_comments',
+  bulletinPostPhotos: 'bulletin_post_photos',
 }
 
 async function pushPendingDeletes(): Promise<void> {
@@ -1992,6 +2227,9 @@ const LOCAL_TABLE_NAMES = new Set([
   'salesOrderSchedules',
   'salesQuotes',
   'salesQuoteLineItems',
+  'bulletinPosts',
+  'bulletinComments',
+  'bulletinPostPhotos',
 ])
 
 async function pullTombstones(): Promise<void> {
@@ -2077,6 +2315,9 @@ export async function runSync(): Promise<void> {
     await pushProjectJobSites()
     await pushMaterialNeeds()
     await pushMaterialNeedAllocations()
+    await pushBulletinPosts()
+    await pushBulletinComments()
+    await pushBulletinPostPhotos()
 
     await pullTombstones()
     await pullProjects()
@@ -2095,6 +2336,9 @@ export async function runSync(): Promise<void> {
     await pullProjectJobSites()
     await pullMaterialNeeds()
     await pullMaterialNeedAllocations()
+    await pullBulletinPosts()
+    await pullBulletinComments()
+    await pullBulletinPostPhotos()
     console.log('[sync] finished')
   } catch (err) {
     reportSyncError('[sync] sync run failed', err)
@@ -2133,6 +2377,9 @@ export function startAutoSync(): void {
     'project_job_sites',
     'material_needs',
     'material_need_allocations',
+    'bulletin_posts',
+    'bulletin_comments',
+    'bulletin_post_photos',
     'tombstones',
   ]
   // One shared channel/connection for every table instead of one each —

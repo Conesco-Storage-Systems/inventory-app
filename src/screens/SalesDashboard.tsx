@@ -34,6 +34,11 @@ export default function SalesDashboard() {
           <Link className="tab-nav-link" to="/projects">
             Project Management
           </Link>
+          {permissions.viewBulletinBoard && (
+            <Link className="tab-nav-link" to="/bulletin-board">
+              Bulletin Board
+            </Link>
+          )}
         </div>
       </nav>
 

@@ -73,15 +73,18 @@
 
 .tab-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  row-gap: 4px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 24px;
 }
 
 .tab-nav-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 

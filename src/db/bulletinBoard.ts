@@ -74,7 +74,10 @@ export async function deleteBulletinComment(id: string): Promise<void> {
 
 export async function addBulletinPostPhoto(postId: string, file: File): Promise<void> {
   const id = uuidv4()
-  const blob = await compressImageToFile(file).catch(() => file)
+  // compressImageToFile() never throws and never falls back to the raw
+  // File (see its docstring) — no .catch() here, see items.ts's savePhotos
+  // for why.
+  const blob = await compressImageToFile(file)
   await db.bulletinPostPhotoBlobs.add({ id, blob })
   await db.bulletinPostPhotos.add({
     id,

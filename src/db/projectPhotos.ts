@@ -7,7 +7,10 @@ import type { ProjectPhoto } from '../models/types'
 
 export async function addProjectPhoto(siteId: string, file: File): Promise<void> {
   const id = uuidv4()
-  const blob = await compressImageToFile(file).catch(() => file)
+  // compressImageToFile() never throws and never falls back to the raw
+  // File (see its docstring) — no .catch() here, see items.ts's savePhotos
+  // for why.
+  const blob = await compressImageToFile(file)
   await db.projectPhotoBlobs.add({ id, blob })
   await db.projectPhotos.add({
     id,

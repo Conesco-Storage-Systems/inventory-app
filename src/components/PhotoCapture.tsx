@@ -37,7 +37,10 @@ export default function PhotoCapture({ files, onChange }: PhotoCaptureProps) {
   // keeps that window as close to zero as possible instead of leaving it
   // open for the rest of the form session.
   async function addFiles(newFiles: File[]) {
-    const compressed = await Promise.all(newFiles.map((file) => compressImageToFile(file).catch(() => file)))
+    // compressImageToFile() never throws and never falls back to the raw
+    // File (see its docstring) — no .catch() here, see items.ts's
+    // savePhotos for why.
+    const compressed = await Promise.all(newFiles.map((file) => compressImageToFile(file)))
     onChange([...files, ...compressed])
   }
 

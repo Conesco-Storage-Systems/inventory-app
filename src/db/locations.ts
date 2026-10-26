@@ -184,8 +184,9 @@ export async function setSitePhoto(siteId: string, file: File): Promise<void> {
   // storing that raw reference risked a later camera shot silently
   // overwriting what this record reads back. compressImageToFile() decodes
   // onto a canvas and re-encodes into a brand-new, fully in-memory Blob,
-  // which severs that tie.
-  const blob = await compressImageToFile(file).catch(() => file)
+  // which severs that tie. It never throws and never falls back to the raw
+  // File either — no .catch() here, see items.ts's savePhotos for why.
+  const blob = await compressImageToFile(file)
   // Blob written first, under its own key — see siteHeroPhotoBlobs in db.ts
   // for why it's kept out of the site record itself.
   await db.siteHeroPhotoBlobs.put({ id: siteId, blob })

@@ -31,10 +31,13 @@ export async function savePhotos(itemType: ItemType, itemId: string, files: File
     const id = uuidv4()
     // A phone camera photo can be huge and isn't necessarily even a JPEG
     // (e.g. HEIC) — normalize before it's ever stored, so it stays small
-    // and fast to sync regardless of what the camera produced. Falls back
-    // to the original file if compression fails for any reason, rather
-    // than losing the photo.
-    const blob = await compressImageToFile(file).catch(() => file)
+    // and fast to sync regardless of what the camera produced.
+    // compressImageToFile() never throws and never falls back to the raw
+    // File itself (see its docstring) — don't add a .catch() here that
+    // falls back to the original file; on iOS that raw File can be a lazy
+    // handle onto a transient OS capture buffer that a later photo silently
+    // overwrites.
+    const blob = await compressImageToFile(file)
     // Blob written first, under its own key — if anything fails between
     // these two writes, there's no metadata record pointing at a missing
     // blob, just an orphaned (harmless, invisible) blob row.

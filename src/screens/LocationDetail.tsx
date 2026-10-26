@@ -35,6 +35,7 @@ import {
 import { deleteBillOfLading, listBolsBySite } from '../db/billsOfLading'
 import { listTiedSalesOrderLineItemsBySite } from '../db/salesOrders'
 import { getSiteHeroPhoto, removeSitePhoto, setSitePhoto, setSiteProject, updateSite } from '../db/locations'
+import { fetchSitePhotoNow } from '../sync/syncEngine'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { exportSitePhotosZip } from '../export/exportSitePhotosZip'
 import { beamExportRow, miscExportRow, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
@@ -62,6 +63,15 @@ export default function LocationDetail() {
   const { siteId } = useParams<{ siteId: string }>()
   const site = useLiveQuery(() => (siteId ? db.sites.get(siteId) : undefined), [siteId])
   const siteHeroPhoto = useLiveQuery(() => (siteId ? getSiteHeroPhoto(siteId) : undefined), [siteId])
+
+  // Covers a local record whose sitePhotoPath is already set but whose
+  // blob never actually downloaded (a transient failure that predates the
+  // fix in pullSites, or any future one-off) — the normal sync cursor has
+  // already moved past that row and will never ask for it again on its
+  // own. A no-op whenever the blob is already present.
+  useEffect(() => {
+    if (siteId) void fetchSitePhotoNow(siteId)
+  }, [siteId])
   const uprights = useLiveQuery(() => (siteId ? listUprightsBySite(siteId) : []), [siteId]) ?? []
   const beams = useLiveQuery(() => (siteId ? listBeamsBySite(siteId) : []), [siteId]) ?? []
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []

@@ -505,6 +505,13 @@ async function pullSites(): Promise<void> {
               sitePhotoPath = remoteSitePhotoPath
             } else {
               reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+              // The site's own name/address/etc. below still applies this
+              // pass (no reason to block that behind a photo problem), but
+              // the cursor must not advance past this row — otherwise the
+              // next pull's gt(cursor) never asks for this row again and
+              // the photo is stuck missing forever despite no error after
+              // the first failure.
+              pullFailed = true
             }
           }
         } else {
@@ -515,6 +522,7 @@ async function pullSites(): Promise<void> {
         }
       } catch (photoErr) {
         reportSyncError(`[sync] site photo download for ${remoteRow.id} threw:`, photoErr)
+        pullFailed = true
       }
 
       await db.sites.put({
@@ -541,18 +549,41 @@ async function pullSites(): Promise<void> {
   setCursor('sites', maxUpdatedAt)
 }
 
-// A retryMissingSitePhotoDownloads() helper used to run here, scanning every
-// local site with a photo path and no local blob and re-downloading it, on
-// every sync pass. Pulled back out: on a device whose local storage had just
-// been wiped (e.g. a Safari "Clear Website Data"), that meant a large,
-// repeating, every-30-seconds bulk re-download of every established site's
-// photo at once, on a flaky mobile connection, at the same time brand-new
-// sites were going through their own rapid push/pull cycles — and new
-// sites' photos started getting replaced by other jobs' photos shortly
-// after being taken. Root cause wasn't fully isolated before this was
-// pulled; re-introduce only with a narrower scope (e.g. a single site at a
-// time, not a full-table scan every pass) and only after confirming it
-// can't run concurrently with itself across overlapping sync passes.
+// On-demand, single-site re-fetch for a site's hero photo, for exactly the
+// case pullSites() can't reach backward for on its own: a local record
+// whose sitePhotoPath is already set but has no matching blob (e.g. a
+// download that failed before the cursor-holdback fix above existed, back
+// when the cursor had already moved past that row — a plain future sync
+// pass will never ask for that row again). Call this from the one site's
+// own detail screen, same pattern as fetchPhotosForItemNow for items.
+//
+// A full-table-scan version of this ("check every local site with a photo
+// path and no blob, every sync pass") was tried before and pulled back
+// out: on a device whose local storage had just been wiped, that meant a
+// large, repeating, every-30-seconds bulk re-download of every
+// established site's photo at once, on a flaky mobile connection, at the
+// same time brand-new sites were going through their own rapid push/pull
+// cycles — and new sites' photos started getting replaced by other jobs'
+// photos shortly after being taken. Root cause wasn't fully isolated
+// before that was pulled. Keep this scoped to one site, called only when
+// that site's screen is actually open — never a timer-driven sweep.
+export async function fetchSitePhotoNow(siteId: string): Promise<void> {
+  if (!supabaseConfigured) return
+  const site = await db.sites.get(siteId)
+  if (!site?.sitePhotoPath) return
+  const existingBlob = await db.siteHeroPhotoBlobs.get(siteId)
+  if (existingBlob) return
+  try {
+    const { data: blob, error } = await supabase.storage.from(STORAGE_BUCKET).download(site.sitePhotoPath)
+    if (blob) {
+      await db.siteHeroPhotoBlobs.put({ id: siteId, blob })
+    } else {
+      reportSyncError(`[sync] site photo fetch-now for ${siteId} failed:`, error?.message, error)
+    }
+  } catch (err) {
+    reportSyncError(`[sync] site photo fetch-now for ${siteId} threw:`, err)
+  }
+}
 
 // ---------- projects ----------
 

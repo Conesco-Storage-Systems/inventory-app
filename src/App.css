@@ -2425,8 +2425,11 @@ button.bol-signature-signed {
 
 .bulletin-comments {
   margin-top: 16px;
+  margin-left: 32px;
   padding-top: 12px;
+  padding-left: 16px;
   border-top: 1px solid var(--border);
+  border-left: 2px solid var(--border);
 }
 
 .bulletin-comment {

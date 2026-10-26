@@ -482,25 +482,36 @@ async function pullSites(): Promise<void> {
         continue
       }
 
-      const sitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
-      // A transient failure here (network drop mid-download, same class as
-      // any other "Load failed"/"Failed to fetch" blip) used to throw out of
-      // this whole iteration before the site's own name/address/etc. below
-      // ever got written locally — needlessly blocking a site's basic data
-      // behind its hero photo. Isolate it so the photo can retry on its own
-      // next pass without holding up the site record itself.
+      const remoteSitePhotoPath = (remoteRow.site_photo_path as string | null) || undefined
+      // What gets persisted locally must only ever advance to a new path
+      // once its blob is actually confirmed downloaded — previously this
+      // was written unconditionally, so a single failed/dropped download
+      // left the local sitePhotoPath matching the remote one with no blob
+      // behind it. From then on this looked "already up to date" to the
+      // check below and never retried again, with no error ever reported
+      // a second time. Falling back to the old local value on failure (or
+      // re-checking the blob even when the path already matches) keeps
+      // this self-healing instead of permanently stuck.
+      let sitePhotoPath = local?.sitePhotoPath
       try {
-        if (sitePhotoPath && sitePhotoPath !== local?.sitePhotoPath) {
-          const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(sitePhotoPath)
-          if (blob) {
-            await db.siteHeroPhotoBlobs.put({ id: remoteRow.id as string, blob })
-          } else {
-            reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+        if (remoteSitePhotoPath) {
+          const alreadyHaveBlob =
+            remoteSitePhotoPath === local?.sitePhotoPath &&
+            (await db.siteHeroPhotoBlobs.get(remoteRow.id as string))
+          if (!alreadyHaveBlob) {
+            const { data: blob, error: downloadError } = await supabase.storage.from(STORAGE_BUCKET).download(remoteSitePhotoPath)
+            if (blob) {
+              await db.siteHeroPhotoBlobs.put({ id: remoteRow.id as string, blob })
+              sitePhotoPath = remoteSitePhotoPath
+            } else {
+              reportSyncError(`[sync] site photo download for ${remoteRow.id} failed:`, downloadError?.message, downloadError)
+            }
           }
-        } else if (!sitePhotoPath) {
+        } else {
           // Remote has no photo (removed elsewhere) — don't keep showing
           // whatever this device happened to have downloaded before.
           await db.siteHeroPhotoBlobs.delete(remoteRow.id as string)
+          sitePhotoPath = undefined
         }
       } catch (photoErr) {
         reportSyncError(`[sync] site photo download for ${remoteRow.id} threw:`, photoErr)

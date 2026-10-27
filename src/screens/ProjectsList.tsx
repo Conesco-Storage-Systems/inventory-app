@@ -36,6 +36,11 @@ export default function ProjectsList() {
                 Bulletin Board
               </Link>
             )}
+            {permissions.viewSyncDiagnostics && (
+              <Link className="tab-nav-link" to="/sync-diagnostics">
+                Sync Diagnostics
+              </Link>
+            )}
           </div>
           <button
             type="button"

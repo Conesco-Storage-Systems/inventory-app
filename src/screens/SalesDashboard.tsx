@@ -39,6 +39,11 @@ export default function SalesDashboard() {
               Bulletin Board
             </Link>
           )}
+          {permissions.viewSyncDiagnostics && (
+            <Link className="tab-nav-link" to="/sync-diagnostics">
+              Sync Diagnostics
+            </Link>
+          )}
         </div>
       </nav>
 

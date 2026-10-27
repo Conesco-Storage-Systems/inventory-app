@@ -26,6 +26,7 @@ import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
 import SalesDashboard from './screens/SalesDashboard'
 import SalesOrdersList from './screens/SalesOrdersList'
 import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
+import SyncDiagnostics from './screens/SyncDiagnostics'
 import ViewBillOfLading from './screens/ViewBillOfLading'
 import ViewInventoryTransfer from './screens/ViewInventoryTransfer'
 import ViewMaterialNeed from './screens/ViewMaterialNeed'
@@ -64,6 +65,7 @@ function App() {
           <Route path="/sales-dashboard" element={<SalesDashboard />} />
           <Route path="/projects" element={<ProjectsList />} />
           <Route path="/bulletin-board" element={<BulletinBoard />} />
+          <Route path="/sync-diagnostics" element={<SyncDiagnostics />} />
           <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />
           <Route path="/sales-quotes/:quoteId/generate" element={<GenerateSalesQuote />} />
           <Route path="/sales-quotes/:quoteId/customer-sheet" element={<GenerateQuoteCustomerSheet />} />

@@ -180,6 +180,31 @@ async function deletePhotosForItems(itemIds: string[]): Promise<void> {
   await db.photoBlobs.bulkDelete(ids)
 }
 
+// Removes a single photo from the line item it belongs to, without
+// touching the item's other photos or any of its fields. The photo's own
+// itemType/itemId (set once at capture time) is enough to find and trim
+// the right item's photoIds array, so the caller only ever needs to pass
+// the photo's id.
+export async function deletePhoto(photoId: string): Promise<void> {
+  const photo = await db.photos.get(photoId)
+  if (!photo) return
+
+  const table = db.table(ITEM_TABLE_NAMES[photo.itemType])
+  const item = await table.get(photo.itemId)
+  if (item) {
+    await table.update(photo.itemId, {
+      photoIds: (item.photoIds as string[]).filter((id) => id !== photoId),
+      updatedAt: Date.now(),
+      syncStatus: 'pending',
+    })
+    await touchSiteUpdated(item.siteId)
+  }
+
+  await enqueuePendingDeletes('photos', [photoId])
+  await db.photos.delete(photoId)
+  await db.photoBlobs.delete(photoId)
+}
+
 export async function deleteBeamGroup(ids: string[]): Promise<void> {
   const existing = await db.beams.get(ids[0])
   await deletePhotosForItems(ids)

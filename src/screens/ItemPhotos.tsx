@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import BlobImage from '../components/BlobImage'
+import DeletePhotoDialog from '../components/DeletePhotoDialog'
 import { getPhotosForItem } from '../db/items'
 import { fetchPhotosForItemNow } from '../sync/syncEngine'
 
@@ -22,6 +23,7 @@ export default function ItemPhotos() {
 
   const photos = useLiveQuery(() => getPhotosForItem(ids), [idsParam]) ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const selectedPhoto = photos.find((photo) => photo.id === selectedId) ?? null
 
   return (
@@ -38,14 +40,24 @@ export default function ItemPhotos() {
       ) : (
         <div className="photo-thumbnails photo-gallery">
           {photos.map((photo) => (
-            <button
-              type="button"
-              className="photo-thumb photo-thumb-large photo-thumb-button"
+            <div
               key={photo.id}
+              className="photo-thumb photo-thumb-large photo-thumb-button"
               onClick={() => setSelectedId(photo.id)}
             >
               <BlobImage blob={photo.blob} />
-            </button>
+              <button
+                type="button"
+                className="photo-remove"
+                aria-label="Remove photo"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeletingId(photo.id)
+                }}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -64,6 +76,14 @@ export default function ItemPhotos() {
             <BlobImage blob={selectedPhoto.blob} />
           </div>
         </div>
+      )}
+
+      {deletingId && (
+        <DeletePhotoDialog
+          photoId={deletingId}
+          onClose={() => setDeletingId(null)}
+          onDeleted={() => setDeletingId(null)}
+        />
       )}
     </main>
   )

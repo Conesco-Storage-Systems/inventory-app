@@ -10,7 +10,7 @@ import { groupUprights } from '../db/groupUprights'
 import { groupWireDecks } from '../db/groupWireDecks'
 import { getItemFields, getItemLabel, type ItemField, type SelectableRow } from '../db/itemFields'
 import { getPhotosForItem } from '../db/items'
-import { bolElementToPdfBlob } from '../export/exportBolToPdf'
+import { blockElementsToPdfBlob, collectPdfBlocks } from '../export/exportBolToPdf'
 import { compressImageToDataUrl } from '../export/compressImage'
 import { saveBlobAs } from '../export/saveBlob'
 import type { Beam, CustomerSheetLineItem, ItemType, MiscItem, Upright, WireDeck } from '../models/types'
@@ -355,7 +355,8 @@ export default function GenerateCustomerSheetFlow({
     setExportError(null)
     setSaving(true)
     try {
-      const blob = await bolElementToPdfBlob(previewRef.current)
+      const blocks = collectPdfBlocks(previewRef.current, '.cs-items')
+      const blob = await blockElementsToPdfBlob(blocks)
       await saveBlobAs(blob, sheetPdfFileName(previewDocument.customerName, previewDocument.date))
     } catch {
       setExportError('Could not save the PDF. Please try again.')

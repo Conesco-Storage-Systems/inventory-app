@@ -13,18 +13,6 @@ export function shareLink(itemType: ItemType, ids: string[]): string {
   return `${window.location.origin}/share/${itemType}/${ids.join(',')}`
 }
 
-// The Photos count column is useful on-screen (e.g. ViewInventoryTransfer's
-// tables, which share InventoryExportRow/the *_EXPORT_COLUMNS lists above),
-// but not wanted in the Excel export itself — callers building rows for
-// exportSheetsToExcel run them through this first.
-export function omitPhotosColumn<T extends { Photos?: unknown }>(rows: T[]): Omit<T, 'Photos'>[] {
-  return rows.map((row) => {
-    const copy = { ...row }
-    delete copy.Photos
-    return copy
-  })
-}
-
 // One row per item, one column per field — a mix of the original per-field
 // layout and the later "Size" column (kept, but limited to just the
 // primary width x length/height, not the extra column size folded in).
@@ -276,5 +264,149 @@ export function miscExportRow(row: MiscItemRow): InventoryExportRow {
     'Cost Per': row.costPer,
     'Sell Per': row.sellPer,
     Photos: row.photoIds.length,
+  }
+}
+
+// The condensed row shape actually written to Excel (LocationDetail.tsx /
+// AllInventory.tsx only) — matches the layout of the offsite consolidated-
+// inventory sheets Conesco already works from (one "Size" column, one
+// free-text "Notes" column), so switching this app's export over doesn't
+// change what the sheet looks like to anyone downstream. Everything above
+// (InventoryExportRow, the *_EXPORT_COLUMNS lists, the *ExportRow
+// functions) stays as-is for the Inventory Transfer screens, which still
+// show each field broken out into its own on-screen column.
+export interface ExcelExportRow {
+  [key: string]: string | number
+  Quantity: number | string
+  Item: string
+  Size: string
+  Notes: string
+  'View Online': string
+  'Cost Per': number | string
+  'Sell Per': number | string
+}
+
+// Shorthand Conesco already uses on these sheets — anything not listed here
+// just prints as the plain style name.
+const STYLE_ABBREVIATIONS: Record<string, string> = {
+  Teardrop: 'TD',
+  'New Style': 'NS',
+}
+
+function styleAbbreviation(style: string): string {
+  return STYLE_ABBREVIATIONS[style] ?? style
+}
+
+// Breaks a long combined Notes string onto a second line near its midpoint
+// (at the nearest comma, so it doesn't cut a word in half) rather than
+// leaving it as one long run — exportToExcel.ts turns this literal "\n"
+// into a real wrapped line in the cell. Short notes are left on one line.
+function wrapAtMidpoint(text: string): string {
+  if (text.length < 40) return text
+  const mid = Math.floor(text.length / 2)
+  for (let offset = 0; offset < text.length; offset++) {
+    const right = mid + offset
+    const left = mid - offset
+    if (right < text.length && text[right] === ',') return breakAfterComma(text, right)
+    if (left >= 0 && text[left] === ',') return breakAfterComma(text, left)
+  }
+  return text
+}
+
+function breakAfterComma(text: string, commaIndex: number): string {
+  const afterComma = commaIndex + 1
+  const start = text[afterComma] === ' ' ? afterComma + 1 : afterComma
+  return `${text.slice(0, afterComma)}\n${text.slice(start)}`
+}
+
+function joinNotes(parts: Array<string | number | undefined | null>): string {
+  const joined = parts
+    .map((part) => (part === undefined || part === null ? '' : String(part).trim()))
+    .filter(Boolean)
+    .join(', ')
+  return wrapAtMidpoint(joined)
+}
+
+function conditionNote(condition: string): string {
+  return condition ? `${condition} condition` : ''
+}
+
+function footplateDescription(length: string, width: string, holeCount: string, holeSize: string): string {
+  const pieces: string[] = []
+  if (length || width) pieces.push(`${length}"x${width}" FP`)
+  const holeBits = [holeCount ? `${holeCount}H` : '', holeSize].filter(Boolean).join(' ')
+  if (holeBits) pieces.push(`with ${holeBits}`)
+  return pieces.join(' ')
+}
+
+export function uprightExcelRow(row: UprightRow): ExcelExportRow {
+  return {
+    Quantity: row.quantity,
+    Item: 'Upright',
+    Size:
+      row.columnLength || row.columnWidth
+        ? `${row.widthByHeight} x ${row.columnLength}"x${row.columnWidth}"`
+        : row.widthByHeight,
+    Notes: joinNotes([
+      styleAbbreviation(row.style),
+      footplateDescription(row.footplateLength, row.footplateWidth, row.anchorHoleCount, row.holeSize),
+      row.gauge ? `${row.gauge} gauge` : '',
+      row.color,
+      conditionNote(row.condition),
+      row.stamp,
+      row.notes,
+    ]),
+    'View Online': 'View Photos',
+    'Cost Per': row.costPer,
+    'Sell Per': row.sellPer,
+  }
+}
+
+export function beamExcelRow(row: BeamRow): ExcelExportRow {
+  return {
+    Quantity: row.quantity,
+    Item: 'Beam',
+    Size: row.step ? `${row.widthByLength} x ${row.step}` : row.widthByLength,
+    Notes: joinNotes([
+      styleAbbreviation(row.style),
+      row.pinCount ? `${row.pinCount} pins` : '',
+      row.color,
+      conditionNote(row.condition),
+      row.stamp,
+      row.stickers === 'Yes' ? 'Stickers' : '',
+      row.notes,
+    ]),
+    'View Online': 'View Photos',
+    'Cost Per': row.costPer,
+    'Sell Per': row.sellPer,
+  }
+}
+
+export function wireDeckExcelRow(row: WireDeckRow): ExcelExportRow {
+  return {
+    Quantity: row.quantity,
+    Item: 'Wire Deck',
+    Size: row.widthByLength,
+    Notes: joinNotes([
+      row.style.map(styleAbbreviation).join(', '),
+      row.channelCount ? `${row.channelCount} channels` : '',
+      conditionNote(row.condition),
+      row.notes,
+    ]),
+    'View Online': 'View Photos',
+    'Cost Per': row.costPer,
+    'Sell Per': row.sellPer,
+  }
+}
+
+export function miscExcelRow(row: MiscItemRow): ExcelExportRow {
+  return {
+    Quantity: row.quantity,
+    Item: 'Other',
+    Size: '',
+    Notes: joinNotes([row.description, row.itemDescription, conditionNote(row.condition), row.notes]),
+    'View Online': 'View Photos',
+    'Cost Per': row.costPer,
+    'Sell Per': row.sellPer,
   }
 }

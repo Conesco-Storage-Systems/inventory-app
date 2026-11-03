@@ -11,7 +11,7 @@ import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, uprightDimensionSortValue, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { exportSheetsToExcel } from '../export/exportToExcel'
-import { beamExportRow, miscExportRow, omitPhotosColumn, shareLink, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
+import { beamExcelRow, miscExcelRow, shareLink, uprightExcelRow, wireDeckExcelRow } from '../export/inventoryExportRows'
 import type { ItemType } from '../models/types'
 import { applyColumnFilters, computeFilterOptions } from '../utils/columnFilters'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
@@ -226,10 +226,10 @@ export default function AllInventory() {
 
   async function handleExport() {
     const rows = [
-      ...uprightRows.map((row) => ({ Location: row.siteName, ...uprightExportRow(row) })),
-      ...beamRows.map((row) => ({ Location: row.siteName, ...beamExportRow(row) })),
-      ...wireDeckRows.map((row) => ({ Location: row.siteName, ...wireDeckExportRow(row) })),
-      ...miscRows.map((row) => ({ Location: row.siteName, ...miscExportRow(row) })),
+      ...uprightRows.map((row) => ({ Location: row.siteName, ...uprightExcelRow(row) })),
+      ...beamRows.map((row) => ({ Location: row.siteName, ...beamExcelRow(row) })),
+      ...wireDeckRows.map((row) => ({ Location: row.siteName, ...wireDeckExcelRow(row) })),
+      ...miscRows.map((row) => ({ Location: row.siteName, ...miscExcelRow(row) })),
     ]
     const targets = [
       ...uprightRows.map((row) => shareLink('upright', row.ids)),
@@ -242,7 +242,7 @@ export default function AllInventory() {
       ? `${project.name.replace(/[^a-z0-9]+/gi, '-')}-inventory.xlsx`
       : 'all-offsite-inventory.xlsx'
     await exportSheetsToExcel(
-      [{ name: 'All Inventory', rows: omitPhotosColumn(rows), hyperlinks: { column: 'View Online', targets } }],
+      [{ name: 'All Inventory', rows, hyperlinks: { column: 'View Online', targets } }],
       filename,
     )
   }

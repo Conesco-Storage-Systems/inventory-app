@@ -76,9 +76,58 @@ async function applyHyperlinkStyle(
   return zip.generateAsync({ type: 'uint8array' })
 }
 
+// A cell value containing a literal "\n" (inventoryExportRows.ts breaks a
+// long Notes string onto a second line this way) still renders as one run
+// unless the cell has "Wrap Text" alignment — and, same as the hyperlink
+// font above, the free xlsx build can't write cell alignment via its JS
+// API either, so this patches it into the generated .xlsx the same way.
+async function applyWrapTextStyle(
+  buffer: Uint8Array,
+  wrapCells: { sheetIndex: number; address: string }[],
+): Promise<Uint8Array> {
+  if (wrapCells.length === 0) return buffer
+
+  const zip = await JSZip.loadAsync(buffer)
+  const stylesFile = zip.file('xl/styles.xml')
+  if (!stylesFile) return buffer
+
+  let stylesXml = await stylesFile.async('string')
+  const cellXfsMatch = stylesXml.match(/<cellXfs count="(\d+)">/)
+  if (!cellXfsMatch) return buffer
+
+  const newStyleIndex = parseInt(cellXfsMatch[1], 10)
+  stylesXml = stylesXml
+    .replace(cellXfsMatch[0], `<cellXfs count="${newStyleIndex + 1}">`)
+    .replace(
+      '</cellXfs>',
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs>',
+    )
+  zip.file('xl/styles.xml', stylesXml)
+
+  const bySheet = new Map<number, string[]>()
+  for (const { sheetIndex, address } of wrapCells) {
+    const list = bySheet.get(sheetIndex) ?? []
+    list.push(address)
+    bySheet.set(sheetIndex, list)
+  }
+
+  for (const [sheetIndex, addresses] of bySheet) {
+    const sheetFile = zip.file(`xl/worksheets/sheet${sheetIndex + 1}.xml`)
+    if (!sheetFile) continue
+    let sheetXml = await sheetFile.async('string')
+    for (const address of addresses) {
+      sheetXml = sheetXml.replaceAll(`<c r="${address}"`, `<c r="${address}" s="${newStyleIndex}"`)
+    }
+    zip.file(`xl/worksheets/sheet${sheetIndex + 1}.xml`, sheetXml)
+  }
+
+  return zip.generateAsync({ type: 'uint8array' })
+}
+
 export async function exportSheetsToExcel(sheets: ExportSheet[], filename: string): Promise<void> {
   const workbook = XLSX.utils.book_new()
   const hyperlinkCells: { sheetIndex: number; address: string }[] = []
+  const wrapCells: { sheetIndex: number; address: string }[] = []
 
   sheets.forEach((sheet, sheetIndex) => {
     const headers = sheet.rows.length > 0 ? Object.keys(sheet.rows[0]) : []
@@ -100,11 +149,19 @@ export async function exportSheetsToExcel(sheets: ExportSheet[], filename: strin
       }
     }
 
+    for (const [address, cell] of Object.entries(worksheet)) {
+      if (address.startsWith('!')) continue
+      if (cell?.t === 's' && typeof cell.v === 'string' && cell.v.includes('\n')) {
+        wrapCells.push({ sheetIndex, address })
+      }
+    }
+
     XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name.slice(0, 31))
   })
 
   const rawBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as Uint8Array
-  const buffer = await applyHyperlinkStyle(rawBuffer, hyperlinkCells)
+  const withHyperlinkStyle = await applyHyperlinkStyle(rawBuffer, hyperlinkCells)
+  const buffer = await applyWrapTextStyle(withHyperlinkStyle, wrapCells)
   const blob = new Blob([new Uint8Array(buffer)], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
 

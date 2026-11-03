@@ -11,7 +11,7 @@ import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, uprightDimensionSortValue, uprightHeightSortValue, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { exportSheetsToExcel } from '../export/exportToExcel'
-import { beamExportRow, miscExportRow, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
+import { beamExportRow, miscExportRow, omitPhotosColumn, shareLink, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
 import type { ItemType } from '../models/types'
 import { applyColumnFilters, computeFilterOptions } from '../utils/columnFilters'
 import { matchesSearch, normalizeForSearch } from '../utils/searchMatch'
@@ -224,18 +224,27 @@ export default function AllInventory() {
   const hasItems =
     uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0 || miscRows.length > 0
 
-  function handleExport() {
+  async function handleExport() {
     const rows = [
       ...uprightRows.map((row) => ({ Location: row.siteName, ...uprightExportRow(row) })),
       ...beamRows.map((row) => ({ Location: row.siteName, ...beamExportRow(row) })),
       ...wireDeckRows.map((row) => ({ Location: row.siteName, ...wireDeckExportRow(row) })),
       ...miscRows.map((row) => ({ Location: row.siteName, ...miscExportRow(row) })),
     ]
+    const targets = [
+      ...uprightRows.map((row) => shareLink('upright', row.ids)),
+      ...beamRows.map((row) => shareLink('beam', row.ids)),
+      ...wireDeckRows.map((row) => shareLink('wireDeck', row.ids)),
+      ...miscRows.map((row) => shareLink('misc', row.ids)),
+    ]
 
     const filename = project
       ? `${project.name.replace(/[^a-z0-9]+/gi, '-')}-inventory.xlsx`
       : 'all-offsite-inventory.xlsx'
-    exportSheetsToExcel([{ name: 'All Inventory', rows }], filename)
+    await exportSheetsToExcel(
+      [{ name: 'All Inventory', rows: omitPhotosColumn(rows), hyperlinks: { column: 'View Online', targets } }],
+      filename,
+    )
   }
 
   const uprightColumns: Record<string, ColumnDef<AllUprightRow>> = {

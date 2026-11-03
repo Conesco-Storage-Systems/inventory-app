@@ -2218,6 +2218,89 @@ button.bol-signature-signed {
   }
 }
 
+/* Shared item view (SharedItemView.tsx) — the public, no-login page behind
+   an Excel export's "View Online" link. Deliberately not the .cs-* "paper
+   sheet" look above: a plain page, logo centered, title to the right, every
+   field in one unwrapped row, photos below. */
+.shared-item-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.shared-item-header {
+  display: flex;
+  justify-content: center;
+  min-height: 60px;
+  margin-bottom: 24px;
+}
+
+.shared-item-logo {
+  height: 60px;
+}
+
+.shared-item-title {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.shared-item-fields-row {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.shared-item-field {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.shared-item-field-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text);
+}
+
+.shared-item-field-value {
+  font-size: 15px;
+}
+
+.shared-item-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.shared-item-photos img {
+  width: 180px;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.shared-item-photo-button {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: block;
+}
+
+.shared-item-footer {
+  margin-top: 32px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text);
+}
+
 /* Project Management Dashboard — the project page's back link/header/
    locations list sit in a fixed-width left column, with the new dashboard
    content filling the remaining space on the right. */

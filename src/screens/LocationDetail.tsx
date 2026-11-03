@@ -38,7 +38,7 @@ import { getSiteHeroPhoto, removeSitePhoto, setSitePhoto, setSiteProject, update
 import { fetchSitePhotoNow } from '../sync/syncEngine'
 import { exportSheetsToExcel } from '../export/exportToExcel'
 import { exportSitePhotosZip } from '../export/exportSitePhotosZip'
-import { beamExportRow, miscExportRow, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
+import { beamExportRow, miscExportRow, omitPhotosColumn, shareLink, uprightExportRow, wireDeckExportRow } from '../export/inventoryExportRows'
 import {
   getWorkbookSheetNames,
   parseInventoryWorkbook,
@@ -392,7 +392,7 @@ export default function LocationDetail() {
     if (siteId) await removeSitePhoto(siteId)
   }
 
-  function handleExport() {
+  async function handleExport() {
     if (!site) return
 
     const rows = [
@@ -401,9 +401,15 @@ export default function LocationDetail() {
       ...wireDeckRows.map(wireDeckExportRow),
       ...miscRows.map(miscExportRow),
     ]
+    const targets = [
+      ...uprightRows.map((row) => shareLink('upright', row.ids)),
+      ...beamRows.map((row) => shareLink('beam', row.ids)),
+      ...wireDeckRows.map((row) => shareLink('wireDeck', row.ids)),
+      ...miscRows.map((row) => shareLink('misc', row.ids)),
+    ]
 
-    exportSheetsToExcel(
-      [{ name: 'Inventory', rows }],
+    await exportSheetsToExcel(
+      [{ name: 'Inventory', rows: omitPhotosColumn(rows), hyperlinks: { column: 'View Online', targets } }],
       `${site.name.replace(/[^a-z0-9]+/gi, '-')}-inventory.xlsx`,
     )
   }

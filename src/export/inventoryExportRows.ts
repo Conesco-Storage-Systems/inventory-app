@@ -2,6 +2,28 @@ import type { BeamRow } from '../db/groupBeams'
 import type { MiscItemRow } from '../db/groupMiscItems'
 import type { UprightRow } from '../db/groupUprights'
 import type { WireDeckRow } from '../db/groupWireDecks'
+import type { ItemType } from '../models/types'
+
+// The public, no-login "View Online" link for a grouped row's ids — reused
+// by both export entry points (LocationDetail.tsx, AllInventory.tsx) to
+// build the parallel hyperlink target list passed to exportSheetsToExcel.
+// window.location.origin keeps this correct in both dev and production
+// without hardcoding a URL.
+export function shareLink(itemType: ItemType, ids: string[]): string {
+  return `${window.location.origin}/share/${itemType}/${ids.join(',')}`
+}
+
+// The Photos count column is useful on-screen (e.g. ViewInventoryTransfer's
+// tables, which share InventoryExportRow/the *_EXPORT_COLUMNS lists above),
+// but not wanted in the Excel export itself — callers building rows for
+// exportSheetsToExcel run them through this first.
+export function omitPhotosColumn<T extends { Photos?: unknown }>(rows: T[]): Omit<T, 'Photos'>[] {
+  return rows.map((row) => {
+    const copy = { ...row }
+    delete copy.Photos
+    return copy
+  })
+}
 
 // One row per item, one column per field — a mix of the original per-field
 // layout and the later "Size" column (kept, but limited to just the
@@ -36,6 +58,7 @@ export interface InventoryExportRow {
   'Cost Per': number | string
   'Sell Per': number | string
   Photos: number
+  'View Online': string
 }
 
 // The full ordered set of column labels this unified row shape carries —
@@ -67,6 +90,7 @@ export const EXPORT_ROW_COLUMNS: string[] = [
   'Cost Per',
   'Sell Per',
   'Photos',
+  'View Online',
 ]
 
 // Per-item-type subsets of EXPORT_ROW_COLUMNS, matching exactly the fields
@@ -91,6 +115,7 @@ export const BEAM_EXPORT_COLUMNS: string[] = [
   'Cost Per',
   'Sell Per',
   'Photos',
+  'View Online',
 ]
 
 export const UPRIGHT_EXPORT_COLUMNS: string[] = [
@@ -112,6 +137,7 @@ export const UPRIGHT_EXPORT_COLUMNS: string[] = [
   'Cost Per',
   'Sell Per',
   'Photos',
+  'View Online',
 ]
 
 export const WIRE_DECK_EXPORT_COLUMNS: string[] = [
@@ -126,6 +152,7 @@ export const WIRE_DECK_EXPORT_COLUMNS: string[] = [
   'Cost Per',
   'Sell Per',
   'Photos',
+  'View Online',
 ]
 
 export const MISC_EXPORT_COLUMNS: string[] = [
@@ -139,6 +166,7 @@ export const MISC_EXPORT_COLUMNS: string[] = [
   'Cost Per',
   'Sell Per',
   'Photos',
+  'View Online',
 ]
 
 const blankRow: InventoryExportRow = {
@@ -166,6 +194,7 @@ const blankRow: InventoryExportRow = {
   'Cost Per': '',
   'Sell Per': '',
   Photos: 0,
+  'View Online': 'View Photos',
 }
 
 export function uprightExportRow(row: UprightRow): InventoryExportRow {

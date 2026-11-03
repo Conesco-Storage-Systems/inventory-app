@@ -46,9 +46,9 @@ export default function LocationsList() {
               Bulletin Board
             </Link>
           )}
-          {permissions.viewSyncDiagnostics && (
-            <Link className="tab-nav-link" to="/sync-diagnostics">
-              Sync Diagnostics
+          {permissions.viewCountingTools && (
+            <Link className="tab-nav-link" to="/counting-tools">
+              Counting Tools
             </Link>
           )}
         </div>

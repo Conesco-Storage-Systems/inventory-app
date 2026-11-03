@@ -5,6 +5,7 @@ import { purgeExpiredDeletedSites } from './db/locations'
 import { purgeExpiredDeletedProjects } from './db/projects'
 import AllInventory from './screens/AllInventory'
 import BulletinBoard from './screens/BulletinBoard'
+import CountingTools from './screens/CountingTools'
 import CreateInventoryTransfer from './screens/CreateInventoryTransfer'
 import GenerateInventoryCustomerSheet from './screens/GenerateInventoryCustomerSheet'
 import GenerateLocationCustomerSheet from './screens/GenerateLocationCustomerSheet'
@@ -26,13 +27,58 @@ import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
 import SalesDashboard from './screens/SalesDashboard'
 import SalesOrdersList from './screens/SalesOrdersList'
 import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
-import SyncDiagnostics from './screens/SyncDiagnostics'
+import SharedItemView from './screens/SharedItemView'
 import ViewBillOfLading from './screens/ViewBillOfLading'
 import ViewInventoryTransfer from './screens/ViewInventoryTransfer'
 import ViewMaterialNeed from './screens/ViewMaterialNeed'
 import ViewSalesOrder from './screens/ViewSalesOrder'
 import ViewSalesQuote from './screens/ViewSalesQuote'
 import './App.css'
+
+// Everything that requires a logged-in session lives here, behind
+// LoginGate. This is a separate component (rather than LoginGate wrapping
+// the top-level router directly) so the public /share route below can sit
+// outside it entirely — LoginGate's session check never even mounts for a
+// /share visit.
+function GatedApp() {
+  return (
+    <LoginGate>
+      <img src="/conesco-logo.png" alt="Conesco" className="app-logo" />
+      <Routes>
+        <Route path="/" element={<LocationsList />} />
+        <Route path="/all-inventory" element={<AllInventory />} />
+        <Route path="/all-inventory/customer-sheet" element={<GenerateInventoryCustomerSheet />} />
+        <Route path="/procurement" element={<Procurement />} />
+        <Route path="/sales-orders" element={<SalesOrdersList />} />
+        <Route path="/inventory-transfers/new" element={<CreateInventoryTransfer />} />
+        <Route path="/inventory-transfers/:transferId" element={<ViewInventoryTransfer />} />
+        <Route path="/sales-dashboard" element={<SalesDashboard />} />
+        <Route path="/projects" element={<ProjectsList />} />
+        <Route path="/bulletin-board" element={<BulletinBoard />} />
+        <Route path="/counting-tools" element={<CountingTools />} />
+        <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />
+        <Route path="/sales-quotes/:quoteId/generate" element={<GenerateSalesQuote />} />
+        <Route path="/sales-quotes/:quoteId/customer-sheet" element={<GenerateQuoteCustomerSheet />} />
+        <Route path="/inactive-locations" element={<InactiveLocations />} />
+        <Route path="/recently-deleted" element={<RecentlyDeleted />} />
+        <Route path="/inactive-projects" element={<InactiveProjects />} />
+        <Route path="/recently-deleted-projects" element={<RecentlyDeletedProjects />} />
+        <Route path="/projects/:projectId" element={<ProjectDetail />} />
+        <Route path="/projects/:projectId/material-needs/:needId" element={<ViewMaterialNeed />} />
+        <Route path="/projects/:projectId/inventory" element={<AllInventory />} />
+        <Route path="/locations/:siteId" element={<LocationDetail />} />
+        <Route path="/locations/:siteId/items/new" element={<NewItem />} />
+        <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
+        <Route path="/locations/:siteId/bol/from-sales-orders" element={<SelectSoItemsForBol />} />
+        <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />
+        <Route path="/locations/:siteId/customer-sheet/new" element={<GenerateLocationCustomerSheet />} />
+        <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />
+        <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
+        <Route path="/locations/:siteId/sales-orders/:soNumber" element={<ViewSalesOrder />} />
+      </Routes>
+    </LoginGate>
+  )
+}
 
 function App() {
   useEffect(() => {
@@ -51,43 +97,12 @@ function App() {
   }, [])
 
   return (
-    <LoginGate>
-      <BrowserRouter>
-        <img src="/conesco-logo.png" alt="Conesco" className="app-logo" />
-        <Routes>
-          <Route path="/" element={<LocationsList />} />
-          <Route path="/all-inventory" element={<AllInventory />} />
-          <Route path="/all-inventory/customer-sheet" element={<GenerateInventoryCustomerSheet />} />
-          <Route path="/procurement" element={<Procurement />} />
-          <Route path="/sales-orders" element={<SalesOrdersList />} />
-          <Route path="/inventory-transfers/new" element={<CreateInventoryTransfer />} />
-          <Route path="/inventory-transfers/:transferId" element={<ViewInventoryTransfer />} />
-          <Route path="/sales-dashboard" element={<SalesDashboard />} />
-          <Route path="/projects" element={<ProjectsList />} />
-          <Route path="/bulletin-board" element={<BulletinBoard />} />
-          <Route path="/sync-diagnostics" element={<SyncDiagnostics />} />
-          <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />
-          <Route path="/sales-quotes/:quoteId/generate" element={<GenerateSalesQuote />} />
-          <Route path="/sales-quotes/:quoteId/customer-sheet" element={<GenerateQuoteCustomerSheet />} />
-          <Route path="/inactive-locations" element={<InactiveLocations />} />
-          <Route path="/recently-deleted" element={<RecentlyDeleted />} />
-          <Route path="/inactive-projects" element={<InactiveProjects />} />
-          <Route path="/recently-deleted-projects" element={<RecentlyDeletedProjects />} />
-          <Route path="/projects/:projectId" element={<ProjectDetail />} />
-          <Route path="/projects/:projectId/material-needs/:needId" element={<ViewMaterialNeed />} />
-          <Route path="/projects/:projectId/inventory" element={<AllInventory />} />
-          <Route path="/locations/:siteId" element={<LocationDetail />} />
-          <Route path="/locations/:siteId/items/new" element={<NewItem />} />
-          <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
-          <Route path="/locations/:siteId/bol/from-sales-orders" element={<SelectSoItemsForBol />} />
-          <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />
-          <Route path="/locations/:siteId/customer-sheet/new" element={<GenerateLocationCustomerSheet />} />
-          <Route path="/locations/:siteId/photos" element={<ItemPhotos />} />
-          <Route path="/locations/:siteId/project-images" element={<ProjectImages />} />
-          <Route path="/locations/:siteId/sales-orders/:soNumber" element={<ViewSalesOrder />} />
-        </Routes>
-      </BrowserRouter>
-    </LoginGate>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/share/:itemType/:ids" element={<SharedItemView />} />
+        <Route path="*" element={<GatedApp />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 

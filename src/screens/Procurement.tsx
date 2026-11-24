@@ -7,6 +7,8 @@ import TieAllocationColumn, {
   type TieAllocationValue,
 } from '../components/TieAllocationColumn'
 import { db } from '../db/db'
+import { importSalesOrderChangeLog, type ChangeLogImportResult } from '../db/salesOrderChangeLog'
+import { listOpenSalesOrderDiscrepancies, resolveSalesOrderDiscrepancy } from '../db/salesOrderDiscrepancies'
 import {
   deletePendingSalesOrderLineItem,
   importSalesOrderLineItems,
@@ -15,10 +17,48 @@ import {
   tieSalesOrderLineItem,
   type TieAllocation,
 } from '../db/salesOrders'
+import {
+  getChangeLogSheetNames,
+  parseSoChangeLogWorkbook,
+  type SoChangeLogParseResult,
+} from '../import/parseChangeLogReport'
 import { getSoReportSheetNames, parseSoReportWorkbook, type SoReportParseResult } from '../import/parseSoReport'
 import type { SalesOrderLineItem } from '../models/types'
 import { useRole } from '../state/RoleContext'
 import { formatSoNumber } from '../utils/soNumber'
+
+// Known GP/SalesPad field names from the change log's "Old X"/"New X"
+// column pairs, given a friendlier label. Anything not in this list (the
+// export's tracked fields aren't fixed — see parseChangeLogReport.ts) just
+// gets title-cased instead of showing its raw column suffix.
+const CHANGE_FIELD_LABELS: Record<string, string> = {
+  itemnmbr: 'Item Number',
+  itemdesc: 'Item Description',
+  'extended description': 'Description',
+  locncode: 'Location',
+  quantity: 'Quantity',
+  unitcost: 'Unit Cost',
+  extdcost: 'Extended Cost',
+  unitprce: 'Unit Price',
+  xtndprce: 'Extended Price',
+}
+
+function friendlyFieldLabel(field: string): string {
+  return CHANGE_FIELD_LABELS[field] ?? field.replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// Only a field whose Old and New are both present and actually differ is
+// worth showing here — a DELETE/INSERT row's untouched fields always have
+// one side blank (nothing to compare), and that's noise, not a change. One
+// string per changed field — the caller renders each on its own line.
+function formatChangeLines(changes: { field: string; oldValue: string; newValue: string }[]): string[] {
+  return changes
+    .filter((c) => c.oldValue && c.newValue && c.oldValue !== c.newValue)
+    .map((c) => {
+      const label = friendlyFieldLabel(c.field)
+      return `Old ${label}: ${c.oldValue} --> New ${label}: ${c.newValue}`
+    })
+}
 
 export default function Procurement() {
   const { permissions } = useRole()
@@ -34,8 +74,19 @@ export default function Procurement() {
   const [importCommitting, setImportCommitting] = useState(false)
   const [importResultMessage, setImportResultMessage] = useState<string | null>(null)
 
+  const changeLogFileInputRef = useRef<HTMLInputElement>(null)
+  const [changeLogFile, setChangeLogFile] = useState<File | null>(null)
+  const [changeLogFileName, setChangeLogFileName] = useState<string | null>(null)
+  const [changeLogSheetNames, setChangeLogSheetNames] = useState<string[]>([])
+  const [changeLogPreview, setChangeLogPreview] = useState<SoChangeLogParseResult | null>(null)
+  const [changeLogParsing, setChangeLogParsing] = useState(false)
+  const [changeLogParseError, setChangeLogParseError] = useState<string | null>(null)
+  const [changeLogCommitting, setChangeLogCommitting] = useState(false)
+  const [changeLogResultMessage, setChangeLogResultMessage] = useState<string | null>(null)
+
   const sites = useLiveQuery(() => db.sites.orderBy('name').toArray(), []) ?? []
   const pendingLineItems = useLiveQuery(() => listPendingSalesOrderLineItems(), []) ?? []
+  const openDiscrepancies = useLiveQuery(() => listOpenSalesOrderDiscrepancies(), []) ?? []
 
   const [tyingId, setTyingId] = useState<string | null>(null)
   const [tyRows, setTyRows] = useState<TieAllocationValue[]>([EMPTY_TIE_ALLOCATION])
@@ -128,6 +179,91 @@ export default function Procurement() {
       cancelImportPreview()
     } finally {
       setImportCommitting(false)
+    }
+  }
+
+  async function loadChangeLogPreview(file: File, sheetName: string) {
+    setChangeLogPreview(await parseSoChangeLogWorkbook(file, sheetName))
+  }
+
+  async function handleChangeLogFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setChangeLogFile(file)
+    setChangeLogFileName(file.name)
+    setChangeLogPreview(null)
+    setChangeLogParseError(null)
+    setChangeLogResultMessage(null)
+    setChangeLogSheetNames([])
+    setChangeLogParsing(true)
+    try {
+      const sheetNames = await getChangeLogSheetNames(file)
+      if (sheetNames.length === 1) {
+        await loadChangeLogPreview(file, sheetNames[0])
+      } else {
+        setChangeLogSheetNames(sheetNames)
+      }
+    } catch {
+      setChangeLogParseError('Could not read that file. Make sure it is a valid Excel export.')
+    } finally {
+      setChangeLogParsing(false)
+    }
+  }
+
+  async function handleSelectChangeLogSheet(sheetName: string) {
+    if (!changeLogFile) return
+    setChangeLogParseError(null)
+    setChangeLogParsing(true)
+    try {
+      await loadChangeLogPreview(changeLogFile, sheetName)
+    } catch (err) {
+      setChangeLogParseError(err instanceof Error ? err.message : 'Could not read that sheet.')
+    } finally {
+      setChangeLogParsing(false)
+    }
+  }
+
+  function cancelChangeLogPreview() {
+    setChangeLogPreview(null)
+    setChangeLogFile(null)
+    setChangeLogFileName(null)
+    setChangeLogSheetNames([])
+    setChangeLogParseError(null)
+  }
+
+  function describeChangeLogResult(result: ChangeLogImportResult): string {
+    const parts: string[] = []
+    if (result.flaggedForReview > 0) {
+      parts.push(`flagged ${result.flaggedForReview} tied line${result.flaggedForReview === 1 ? '' : 's'} for review`)
+    }
+    if (result.silentlyUpdated > 0) {
+      parts.push(`updated ${result.silentlyUpdated} pending line${result.silentlyUpdated === 1 ? '' : 's'}`)
+    }
+    if (result.silentlyRemoved > 0) {
+      parts.push(`removed ${result.silentlyRemoved} pending line${result.silentlyRemoved === 1 ? '' : 's'} that were deleted on the order`)
+    }
+    if (result.unmatched > 0) {
+      parts.push(`${result.unmatched} row${result.unmatched === 1 ? '' : 's'} didn't match a known line item`)
+    }
+    if (result.ignoredInserts > 0) {
+      parts.push(`${result.ignoredInserts} new-line insert${result.ignoredInserts === 1 ? '' : 's'} ignored`)
+    }
+    if (result.alreadyProcessed > 0) {
+      parts.push(`${result.alreadyProcessed} already processed`)
+    }
+    return parts.length > 0 ? `Processed ${result.totalRows} rows: ${parts.join(', ')}.` : `Processed ${result.totalRows} rows — nothing to do.`
+  }
+
+  async function confirmChangeLogImport() {
+    if (!changeLogPreview) return
+    setChangeLogCommitting(true)
+    try {
+      const result = await importSalesOrderChangeLog(changeLogPreview.rows)
+      setChangeLogResultMessage(describeChangeLogResult(result))
+      cancelChangeLogPreview()
+    } finally {
+      setChangeLogCommitting(false)
     }
   }
 
@@ -298,10 +434,147 @@ export default function Procurement() {
 
       <section className="item-section">
         <h2>Recent Changes</h2>
-        <p className="placeholder-note">
-          This will surface recent sales order changes in one feed in order to show discrepancies needing attention
-          in inventory
+
+        <p>
+          <button type="button" onClick={() => changeLogFileInputRef.current?.click()} disabled={changeLogParsing}>
+            {changeLogParsing ? 'Reading…' : 'Import File'}
+          </button>
+          <input
+            ref={changeLogFileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="photo-file-input"
+            onChange={handleChangeLogFileSelected}
+          />
         </p>
+        {changeLogParseError && <p className="field-error">{changeLogParseError}</p>}
+        {changeLogResultMessage && <p className="placeholder-note">{changeLogResultMessage}</p>}
+
+        {changeLogSheetNames.length > 0 && !changeLogPreview && (
+          <div className="field-row">
+            <label>
+              <strong>{changeLogFileName}</strong> has multiple sheets. Pick the one with the change log data.
+              <select defaultValue="" onChange={(e) => handleSelectChangeLogSheet(e.target.value)}>
+                <option value="" disabled>
+                  Select a sheet…
+                </option>
+                {changeLogSheetNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={cancelChangeLogPreview}>
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {changeLogPreview && (
+          <div className="item-section">
+            {(() => {
+              const actionableRows = changeLogPreview.rows.filter((row) => row.changeAction !== 'INSERT')
+              const insertCount = changeLogPreview.rows.length - actionableRows.length
+              return (
+                <>
+                  <p>
+                    Ready to import from <strong>{changeLogFileName}</strong>: {actionableRows.length} update/delete
+                    event{actionableRows.length === 1 ? '' : 's'}
+                    {insertCount > 0 ? ` (${insertCount} new-line insert${insertCount === 1 ? '' : 's'} will be ignored)` : ''}
+                    {changeLogPreview.skippedRows > 0
+                      ? `, ${changeLogPreview.skippedRows} row${changeLogPreview.skippedRows === 1 ? '' : 's'} skipped — missing SO # or action.`
+                      : '.'}
+                  </p>
+                  {actionableRows.length > 0 && (
+                    <div className="item-table-wrap">
+                      <table className="item-table">
+                        <thead>
+                          <tr>
+                            <th>SO #</th>
+                            <th>Warehouse Code</th>
+                            <th>Action</th>
+                            <th>Batch ID</th>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Changes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {actionableRows.map((row, i) => (
+                            <tr key={i}>
+                              <td>{formatSoNumber(row.soNumber)}</td>
+                              <td>{row.warehouseCode}</td>
+                              <td>{row.changeAction}</td>
+                              <td>{row.batchId || '—'}</td>
+                              <td>{row.auditDate ? new Date(row.auditDate).toLocaleString() : '—'}</td>
+                              <td className="col-notes">{row.description}</td>
+                              <td className="col-left">
+                                {formatChangeLines(row.changes).map((line, j) => (
+                                  <div key={j}>{line}</div>
+                                ))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            <div className="import-preview-actions">
+              <button type="button" onClick={cancelChangeLogPreview} disabled={changeLogCommitting}>
+                Cancel
+              </button>
+              <button type="button" onClick={confirmChangeLogImport} disabled={changeLogCommitting}>
+                {changeLogCommitting ? 'Importing…' : 'Confirm Import'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {openDiscrepancies.length === 0 ? (
+          <p className="placeholder-note">No discrepancies need attention right now.</p>
+        ) : (
+          <div className="item-table-wrap">
+            <table className="item-table">
+              <thead>
+                <tr>
+                  <th>SO #</th>
+                  <th>Location</th>
+                  <th>Line Item</th>
+                  <th>Action</th>
+                  <th>Changes</th>
+                  <th>Last Changed</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {openDiscrepancies.map((d) => (
+                  <tr key={d.id}>
+                    <td>{formatSoNumber(d.soNumber)}</td>
+                    <td>{d.tiedSiteNames.join(', ') || d.warehouseCode}</td>
+                    <td className="col-notes">{d.description}</td>
+                    <td>{d.action === 'deleted' ? 'Deleted' : 'Updated'}</td>
+                    <td className="col-left">
+                      {formatChangeLines(d.changes).map((line, j) => (
+                        <div key={j}>{line}</div>
+                      ))}
+                    </td>
+                    <td>{d.lastChangedAt ? new Date(d.lastChangedAt).toLocaleString() : '—'}</td>
+                    <td>
+                      <button type="button" onClick={() => resolveSalesOrderDiscrepancy(d.id)}>
+                        Mark Reviewed
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <details className="item-section collapsible-section" open>

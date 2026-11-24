@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from './db'
 import { deductGroupQuantity, restoreGroupQuantity } from './items'
-import { enqueuePendingDelete } from './pendingDeletes'
+import { enqueuePendingDelete, enqueuePendingDeletes } from './pendingDeletes'
 import { getEditorName } from '../state/editor'
 import type { ParsedSoLineItem } from '../import/parseSoReport'
 import type { BillOfLading, ItemType, SalesOrderLineItem } from '../models/types'
@@ -150,6 +150,7 @@ export async function importSalesOrderLineItems(items: ParsedSoLineItem[]): Prom
       quantityOrdered: parsed.quantity,
       createdOn: parsed.createdOn,
       salespersonId: parsed.salespersonId,
+      lineSeq: parsed.lineSeq,
       importSourceKey: key,
       flaggedDuplicate: isDuplicate,
       status: 'pending',
@@ -375,6 +376,44 @@ export async function deleteTiedSalesOrder(soNumber: string, siteId: string): Pr
       }
 
       await deleteSalesOrderSchedule(soNumber, siteId)
+    },
+  )
+}
+
+// For a Sales Order that's already (partially) shipped, the normal delete
+// above can't be used — it hands back the deducted quantity, which would
+// be wrong once material has actually left. This instead permanently
+// removes the SO's line items at this site, its schedule, and any BOL(s)
+// generated from it (or just this SO's number off a BOL that also covers
+// other orders), without touching current inventory quantity at all — a
+// pure "this record shouldn't exist" cleanup, not an "undo the order" one.
+export async function forceDeleteShippedSalesOrder(soNumber: string, siteId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.salesOrderLineItems, db.salesOrderSchedules, db.billsOfLading, db.pendingDeletes],
+    async () => {
+      const items = await listTiedLineItemsBySoNumberAndSite(soNumber, siteId)
+      const itemIds = items.map((item) => item.id)
+      await enqueuePendingDeletes('salesOrderLineItems', itemIds)
+      await db.salesOrderLineItems.bulkDelete(itemIds)
+
+      await deleteSalesOrderSchedule(soNumber, siteId)
+
+      const siteBols = await db.billsOfLading.where('siteId').equals(siteId).toArray()
+      for (const bol of siteBols) {
+        if (!bol.sourceSoNumbers.includes(soNumber)) continue
+        if (bol.sourceSoNumbers.length === 1) {
+          await enqueuePendingDelete('billsOfLading', bol.id)
+          await db.billsOfLading.delete(bol.id)
+        } else {
+          await db.billsOfLading.update(bol.id, {
+            sourceSoNumbers: bol.sourceSoNumbers.filter((n) => n !== soNumber),
+            lastUpdatedBy: getEditorName(),
+            lastUpdatedAt: Date.now(),
+            syncStatus: 'pending',
+          })
+        }
+      }
     },
   )
 }

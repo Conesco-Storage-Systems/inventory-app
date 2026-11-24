@@ -21,7 +21,23 @@ export default function CountingTools() {
         <Link to="/">← Back</Link>
       </p>
       <h1>Counting Tools</h1>
-      <p className="existing-photos-note">More tools coming soon.</p>
+      <ul className="location-list">
+        <li className="location-list-row">
+          <div className="location-list-info">
+            <Link to="/counting-tools/customer-count">Customer Count</Link>
+          </div>
+        </li>
+        <li className="location-list-row">
+          <div className="location-list-info">
+            <Link to="/counting-tools/unloading-trucks">Unloading Trucks</Link>
+          </div>
+        </li>
+        <li className="location-list-row">
+          <div className="location-list-info">
+            <Link to="/counting-tools/standing-racking">Standing Racking</Link>
+          </div>
+        </li>
+      </ul>
     </main>
   )
 }

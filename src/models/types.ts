@@ -60,6 +60,103 @@ export interface ProjectShare {
   email: string
 }
 
+// The Standing Racking counting tool's own record — a count of material
+// still erected in a rack row, estimated from bay configurations rather
+// than counted piece by piece. Not synced to Supabase yet: this is local
+// only while the Bay Configuration / Row model is still being designed, to
+// avoid repeated live schema changes before the shape settles.
+export interface StandingMaterialCount {
+  id: string
+  // Freeform — this is often a prospective or not-yet-created site, so it
+  // does not reference the real Site table. A later "attach to a project or
+  // offsite" step is where this gets tied to a real location.
+  siteName: string
+  siteAddress: string
+  siteInfo: string
+  // Set once the Site Info section is confirmed — gates the "Create Bay
+  // Configuration" button, which doesn't appear until then.
+  confirmed: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+// A reusable spec for "one bay" of a standing rack row — scoped to a single
+// StandingMaterialCount, never shared across counts. A Row is built by
+// saying how many bays of each configuration it has (plus optional
+// Transition Bay overrides at configuration boundaries), and the material
+// math is derived from these specs rather than counted piece by piece.
+// Only physical-identity fields live here — no quantity/cost/sell/stamp/
+// zone/photos, since a configuration isn't an inventory record itself.
+export interface BayConfiguration {
+  id: string
+  standingCountId: string
+  name: string
+  upright: {
+    style: string
+    width: string
+    height: string
+    columnLength: string
+    columnWidth: string
+    footplateLength: string
+    footplateWidth: string
+    footplateThickness: string
+    anchorHoleCount: string
+    holeSize: string
+    gauge: string
+    color: string
+    condition: string
+  }
+  beam: {
+    // How many beam levels one bay has — every level uses this same beam
+    // spec for now (no per-level variation yet).
+    levelCount: string
+    length: string
+    step: string
+    color: string
+    pinCount: string
+    style: string
+    stickers: string
+    condition: string
+  }
+  deck: {
+    decksPerLevel: string
+    length: string
+    width: string
+    channelCount: string
+    style: string
+    condition: string
+  }
+  createdAt: number
+  updatedAt: number
+}
+
+// A physical rack row, built as an ordered run of bay-configuration
+// segments (e.g. "2 bays of Config A, then 3 bays of Config B"). Material
+// math is derived from this rather than stored:
+//   - Beams/decks never share between bays, so each segment's own
+//     bayCount x levelCount (x2 for beams, front+back rail) applies with no
+//     boundary logic.
+//   - Uprights DO share a frame at every junction between bays, including
+//     at a configuration boundary — so total frames = total bays + 1, never
+//     bayCount x2. By default the shared frame at a segment boundary is
+//     counted under the FOLLOWING segment's spec (each segment "owns" the
+//     leading frame of each of its own bays); a boundary index listed in
+//     transitionOverrides flips that one frame to the PRECEDING segment's
+//     spec instead — this is the "Transition Bay" the shared-frame can be
+//     pinned to whichever side actually matches reality.
+export interface RackRow {
+  id: string
+  standingCountId: string
+  name: string
+  // Free text the counter jots down to mark where on the physical row they
+  // started counting — not used in the material math.
+  startingPoint: string
+  segments: Array<{ bayConfigId: string; bayCount: number }>
+  transitionOverrides: number[]
+  createdAt: number
+  updatedAt: number
+}
+
 export interface Project {
   id: string
   name: string
@@ -188,6 +285,84 @@ export interface MaterialNeedAllocation {
   tiedAt: number
   tiedBy: string
   syncStatus: SyncStatus
+}
+
+export type RecountStatus = 'draft' | 'committed'
+
+// A physical recount of a location, done on-site line by line the same
+// way an initial count is — never an Excel re-import. Only one 'draft'
+// recount should exist per site at a time; once committed it's kept
+// forever as history (never deleted), the same role the old Excel
+// version tabs (v1/v2/v3...) used to serve. Local-only for now, same
+// reasoning as StandingMaterialCount/SalesOrderDiscrepancy — shape may
+// still move as this gets tested on the pilot location.
+export interface Recount {
+  id: string
+  siteId: string
+  siteName: string
+  status: RecountStatus
+  label: string
+  startedAt: number
+  startedBy: string
+  committedAt: number
+  committedBy: string
+}
+
+// One line counted during a Recount. Deliberately a single flat shape
+// carrying every item-type field, only the ones relevant to itemType
+// ever set — same pattern MaterialNeed already uses above for "mirrors
+// the real Add Item forms, isn't real inventory yet." Kept in its own
+// table rather than tagged onto beams/uprights/wireDecks/miscItems so it
+// can never leak into any existing read of "current inventory" (grouping,
+// exports, customer sheets, sync push, etc.) by construction.
+export interface RecountLineItem {
+  id: string
+  recountId: string
+  siteId: string
+  itemType: ItemType
+  quantity: number
+  condition: string
+  bundleSize: string
+  zone: string
+  notes: string
+  costPer: number
+  sellPer: number
+  photoIds: string[]
+  recordedBy: string
+
+  // Beam + Upright
+  color: string
+  style: string
+  stamp: string
+
+  // Beam (also shares width with Upright/Wire Deck)
+  length: string
+  width: string
+  pinCount: string
+  stickers: string
+  step: string
+
+  // Upright
+  height: string
+  columnLength: string
+  columnWidth: string
+  footplateLength: string
+  footplateWidth: string
+  footplateThickness: string
+  anchorHoleCount: string
+  holeSize: string
+  gauge: string
+
+  // Wire Deck
+  channelCount: string
+  wireDeckStyle: string[]
+
+  // Misc ("Other")
+  description: string
+  itemDescription: string
+
+  createdAt: number
+  updatedAt: number
 }
 
 // A note/idea posted to the admin-only Bulletin Board — editable by its
@@ -502,6 +677,14 @@ export interface SalesOrderLineItem {
   // this field existed — de-dup falls back to computing it from their own
   // (never-split) current fields.
   importSourceKey?: string
+  // SalesPad's internal per-line sequence number ("Audit Line Seq" in both
+  // the SO report and the change log export) — undefined on rows imported
+  // before/without this column. When present on both sides it's the exact,
+  // edit-proof way to match a change-log row back to this line; absent, the
+  // change-log matcher falls back to (soNumber, description, warehouseCode).
+  // Never touched by a tie split — copied through like importSourceKey, so
+  // every row a single original line gets split into still carries it.
+  lineSeq?: number
   // Set at import time when this row's (soNumber, description,
   // warehouseCode, quantity) signature already matched an existing line
   // item — it still gets imported (so nothing from the report is ever
@@ -522,6 +705,43 @@ export interface SalesOrderLineItem {
   createdAt: number
   updatedAt: number
   syncStatus: SyncStatus
+}
+
+export type SalesOrderDiscrepancyAction = 'updated' | 'deleted'
+
+export interface SalesOrderDiscrepancyFieldChange {
+  field: string
+  oldValue: string
+  newValue: string
+}
+
+// One open "needs attention" entry per affected SalesPad order line (or
+// tied-split group of local rows sharing that same original line) — created
+// the first time a Recent Changes import reports an edit/delete against a
+// line that's already tied to inventory, and merged in place on every
+// later import until a human resolves it, so there's only ever one thing
+// to review per line instead of a pile of superseded edits. A line whose
+// change-log event lands before it's been tied isn't flagged at all — its
+// SalesOrderLineItem fields are just updated directly.
+// Local-only for now (not wired into Supabase sync) — same reasoning as the
+// Standing Racking tables: the shape is still being worked out through
+// testing.
+export interface SalesOrderDiscrepancy {
+  id: string
+  lineItemIds: string[]
+  soNumber: string
+  warehouseCode: string
+  tiedSiteNames: string[]
+  description: string
+  action: SalesOrderDiscrepancyAction
+  changes: SalesOrderDiscrepancyFieldChange[]
+  firstDetectedAt: number
+  lastChangedAt: number
+  resolved: boolean
+  resolvedAt: number
+  resolvedBy: string
+  createdAt: number
+  updatedAt: number
 }
 
 // A Sales Quote a sales person is building for a customer. Holding

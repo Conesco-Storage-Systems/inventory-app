@@ -6,6 +6,7 @@ import ScheduleShipmentDialog from '../components/ScheduleShipmentDialog'
 import { db } from '../db/db'
 import {
   deleteTiedSalesOrder,
+  forceDeleteShippedSalesOrder,
   getSalesOrderSchedule,
   listTiedLineItemsBySoNumberAndSite,
   sumShippedQuantity,
@@ -61,7 +62,11 @@ export default function ViewSalesOrder() {
 
   async function handleDeleteSo() {
     if (!siteId || !soNumber) return
-    await deleteTiedSalesOrder(soNumber, siteId)
+    if (isShipped) {
+      await forceDeleteShippedSalesOrder(soNumber, siteId)
+    } else {
+      await deleteTiedSalesOrder(soNumber, siteId)
+    }
     navigate(backTo)
   }
 
@@ -102,11 +107,7 @@ export default function ViewSalesOrder() {
               </button>
             )}
             {permissions.manageSalesOrders && (
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(true)}
-                disabled={lineItems.length === 0 || isShipped}
-              >
+              <button type="button" onClick={() => setConfirmingDelete(true)} disabled={lineItems.length === 0}>
                 Delete SO
               </button>
             )}
@@ -116,7 +117,8 @@ export default function ViewSalesOrder() {
 
       {isShipped && (
         <p className="placeholder-note">
-          This Sales Order already has shipped quantity against it, so it can't be deleted.
+          This Sales Order already has shipped quantity against it. Deleting it will permanently remove its line
+          items and related Bill(s) of Lading — current inventory quantity will not be restored.
         </p>
       )}
 
@@ -124,7 +126,11 @@ export default function ViewSalesOrder() {
         <ConfirmDeleteDialog
           onConfirm={handleDeleteSo}
           onClose={() => setConfirmingDelete(false)}
-          message="Delete this Sales Order from this location? Its line items will go back to Procurement as pending, and the inventory quantity that was deducted for them will be restored."
+          message={
+            isShipped
+              ? "Delete this Sales Order from this location? It has already shipped, so its line items and related Bill(s) of Lading will be permanently removed. Inventory quantity will NOT be restored."
+              : 'Delete this Sales Order from this location? Its line items will go back to Procurement as pending, and the inventory quantity that was deducted for them will be restored.'
+          }
         />
       )}
 

@@ -18,6 +18,7 @@ import { groupMiscItems, type MiscItemRow } from '../db/groupMiscItems'
 import { groupUprights, type UprightRow } from '../db/groupUprights'
 import { groupWireDecks, type WireDeckRow } from '../db/groupWireDecks'
 import { getItemLabel } from '../db/itemFields'
+import { listRecountsBySite, startOrResumeRecount } from '../db/recounts'
 import {
   createBeam,
   createMiscItem,
@@ -77,6 +78,8 @@ export default function LocationDetail() {
   const wireDecks = useLiveQuery(() => (siteId ? listWireDecksBySite(siteId) : []), [siteId]) ?? []
   const miscItems = useLiveQuery(() => (siteId ? listMiscItemsBySite(siteId) : []), [siteId]) ?? []
   const bols = useLiveQuery(() => (siteId ? listBolsBySite(siteId) : []), [siteId]) ?? []
+  const recounts = useLiveQuery(() => (siteId ? listRecountsBySite(siteId) : []), [siteId]) ?? []
+  const draftRecount = recounts.find((r) => r.status === 'draft')
   const salesOrderLineItems = useLiveQuery(() => (siteId ? listTiedSalesOrderLineItemsBySite(siteId) : []), [siteId]) ?? []
   const salesOrderGroups = (() => {
     const bySoNumber = new Map<string, { soNumber: string; count: number; latestTiedAt: number }>()
@@ -427,6 +430,12 @@ export default function LocationDetail() {
     }
   }
 
+  async function handleStartRecount() {
+    if (!site || !siteId) return
+    const recount = await startOrResumeRecount(siteId, site.name)
+    navigate(`/locations/${siteId}/recounts/${recount.id}`)
+  }
+
   const hasItems =
     uprightRows.length > 0 || beamRows.length > 0 || wireDeckRows.length > 0 || miscRows.length > 0
 
@@ -522,6 +531,11 @@ export default function LocationDetail() {
         {permissions.addItems && (
           <button type="button" onClick={() => importFileInputRef.current?.click()}>
             Import Data
+          </button>
+        )}
+        {permissions.addItems && (
+          <button type="button" onClick={handleStartRecount}>
+            {draftRecount ? 'Resume Recount' : 'Start Recount'}
           </button>
         )}
         <input
@@ -647,6 +661,30 @@ export default function LocationDetail() {
                   <Link to={`/locations/${site.id}/sales-orders/${encodeURIComponent(group.soNumber)}`}>
                     {formatSoNumber(group.soNumber)} — {group.count} item{group.count === 1 ? '' : 's'} — last tied{' '}
                     {new Date(group.latestTiedAt).toLocaleDateString()}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {recounts.length > 0 && (
+        <details className="item-section collapsible-section">
+          <summary className="collapsible-section-summary">Recounts ({recounts.length})</summary>
+          <ul className="location-list location-list--compact">
+            {recounts.map((recount) => (
+              <li key={recount.id} className="location-list-row">
+                <div className="location-list-info">
+                  <Link
+                    to={
+                      recount.status === 'draft'
+                        ? `/locations/${site.id}/recounts/${recount.id}`
+                        : `/locations/${site.id}/recounts/${recount.id}/review`
+                    }
+                  >
+                    {new Date(recount.startedAt).toLocaleDateString()} —{' '}
+                    {recount.status === 'draft' ? 'In progress' : 'Committed'}
                   </Link>
                 </div>
               </li>

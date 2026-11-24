@@ -7,6 +7,7 @@ import AllInventory from './screens/AllInventory'
 import BulletinBoard from './screens/BulletinBoard'
 import CountingTools from './screens/CountingTools'
 import CreateInventoryTransfer from './screens/CreateInventoryTransfer'
+import CustomerCount from './screens/CustomerCount'
 import GenerateInventoryCustomerSheet from './screens/GenerateInventoryCustomerSheet'
 import GenerateLocationCustomerSheet from './screens/GenerateLocationCustomerSheet'
 import GenerateQuoteCustomerSheet from './screens/GenerateQuoteCustomerSheet'
@@ -24,10 +25,16 @@ import ProjectImages from './screens/ProjectImages'
 import ProjectsList from './screens/ProjectsList'
 import RecentlyDeleted from './screens/RecentlyDeleted'
 import RecentlyDeletedProjects from './screens/RecentlyDeletedProjects'
+import RecountEntry from './screens/RecountEntry'
+import RecountNewItem from './screens/RecountNewItem'
+import RecountReview from './screens/RecountReview'
 import SalesDashboard from './screens/SalesDashboard'
 import SalesOrdersList from './screens/SalesOrdersList'
 import SelectSoItemsForBol from './screens/SelectSoItemsForBol'
 import SharedItemView from './screens/SharedItemView'
+import StandingRacking from './screens/StandingRacking'
+import StandingRackingDetail from './screens/StandingRackingDetail'
+import UnloadingTrucks from './screens/UnloadingTrucks'
 import ViewBillOfLading from './screens/ViewBillOfLading'
 import ViewInventoryTransfer from './screens/ViewInventoryTransfer'
 import ViewMaterialNeed from './screens/ViewMaterialNeed'
@@ -56,6 +63,10 @@ function GatedApp() {
         <Route path="/projects" element={<ProjectsList />} />
         <Route path="/bulletin-board" element={<BulletinBoard />} />
         <Route path="/counting-tools" element={<CountingTools />} />
+        <Route path="/counting-tools/customer-count" element={<CustomerCount />} />
+        <Route path="/counting-tools/unloading-trucks" element={<UnloadingTrucks />} />
+        <Route path="/counting-tools/standing-racking" element={<StandingRacking />} />
+        <Route path="/counting-tools/standing-racking/:countId" element={<StandingRackingDetail />} />
         <Route path="/sales-quotes/:quoteId" element={<ViewSalesQuote />} />
         <Route path="/sales-quotes/:quoteId/generate" element={<GenerateSalesQuote />} />
         <Route path="/sales-quotes/:quoteId/customer-sheet" element={<GenerateQuoteCustomerSheet />} />
@@ -68,6 +79,9 @@ function GatedApp() {
         <Route path="/projects/:projectId/inventory" element={<AllInventory />} />
         <Route path="/locations/:siteId" element={<LocationDetail />} />
         <Route path="/locations/:siteId/items/new" element={<NewItem />} />
+        <Route path="/locations/:siteId/recounts/:recountId" element={<RecountEntry />} />
+        <Route path="/locations/:siteId/recounts/:recountId/items/new" element={<RecountNewItem />} />
+        <Route path="/locations/:siteId/recounts/:recountId/review" element={<RecountReview />} />
         <Route path="/locations/:siteId/bol/new" element={<NewBillOfLading />} />
         <Route path="/locations/:siteId/bol/from-sales-orders" element={<SelectSoItemsForBol />} />
         <Route path="/locations/:siteId/bol/:bolId" element={<ViewBillOfLading />} />

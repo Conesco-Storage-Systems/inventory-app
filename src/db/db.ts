@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type {
   Area,
+  BayConfiguration,
   Beam,
   BillOfLading,
   BolPhoto,
@@ -19,11 +20,16 @@ import type {
   Project,
   ProjectJobSite,
   ProjectPhoto,
+  RackRow,
+  Recount,
+  RecountLineItem,
+  SalesOrderDiscrepancy,
   SalesOrderLineItem,
   SalesOrderSchedule,
   SalesQuote,
   SalesQuoteLineItem,
   Site,
+  StandingMaterialCount,
   Upright,
   WireDeck,
 } from '../models/types'
@@ -59,6 +65,13 @@ class InventoryDB extends Dexie {
   bulletinComments!: Table<BulletinComment, string>
   bulletinPostPhotos!: Table<BulletinPostPhoto, string>
   bulletinPostPhotoBlobs!: Table<PhotoBlob, string>
+  standingMaterialCounts!: Table<StandingMaterialCount, string>
+  bayConfigurations!: Table<BayConfiguration, string>
+  rackRows!: Table<RackRow, string>
+  salesOrderDiscrepancies!: Table<SalesOrderDiscrepancy, string>
+  processedChangeLogKeys!: Table<{ id: string }, string>
+  recounts!: Table<Recount, string>
+  recountLineItems!: Table<RecountLineItem, string>
 
   constructor() {
     super('ConescoRackingInventory')
@@ -830,6 +843,215 @@ class InventoryDB extends Dexie {
       bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
       bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
       bulletinPostPhotoBlobs: 'id',
+    })
+    // Adds the Standing Racking counting tool's own record — local only for
+    // now (no syncStatus / Supabase sync) while the Bay Configuration / Row
+    // model underneath it is still being designed.
+    this.version(25).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+      bulletinPosts: 'id, authorEmail, syncStatus, createdAt',
+      bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
+      bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
+      bulletinPostPhotoBlobs: 'id',
+      standingMaterialCounts: 'id, createdAt',
+    })
+    // Adds Bay Configurations — reusable per-bay specs (upright/beam/deck)
+    // scoped to one Standing Material Count. Local only, same reasoning as
+    // version 25.
+    this.version(26).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+      bulletinPosts: 'id, authorEmail, syncStatus, createdAt',
+      bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
+      bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
+      bulletinPostPhotoBlobs: 'id',
+      standingMaterialCounts: 'id, createdAt',
+      bayConfigurations: 'id, standingCountId, createdAt',
+    })
+    // Adds Rack Rows — an ordered run of bay-configuration segments used to
+    // derive a Standing Material Count's totals. Local only, same reasoning
+    // as versions 25/26.
+    this.version(27).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+      bulletinPosts: 'id, authorEmail, syncStatus, createdAt',
+      bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
+      bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
+      bulletinPostPhotoBlobs: 'id',
+      standingMaterialCounts: 'id, createdAt',
+      bayConfigurations: 'id, standingCountId, createdAt',
+      rackRows: 'id, standingCountId, createdAt',
+    })
+    // Adds Sales Order Discrepancies — one open "needs attention" entry per
+    // tied line whose Recent Changes import reported an edit/delete, plus a
+    // dedupe-only log of which change-log audit events have already been
+    // processed so re-importing an overlapping report window is a no-op.
+    // Local only, same reasoning as the Standing Racking tables (versions
+    // 25-27): the shape is still being worked out through testing.
+    this.version(28).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+      bulletinPosts: 'id, authorEmail, syncStatus, createdAt',
+      bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
+      bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
+      bulletinPostPhotoBlobs: 'id',
+      standingMaterialCounts: 'id, createdAt',
+      bayConfigurations: 'id, standingCountId, createdAt',
+      rackRows: 'id, standingCountId, createdAt',
+      salesOrderDiscrepancies: 'id, soNumber, createdAt',
+      processedChangeLogKeys: 'id',
+    })
+
+    this.version(29).stores({
+      sites: 'id, name, createdAt, syncStatus',
+      areas: 'id, siteId, name, assignedTo, status, createdAt',
+      pickerOptions: 'id, fieldType, value, [fieldType+value]',
+      beams:
+        'id, siteId, areaId, condition, manufacturer, style, color, length, width, step, pinCount, syncStatus, createdAt',
+      uprights:
+        'id, siteId, areaId, condition, manufacturer, style, weldedOrBolted, height, width, gauge, syncStatus, createdAt',
+      wireDecks:
+        'id, siteId, areaId, condition, length, width, channelSize, syncStatus, createdAt',
+      miscItems: 'id, siteId, areaId, condition, syncStatus, createdAt',
+      photos: 'id, itemType, itemId, uploadStatus, createdAt',
+      photoBlobs: 'id',
+      projectPhotos: 'id, siteId, uploadStatus, createdAt',
+      projectPhotoBlobs: 'id',
+      bolPhotos: 'id, bolId, uploadStatus, createdAt',
+      bolPhotoBlobs: 'id',
+      siteHeroPhotoBlobs: 'id',
+      pendingDeletes: 'id, table, recordId, deletedAt',
+      projects: 'id, name, createdAt, syncStatus',
+      billsOfLading: 'id, siteId, createdAt, syncStatus',
+      customerSheets: 'id, siteId, createdAt, syncStatus',
+      salesOrderLineItems: 'id, soNumber, status, tiedSiteId, syncStatus, createdAt',
+      salesOrderSchedules: 'id, soNumber, siteId, [soNumber+siteId], syncStatus, createdAt',
+      salesQuotes: 'id, createdById, canceledAt, syncStatus, createdAt',
+      salesQuoteLineItems: 'id, quoteId, siteId, itemType, syncStatus, createdAt',
+      inventoryTransfers: 'id, fromSiteId, toSiteId, syncStatus, createdAt',
+      projectJobSites: 'id, projectId, linkedSiteId, syncStatus, createdAt',
+      materialNeeds: 'id, projectId, jobSiteId, itemType, syncStatus, createdAt',
+      materialNeedAllocations: 'id, materialNeedId, projectId, siteId, syncStatus, tiedAt',
+      bulletinPosts: 'id, authorEmail, syncStatus, createdAt',
+      bulletinComments: 'id, postId, authorEmail, syncStatus, createdAt',
+      bulletinPostPhotos: 'id, postId, uploadStatus, createdAt',
+      bulletinPostPhotoBlobs: 'id',
+      standingMaterialCounts: 'id, createdAt',
+      bayConfigurations: 'id, standingCountId, createdAt',
+      rackRows: 'id, standingCountId, createdAt',
+      salesOrderDiscrepancies: 'id, soNumber, createdAt',
+      processedChangeLogKeys: 'id',
+      recounts: 'id, siteId, status, startedAt',
+      recountLineItems: 'id, recountId, siteId, itemType, createdAt',
     })
   }
 }

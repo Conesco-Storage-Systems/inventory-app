@@ -9,6 +9,10 @@ export interface ParsedSoLineItem {
   // "Created On" column (older export format, or a sheet that omits it).
   createdOn: number
   salespersonId: string
+  // SalesPad's internal per-line sequence number, if this report happens to
+  // carry one under "Audit Line Seq" — undefined otherwise. See the comment
+  // on SalesOrderLineItem.lineSeq for what this is used for.
+  lineSeq?: number
 }
 
 export interface SoReportParseResult {
@@ -89,6 +93,7 @@ export async function parseSoReportWorkbook(file: File, sheetName: string): Prom
   const quantityCol = columnMap.get('quantity')
   const createdOnCol = columnMap.get('created on')
   const salespersonIdCol = columnMap.get('sales person id')
+  const lineSeqCol = columnMap.get('audit line seq')
 
   if (soNumberCol === undefined || warehouseCodeCol === undefined || quantityCol === undefined) {
     throw new Error('Could not find the expected columns in this sheet.')
@@ -108,6 +113,12 @@ export async function parseSoReportWorkbook(file: File, sheetName: string): Prom
       continue
     }
 
+    const lineSeqValue = lineSeqCol !== undefined ? row[lineSeqCol] : undefined
+    const lineSeq =
+      lineSeqValue !== undefined && lineSeqValue !== '' && Number.isFinite(Number(lineSeqValue))
+        ? Number(lineSeqValue)
+        : undefined
+
     lineItems.push({
       soNumber,
       description: descriptionCol !== undefined ? String(row[descriptionCol] ?? '').trim() : '',
@@ -115,6 +126,7 @@ export async function parseSoReportWorkbook(file: File, sheetName: string): Prom
       quantity,
       createdOn: createdOnCol !== undefined ? parseCreatedOn(row[createdOnCol]) : 0,
       salespersonId: salespersonIdCol !== undefined ? String(row[salespersonIdCol] ?? '').trim() : '',
+      lineSeq,
     })
   }
 
